@@ -56,8 +56,8 @@ pnpm dev
 | App      | URL                        |
 | -------- | -------------------------- |
 | Admin UI | http://localhost:5173      |
-| REST API | http://localhost:3000      |
-| Swagger  | http://localhost:3000/docs |
+| REST API | http://localhost:3002      |
+| Swagger  | http://localhost:3002/docs |
 | Adminer  | http://localhost:8080      |
 | MailHog  | http://localhost:8025      |
 
@@ -73,12 +73,12 @@ The seed script creates a demo program with:
 
 ```bash
 # Dashboard stats
-curl http://localhost:3000/api/v1/stats/dashboard \
+curl http://localhost:3002/api/v1/stats/dashboard \
   -H "X-API-Key: dev-key" \
   -H "X-Program-Id: prog_dev"
 
 # Paginated member list
-curl "http://localhost:3000/api/v1/members?page=1&pageSize=5" \
+curl "http://localhost:3002/api/v1/members?page=1&pageSize=5" \
   -H "X-API-Key: dev-key" \
   -H "X-Program-Id: prog_dev"
 ```

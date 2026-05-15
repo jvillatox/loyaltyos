@@ -477,7 +477,7 @@ async function main(): Promise<void> {
   console.log("Seed complete!\n");
   console.table(counts);
   console.log("\nAdmin UI ready at http://localhost:5173");
-  console.log("API ready at http://localhost:3000");
+  console.log("API ready at http://localhost:3002");
 }
 
 main()
