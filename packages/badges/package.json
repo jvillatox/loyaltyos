@@ -1,0 +1,23 @@
+{
+  "name": "@loyaltyos/badges",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@loyaltyos/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@loyaltyos/config-eslint": "workspace:*",
+    "@loyaltyos/config-prettier": "workspace:*",
+    "typescript": "^5.5.2",
+    "vitest": "^1.6.0"
+  }
+}
