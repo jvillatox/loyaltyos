@@ -35,6 +35,51 @@ export function membersRoutes(app: FastifyInstance): void {
     return reply.status(201).send({ data: member });
   });
 
+  app.get("/members", async (request, reply) => {
+    const query = z
+      .object({
+        page: z.coerce.number().int().min(1).optional().default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+        search: z.string().optional(),
+      })
+      .parse(request.query);
+
+    const where: Prisma.MemberWhereInput = {
+      programId: request.programId,
+      deletedAt: null,
+    };
+
+    if (query.search) {
+      where.OR = [
+        { email: { contains: query.search, mode: "insensitive" } },
+        { firstName: { contains: query.search, mode: "insensitive" } },
+        { lastName: { contains: query.search, mode: "insensitive" } },
+        { externalId: { contains: query.search, mode: "insensitive" } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.member.findMany({
+        where,
+        include: { pointAccount: { select: { balance: true } } },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.member.count({ where }),
+    ]);
+
+    return reply.send({
+      data: {
+        items,
+        total,
+        page: query.page,
+        pageSize: query.pageSize,
+        totalPages: Math.ceil(total / query.pageSize),
+      },
+    });
+  });
+
   app.get("/members/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
 

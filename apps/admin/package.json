@@ -19,7 +19,16 @@
     "react-hook-form": "^7.52.0",
     "@hookform/resolvers": "^3.6.0",
     "zod": "^3.23.8",
-    "lucia": "^3.2.0"
+    "lucia": "^3.2.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.3.0",
+    "class-variance-authority": "^0.7.0",
+    "lucide-react": "^0.395.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-dialog": "^1.1.1",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-select": "^2.1.1",
+    "@radix-ui/react-separator": "^1.1.0"
   },
   "devDependencies": {
     "@loyaltyos/config-eslint": "workspace:*",
@@ -35,6 +44,7 @@
     "jsdom": "^24.1.0",
     "tailwindcss": "^3.4.4",
     "postcss": "^8.4.38",
-    "autoprefixer": "^10.4.19"
+    "autoprefixer": "^10.4.19",
+    "tailwindcss-animate": "^1.0.7"
   }
 }

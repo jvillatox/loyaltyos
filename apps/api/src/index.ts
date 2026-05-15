@@ -10,6 +10,7 @@ import { authPlugin } from "./plugins/auth.js";
 import { eventsRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { membersRoutes } from "./routes/members.js";
+import { statsRoutes } from "./routes/stats.js";
 
 const app = Fastify({
   logger: {
@@ -65,6 +66,7 @@ app.setErrorHandler(errorHandler);
 await app.register(healthRoutes, { prefix: "/" });
 await app.register(membersRoutes, { prefix: "/api/v1" });
 await app.register(eventsRoutes, { prefix: "/api/v1" });
+await app.register(statsRoutes, { prefix: "/api/v1" });
 
 // Start
 const port = Number(process.env.PORT_API) || 3000;
