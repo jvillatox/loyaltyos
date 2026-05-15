@@ -1,0 +1,594 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Program {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  pointsUnit  String    @default("PTS")
+  logoUrl     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members            Member[]
+  pointAccounts      PointAccount[]
+  pointRules         PointRule[]
+  tiers              Tier[]
+  campaigns          Campaign[]
+  segments           Segment[]
+  coupons            Coupon[]
+  rewards            Reward[]
+  badges             Badge[]
+  notificationTemplates NotificationTemplate[]
+  coalitionAccounts  CoalitionAccount[]
+  adminUsers         AdminUser[]
+  events             Event[]
+  apiKeys            ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
+  auditLogs          AuditLog[]
+
+  @@index([isActive])
+}
+
+model Member {
+  id          String   @id @default(cuid())
+  programId   String
+  externalId  String?
+  email       String?
+  phone       String?
+  firstName   String?
+  lastName    String?
+  metadata    Json?    @default("{}")
+  tags        String[] @default([])
+  joinedAt    DateTime @default(now())
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program            Program              @relation(fields: [programId], references: [id], onDelete: Restrict)
+  pointAccount       PointAccount?
+  memberTiers        MemberTier[]
+  couponRedemptions  CouponRedemption[]
+  rewardRedemptions  RewardRedemption[]
+  memberBadges       MemberBadge[]
+  notifications      Notification[]
+  coalitionAccounts  CoalitionAccount[]
+  // Inbound events
+  events             Event[]
+
+  @@unique([programId, externalId])
+  @@index([programId])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+model PointAccount {
+  id             String  @id @default(cuid())
+  memberId       String  @unique
+  programId      String
+  balance        Int     @default(0)
+  pendingBalance Int     @default(0)
+  totalEarned    Int     @default(0)
+  totalRedeemed  Int     @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  member       Member              @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  program      Program             @relation(fields: [programId], references: [id], onDelete: Restrict)
+  transactions PointTransaction[]
+
+  @@index([memberId, programId])
+  @@index([programId])
+}
+
+enum TransactionType {
+  EARN
+  REDEEM
+  EXPIRE
+  REVERSE
+  ADJUST
+  CONVERT_OUT
+  CONVERT_IN
+}
+
+model PointTransaction {
+  id              String          @id @default(cuid())
+  accountId       String
+  type            TransactionType
+  amount          Int
+  balanceAfter    Int
+  source          String
+  description     String?
+  metadata        Json?           @default("{}")
+  idempotencyKey  String          @unique
+  expiresAt       DateTime?
+  settledAt       DateTime?
+  reversedFromId  String?
+  reversedById    String?
+  createdAt       DateTime        @default(now())
+
+  account       PointAccount              @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId])
+  @@index([type])
+  @@index([idempotencyKey])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@index([source])
+}
+
+model PointRule {
+  id          String   @id @default(cuid())
+  programId   String
+  eventType   String
+  multiplier  Float    @default(1.0)
+  conditions  Json?    @default("{}")
+  isActive    Boolean  @default(true)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId, eventType])
+  @@index([isActive])
+}
+
+model Tier {
+  id          String   @id @default(cuid())
+  programId   String
+  name        String
+  rank        Int
+  minPoints   Int      @default(0)
+  color       String?
+  iconUrl     String?
+  benefits    Json?    @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program     Program       @relation(fields: [programId], references: [id], onDelete: Cascade)
+  memberTiers MemberTier[]
+
+  @@unique([programId, rank])
+  @@index([programId])
+}
+
+model MemberTier {
+  id           String   @id @default(cuid())
+  memberId     String
+  tierId       String
+  upgradedAt   DateTime @default(now())
+  downgradedAt DateTime?
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  tier   Tier   @relation(fields: [tierId], references: [id], onDelete: Restrict)
+
+  @@index([memberId])
+  @@index([tierId])
+}
+
+enum CampaignType {
+  BONUS_POINTS
+  SPEND_AND_GET
+  FREQUENCY
+  MILESTONE
+  REFERRAL
+  BIRTHDAY
+  ANNIVERSARY
+  FLASH_SALE
+  TIER_UPGRADE_BONUS
+}
+
+model Campaign {
+  id              String       @id @default(cuid())
+  programId       String
+  name            String
+  description     String?
+  type            CampaignType
+  conditions      Json?        @default("{}")
+  multiplier      Float        @default(1.0)
+  maxBudget       Int?
+  maxUsesPerMember Int?
+  isStackable     Boolean      @default(false)
+  isActive        Boolean      @default(true)
+  abTesting       Boolean      @default(false)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  program   Program           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  variants  CampaignVariant[]
+
+  @@index([programId, type])
+  @@index([isActive])
+  @@index([startsAt, endsAt])
+}
+
+model CampaignVariant {
+  id          String   @id @default(cuid())
+  campaignId  String
+  name        String
+  trafficPct  Float    @default(50.0)
+  config      Json?    @default("{}")
+  createdAt   DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model Segment {
+  id          String   @id @default(cuid())
+  programId   String
+  name        String
+  description String?
+  type        String   @default("DYNAMIC") // STATIC or DYNAMIC
+  rules       Json?    @default("{}")
+  memberIds   String[] @default([])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+  @@index([type])
+}
+
+enum CouponMode {
+  SHARED
+  INDIVIDUAL
+  LIMITED
+}
+
+enum CouponDiscountType {
+  PERCENTAGE
+  FIXED
+  FREE_PRODUCT
+  FREE_SHIPPING
+  EXTRA_POINTS
+  EXPERIENCE
+}
+
+model Coupon {
+  id              String            @id @default(cuid())
+  programId       String
+  code            String
+  mode            CouponMode
+  discountType    CouponDiscountType
+  discountValue   Float?
+  minPurchase     Int?
+  maxUses         Int?
+  maxUsesPerMember Int?
+  usedCount       Int               @default(0)
+  isStackable     Boolean           @default(false)
+  channels        String[]          @default([])
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  program     Program             @relation(fields: [programId], references: [id], onDelete: Cascade)
+  redemptions CouponRedemption[]
+
+  @@unique([programId, code])
+  @@index([programId])
+  @@index([code])
+  @@index([expiresAt])
+}
+
+model CouponRedemption {
+  id          String   @id @default(cuid())
+  couponId    String
+  memberId    String
+  redeemedAt  DateTime @default(now())
+  metadata    Json?    @default("{}")
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@index([couponId])
+  @@index([memberId])
+}
+
+model Reward {
+  id          String   @id @default(cuid())
+  programId   String
+  name        String
+  description String?
+  pointsCost  Int
+  stock       Int?
+  imageUrl    String?
+  category    String?
+  tierRequired String?
+  isActive    Boolean  @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program     Program             @relation(fields: [programId], references: [id], onDelete: Cascade)
+  redemptions RewardRedemption[]
+
+  @@index([programId])
+  @@index([isActive])
+}
+
+model RewardRedemption {
+  id          String   @id @default(cuid())
+  rewardId    String
+  memberId    String
+  pointsSpent Int
+  redeemedAt  DateTime @default(now())
+  metadata    Json?    @default("{}")
+
+  reward Reward @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@index([rewardId])
+  @@index([memberId])
+}
+
+enum BadgeType {
+  ACHIEVEMENT
+  STATUS
+  TEMPORAL
+  COLLECTIBLE
+  SOCIAL
+}
+
+model Badge {
+  id             String   @id @default(cuid())
+  programId      String
+  name           String
+  description    String?
+  type           BadgeType
+  imageUrl       String?
+  tierId         String?
+  conditions     Json?    @default("{}")
+  seriesId       String?
+  seriesPosition Int?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  program      Program       @relation(fields: [programId], references: [id], onDelete: Cascade)
+  memberBadges MemberBadge[]
+
+  @@index([programId])
+  @@index([type])
+  @@index([seriesId])
+}
+
+model MemberBadge {
+  id          String   @id @default(cuid())
+  memberId    String
+  badgeId     String
+  progress    Float    @default(0)
+  unlockedAt  DateTime?
+  notifiedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  badge  Badge  @relation(fields: [badgeId], references: [id], onDelete: Restrict)
+
+  @@unique([memberId, badgeId])
+  @@index([memberId])
+  @@index([badgeId])
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+model NotificationTemplate {
+  id        String  @id @default(cuid())
+  programId String
+  name      String
+  channel   NotificationChannel
+  subject   String?
+  bodyHtml  String?
+  bodyText  String?
+  triggerEvent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  program       Program         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([programId])
+  @@index([triggerEvent])
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  templateId  String?
+  memberId    String
+  channel     NotificationChannel
+  status      NotificationStatus  @default(PENDING)
+  subject     String?
+  body        String?
+  sentAt      DateTime?
+  readAt      DateTime?
+  error       String?
+  metadata    Json?               @default("{}")
+  createdAt   DateTime            @default(now())
+
+  template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  member   Member                @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CoalitionAccount {
+  id              String   @id @default(cuid())
+  memberId        String
+  programId       String
+  provider        String   @default("APPRECIO")
+  externalId      String
+  externalBalance Int      @default(0)
+  lastSyncedAt    DateTime?
+  metadata        Json?    @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  member       Member                 @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  program      Program                @relation(fields: [programId], references: [id], onDelete: Restrict)
+  transactions CoalitionTransaction[]
+
+  @@unique([provider, externalId])
+  @@index([memberId, programId])
+}
+
+model CoalitionTransaction {
+  id               String   @id @default(cuid())
+  accountId        String
+  type             TransactionType
+  amount           Int
+  localTxRef       String
+  externalTxRef    String?
+  status           String   @default("PENDING") // PENDING, SUCCESS, FAILED, REVERSED
+  error            String?
+  metadata         Json?    @default("{}")
+  idempotencyKey   String   @unique
+  createdAt        DateTime @default(now())
+
+  account CoalitionAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId])
+  @@index([idempotencyKey])
+  @@index([status])
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  programId   String
+  url         String
+  events      String[] @default([])
+  secret      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  OPERATOR
+  ANALYST
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  programId    String
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         AdminRole @default(OPERATOR)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  program   Program    @relation(fields: [programId], references: [id], onDelete: Restrict)
+  auditLogs AuditLog[]
+
+  @@index([programId])
+  @@index([email])
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  programId   String
+  key         String   @unique
+  scope       String   @default("SERVER") // SERVER or CLIENT
+  name        String?
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([key])
+  @@index([programId])
+}
+
+enum AuditAction {
+  ADJUST_POINTS
+  REVERSE_TRANSACTION
+  CREATE_COUPON
+  DELETE_COUPON
+  UPDATE_CAMPAIGN
+  UPDATE_REWARD
+  MERGE_MEMBERS
+  MANUAL_TIER_CHANGE
+  CONFIG_CHANGE
+  OTHER
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  programId   String
+  adminUserId String
+  action      AuditAction
+  entityType  String
+  entityId    String?
+  diff        Json?      @default("{}")
+  reason      String?
+  ipAddress   String?
+  createdAt   DateTime   @default(now())
+
+  program   Program    @relation(fields: [programId], references: [id], onDelete: Restrict)
+  adminUser AdminUser  @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  @@index([programId])
+  @@index([adminUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model Event {
+  id              String   @id @default(cuid())
+  programId       String
+  memberId        String?
+  type            String
+  payload         Json?    @default("{}")
+  idempotencyKey  String   @unique
+  processed       Boolean  @default(false)
+  processedAt     DateTime?
+  error           String?
+  createdAt       DateTime @default(now())
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  member  Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@index([programId, type])
+  @@index([idempotencyKey])
+  @@index([processed])
+  @@index([createdAt])
+}
