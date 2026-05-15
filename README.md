@@ -2,6 +2,10 @@
 
 > Open source customer loyalty platform with native coalition support. MIT licensed.
 
+![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Phase](https://img.shields.io/badge/phase-1%20Core%20MVP-orange)
+
 **LoyaltyOS** is a modular, API-first loyalty platform designed to be simple to deploy but powerful in operation. Connect your sales channels, run campaigns, issue coupons, manage tiers and badges, and integrate with coalition point systems (Puntos Apprecio) — all from a single Dockerized stack.
 
 ## Features
@@ -14,6 +18,56 @@
 - **Campaigns** — time-boxed multipliers (bonus points, flash sales) with budget capping.
 - **Coupons & Rewards** — percentage/fixed discount coupons and points-based reward catalog.
 - **Privacy-first** — soft-delete on members, GDPR-ready data isolation.
+
+## Architecture
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        Admin["Admin UI<br/>React + Vite"]
+        Widget["Loyalty Widget<br/>Web Component"]
+        API_Consumer["External Systems<br/>REST / GraphQL"]
+    end
+
+    subgraph "API Layer"
+        Fastify["Fastify API<br/>Zod + Swagger"]
+        Auth["Auth Middleware<br/>API Key + JWT"]
+    end
+
+    subgraph "Business Logic"
+        Core["Points Engine<br/>Core Package"]
+        Campaigns["Campaigns<br/>Segments<br/>Coupons"]
+        Coalition["Coalition Adapter<br/>Apprecio"]
+    end
+
+    subgraph "Data Layer"
+        PG[("PostgreSQL 15<br/>Ledger + Config")]
+        Redis[("Redis 7<br/>Cache + Queues")]
+    end
+
+    Admin --> Fastify
+    Widget --> Fastify
+    API_Consumer --> Fastify
+    Fastify --> Auth
+    Auth --> Core
+    Core --> Campaigns
+    Core --> Coalition
+    Core --> PG
+    Core --> Redis
+```
+
+## Differentiators vs OpenLoyalty.io
+
+| Feature                   | OpenLoyalty     | LoyaltyOS                |
+| ------------------------- | --------------- | ------------------------ |
+| Open Source               | Yes (limited)   | MIT (full)               |
+| Native Coalition          | No              | Yes (Apprecio + generic) |
+| Setup                     | Complex         | Docker one-liner         |
+| Embeddable Widget         | No              | Yes (Web Component)      |
+| A/B Testing for Campaigns | No              | Yes                      |
+| GraphQL API               | No              | Yes (planned Phase 2)    |
+| Multi-tenant              | Enterprise only | Included                 |
+| Visual Segment Builder    | Basic           | Advanced                 |
 
 ## Quick Start
 
@@ -156,13 +210,13 @@ Full OpenAPI spec at `/docs` when the API is running.
 
 ## Roadmap
 
-| Phase | Scope                                                          | Status      |
-| ----- | -------------------------------------------------------------- | ----------- |
-| 1     | Core MVP — monorepo, points engine, REST API, Admin UI, Docker | In progress |
-| 2     | Engagement — campaigns, coupons, notifications, segments       | Planned     |
-| 3     | Gamification — badges, tiers, rewards, customer widget         | Planned     |
-| 4     | Coalition — Apprecio adapter, coalition accounts, admin panel  | Planned     |
-| 5     | Production — Helm charts, OTel, Docusaurus, CI/CD, v1.0.0      | Planned     |
+| Phase | Scope                                                          | Status   |
+| ----- | -------------------------------------------------------------- | -------- |
+| 1     | Core MVP — monorepo, points engine, REST API, Admin UI, Docker | Complete |
+| 2     | Engagement — campaigns, coupons, notifications, segments       | Planned  |
+| 3     | Gamification — badges, tiers, rewards, customer widget         | Planned  |
+| 4     | Coalition — Apprecio adapter, coalition accounts, admin panel  | Planned  |
+| 5     | Production — Helm charts, OTel, Docusaurus, CI/CD, v1.0.0      | Planned  |
 
 Full details in [docs/SPEC.md](docs/SPEC.md).
 
@@ -176,6 +230,8 @@ Contributions are welcome. This project uses:
 - **Formatting** — Prettier with single quotes, trailing commas, and 100-char print width.
 
 Before submitting a PR, make sure `pnpm typecheck` and `pnpm lint` pass cleanly.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 

@@ -1,3 +1,4 @@
+import type { PrismaClient } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -23,7 +24,10 @@ const mockPrisma = {
     findMany: vi.fn(),
   },
   $transaction: vi.fn(),
-} as unknown as Parameters<typeof import("../service.js").PointsService.prototype.constructor>[0];
+};
+
+// Cast for PointsService constructor; the inferred vi.fn() types satisfy mock setup
+const prisma = mockPrisma as unknown as PrismaClient;
 
 // Dynamic import after mock setup
 let PointsService: typeof import("../service.js").PointsService;
@@ -60,7 +64,7 @@ describe("PointsService.earn", () => {
       createdAt: new Date(),
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.earn({
       memberId: "mem-1",
       programId: "prog-1",
@@ -87,7 +91,7 @@ describe("PointsService.earn", () => {
       createdAt: new Date(),
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.earn({
       memberId: "mem-1",
       programId: "prog-1",
@@ -134,7 +138,7 @@ describe("PointsService.earn", () => {
       balanceAfter: 200,
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.earn({
       memberId: "mem-1",
       programId: "prog-1",
@@ -170,7 +174,7 @@ describe("PointsService.earn", () => {
       balanceAfter: 50,
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.earn({
       memberId: "mem-new",
       programId: "prog-1",
@@ -204,7 +208,7 @@ describe("PointsService.redeem", () => {
       balanceAfter: 300,
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.redeem({
       memberId: "mem-1",
       programId: "prog-1",
@@ -231,7 +235,7 @@ describe("PointsService.redeem", () => {
       updatedAt: new Date(),
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     await expect(
       svc.redeem({
         memberId: "mem-1",
@@ -250,7 +254,7 @@ describe("PointsService.redeem", () => {
       balanceAfter: 300,
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.redeem({
       memberId: "mem-1",
       programId: "prog-1",
@@ -312,7 +316,7 @@ describe("PointsService.reverse", () => {
       createdAt: new Date(),
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.reverse("tx-orig", "mistake", "admin-1");
 
     expect(result.reversalId).toBe("tx-reverse");
@@ -325,7 +329,7 @@ describe("PointsService.reverse", () => {
   it("throws TransactionNotFoundError when original doesn't exist", async () => {
     mockPrisma.pointTransaction.findUnique.mockResolvedValue(null); // no idempotent, no original
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     await expect(svc.reverse("nonexistent", "reason", "admin-1")).rejects.toThrow(
       TransactionNotFoundError,
     );
@@ -351,7 +355,7 @@ describe("PointsService.reverse", () => {
       id: "existing-reversal",
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     await expect(svc.reverse("tx-orig", "reason", "admin-1")).rejects.toThrow(AlreadyReversedError);
   });
 });
@@ -360,7 +364,7 @@ describe("PointsService.balance", () => {
   it("returns zero for non-existent account", async () => {
     mockPrisma.pointAccount.findFirst.mockResolvedValue(null);
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.balance("mem-1", "prog-1");
 
     expect(result).toEqual({ confirmed: 0, pending: 0, total: 0 });
@@ -373,7 +377,7 @@ describe("PointsService.balance", () => {
       pendingBalance: 200,
     });
 
-    const svc = new PointsService(mockPrisma);
+    const svc = new PointsService(prisma);
     const result = await svc.balance("mem-1", "prog-1");
 
     expect(result.confirmed).toBe(1000);
