@@ -252,6 +252,12 @@ importers:
       '@loyaltyos/core':
         specifier: workspace:*
         version: link:../core
+      '@prisma/client':
+        specifier: ^5.15.0
+        version: 5.22.0(prisma@5.22.0)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       '@loyaltyos/config-eslint':
         specifier: workspace:*

@@ -206,8 +206,9 @@ model Campaign {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  program   Program           @relation(fields: [programId], references: [id], onDelete: Cascade)
-  variants  CampaignVariant[]
+  program      Program                @relation(fields: [programId], references: [id], onDelete: Cascade)
+  variants     CampaignVariant[]
+  applications CampaignApplication[]
 
   @@index([programId, type])
   @@index([isActive])
@@ -222,7 +223,26 @@ model CampaignVariant {
   config      Json?    @default("{}")
   createdAt   DateTime @default(now())
 
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign     Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  applications CampaignApplication[]
+}
+
+model CampaignApplication {
+  id            String   @id @default(cuid())
+  campaignId    String
+  variantId     String?
+  memberId      String
+  eventId       String?
+  pointsAwarded Int      @default(0)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  campaign Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  variant  CampaignVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([campaignId])
+  @@index([memberId])
+  @@index([campaignId, memberId])
 }
 
 model Segment {
