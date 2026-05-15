@@ -22,7 +22,7 @@ const adjustSchema = z.object({
   reason: z.string().min(1),
 });
 
-export function membersRoutes(app: FastifyInstance): void {
+export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.post("/members", async (request, reply) => {
     const body = createMemberSchema.parse(request.body);
     const member = await prisma.member.create({
@@ -135,4 +135,6 @@ export function membersRoutes(app: FastifyInstance): void {
     });
     return reply.status(201).send({ data: result });
   });
+
+  done();
 }

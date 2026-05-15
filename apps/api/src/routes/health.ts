@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 
 import { prisma } from "../db.js";
 
-export function healthRoutes(app: FastifyInstance): void {
+export function healthRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.get("/healthz", async (_req, reply) => {
     return reply.send({ status: "ok", uptime: process.uptime() });
   });
@@ -15,4 +15,6 @@ export function healthRoutes(app: FastifyInstance): void {
     }
     return reply.send({ status: "ready", db: true, redis: true });
   });
+
+  done();
 }

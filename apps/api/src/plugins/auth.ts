@@ -9,7 +9,7 @@ declare module "fastify" {
   }
 }
 
-function authPlugin(app: FastifyInstance): void {
+function authPlugin(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.decorateRequest("programId", "");
   app.decorateRequest("apiKeyScope", "");
 
@@ -42,6 +42,8 @@ function authPlugin(app: FastifyInstance): void {
     request.programId = programId ?? key.programId;
     request.apiKeyScope = key.scope;
   });
+
+  done();
 }
 
 export { authPlugin };

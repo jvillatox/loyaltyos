@@ -13,7 +13,7 @@ const eventSchema = z.object({
   payload: z.record(z.unknown()).optional(),
 });
 
-export function eventsRoutes(app: FastifyInstance): void {
+export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.post("/events", async (request, reply) => {
     const idempotencyKey = request.headers["idempotency-key"] as string;
     if (!idempotencyKey) {
@@ -106,4 +106,6 @@ export function eventsRoutes(app: FastifyInstance): void {
 
     return reply.status(201).send({ data: event });
   });
+
+  done();
 }

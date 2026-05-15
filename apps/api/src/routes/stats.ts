@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 
 import { prisma } from "../db.js";
 
-export function statsRoutes(app: FastifyInstance): void {
+export function statsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.get("/stats/dashboard", async (request, reply) => {
     const programId = request.programId;
 
@@ -35,4 +35,6 @@ export function statsRoutes(app: FastifyInstance): void {
       },
     });
   });
+
+  done();
 }
