@@ -35,6 +35,18 @@ module.exports = {
       node: true,
     },
   },
+  overrides: [
+    {
+      files: ["**/__tests__/**", "**/*.test.*", "**/*.spec.*"],
+      rules: {
+        "@typescript-eslint/no-unsafe-call": "off",
+        "@typescript-eslint/no-unsafe-member-access": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
+        "@typescript-eslint/no-unsafe-return": "off",
+      },
+    },
+  ],
   ignorePatterns: [
     "node_modules/",
     "dist/",
@@ -44,5 +56,6 @@ module.exports = {
     "*.js",
     "*.cjs",
     "*.mjs",
+    "vitest.config.ts",
   ],
 };
