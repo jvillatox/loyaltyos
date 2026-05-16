@@ -165,9 +165,15 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^3.0.0
         version: 3.1.0
+      '@loyaltyos/campaigns':
+        specifier: workspace:*
+        version: link:../../packages/campaigns
       '@loyaltyos/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@loyaltyos/coupons':
+        specifier: workspace:*
+        version: link:../../packages/coupons
       '@prisma/client':
         specifier: ^5.15.0
         version: 5.22.0(prisma@5.22.0)
@@ -341,6 +347,12 @@ importers:
       '@loyaltyos/core':
         specifier: workspace:*
         version: link:../core
+      '@prisma/client':
+        specifier: ^5.15.0
+        version: 5.22.0(prisma@5.22.0)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       '@loyaltyos/config-eslint':
         specifier: workspace:*
@@ -360,6 +372,12 @@ importers:
       '@loyaltyos/core':
         specifier: workspace:*
         version: link:../core
+      '@prisma/client':
+        specifier: ^5.15.0
+        version: 5.22.0(prisma@5.22.0)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       '@loyaltyos/config-eslint':
         specifier: workspace:*
@@ -398,6 +416,12 @@ importers:
       '@loyaltyos/core':
         specifier: workspace:*
         version: link:../core
+      '@prisma/client':
+        specifier: ^5.15.0
+        version: 5.22.0(prisma@5.22.0)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       '@loyaltyos/config-eslint':
         specifier: workspace:*

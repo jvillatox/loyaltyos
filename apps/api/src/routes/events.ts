@@ -1,3 +1,4 @@
+import { CampaignsService } from "@loyaltyos/campaigns";
 import { PointsService } from "@loyaltyos/core";
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -6,6 +7,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 
 const points = new PointsService(prisma);
+const campaigns = new CampaignsService(prisma, points);
 
 const eventSchema = z.object({
   type: z.string().min(1),
@@ -65,6 +67,35 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
               metadata: body.payload,
             });
 
+            // Evaluate and apply eligible campaigns
+            const evaluation = await campaigns.evaluateForEvent({
+              type: body.type,
+              memberId: body.memberId,
+              programId: request.programId,
+              amount,
+              payload: body.payload,
+            });
+
+            const appliedCampaigns: unknown[] = [];
+            for (const campaign of evaluation.applicable) {
+              try {
+                const appResult = await campaigns.applyCampaign(
+                  campaign.id,
+                  {
+                    type: body.type,
+                    memberId: body.memberId,
+                    programId: request.programId,
+                    amount,
+                    payload: body.payload,
+                  },
+                  `${idempotencyKey}-campaign-${campaign.id}`,
+                );
+                appliedCampaigns.push(appResult);
+              } catch (err) {
+                request.log.warn({ err, campaignId: campaign.id }, "Failed to apply campaign");
+              }
+            }
+
             await prisma.event.update({
               where: { id: event.id },
               data: {
@@ -73,7 +104,9 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
               },
             });
 
-            return reply.status(201).send({ data: { event, earnResult: result } });
+            return reply.status(201).send({
+              data: { event, earnResult: result, appliedCampaigns },
+            });
           }
         }
 
