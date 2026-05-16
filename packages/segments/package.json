@@ -12,7 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@loyaltyos/core": "workspace:*"
+    "@loyaltyos/core": "workspace:*",
+    "@prisma/client": "^5.15.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@loyaltyos/config-eslint": "workspace:*",
