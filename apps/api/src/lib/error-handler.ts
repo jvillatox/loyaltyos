@@ -20,6 +20,12 @@ import {
   CouponNotFoundError,
   CouponNotStartedError,
 } from "@loyaltyos/coupons";
+import {
+  InvalidSegmentRuleError,
+  SegmentNotActiveError,
+  SegmentNotFoundError,
+  SegmentNotStaticError,
+} from "@loyaltyos/segments";
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 
@@ -171,6 +177,35 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
     return {
       status: 422,
       body: { error: { code: "COUPON_CHANNEL_ERROR", message: err.message } },
+    };
+  }
+
+  // Segment domain errors
+  if (err instanceof SegmentNotFoundError) {
+    return {
+      status: 404,
+      body: { error: { code: "SEGMENT_NOT_FOUND", message: err.message } },
+    };
+  }
+
+  if (err instanceof SegmentNotActiveError) {
+    return {
+      status: 422,
+      body: { error: { code: "SEGMENT_NOT_ACTIVE", message: err.message } },
+    };
+  }
+
+  if (err instanceof SegmentNotStaticError) {
+    return {
+      status: 422,
+      body: { error: { code: "SEGMENT_NOT_STATIC", message: err.message } },
+    };
+  }
+
+  if (err instanceof InvalidSegmentRuleError) {
+    return {
+      status: 400,
+      body: { error: { code: "INVALID_SEGMENT_RULE", message: err.message } },
     };
   }
 

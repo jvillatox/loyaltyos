@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users } from "lucide-react";
+import { LayoutDashboard, Megaphone, PieChart, Ticket, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { Separator } from "@/components/ui/separator";
@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/members", label: "Members", icon: Users },
+  { to: "/campaigns", label: "Campaigns", icon: Megaphone },
+  { to: "/coupons", label: "Coupons", icon: Ticket },
+  { to: "/segments", label: "Segments", icon: PieChart },
 ];
 
 export function Sidebar(): JSX.Element {

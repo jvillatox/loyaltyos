@@ -44,3 +44,122 @@ export interface PaginatedResponse<T> {
   pageSize: number;
   totalPages: number;
 }
+
+export type CampaignType =
+  | "BONUS_POINTS"
+  | "SPEND_AND_GET"
+  | "FREQUENCY"
+  | "MILESTONE"
+  | "REFERRAL"
+  | "BIRTHDAY"
+  | "ANNIVERSARY"
+  | "FLASH_SALE"
+  | "TIER_UPGRADE_BONUS";
+
+export interface CampaignVariant {
+  id: string;
+  name: string;
+  trafficPct: number;
+  config: unknown;
+}
+
+export interface Campaign {
+  id: string;
+  programId: string;
+  name: string;
+  description: string | null;
+  type: CampaignType;
+  conditions: unknown;
+  multiplier: number;
+  maxBudget: number | null;
+  maxUsesPerMember: number | null;
+  isStackable: boolean;
+  isActive: boolean;
+  abTesting: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  variants?: CampaignVariant[];
+  applications?: unknown[];
+}
+
+export interface CampaignEstimate {
+  eligibleMembers: number;
+  projectedPoints: number;
+  budgetUtilization: number;
+}
+
+export type CouponMode = "SHARED" | "INDIVIDUAL" | "LIMITED";
+
+export type CouponDiscountType =
+  | "PERCENTAGE"
+  | "FIXED"
+  | "FREE_PRODUCT"
+  | "FREE_SHIPPING"
+  | "EXTRA_POINTS"
+  | "EXPERIENCE";
+
+export interface Coupon {
+  id: string;
+  programId: string;
+  code: string;
+  mode: CouponMode;
+  discountType: CouponDiscountType;
+  discountValue: number | null;
+  minPurchase: number | null;
+  maxUses: number | null;
+  maxUsesPerMember: number | null;
+  usedCount: number;
+  isStackable: boolean;
+  isActive: boolean;
+  channels: string[];
+  startsAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CouponStats {
+  totalRedemptions: number;
+  uniqueMembers: number;
+  totalDiscount: number;
+  redemptionRate: number;
+}
+
+export type SegmentType = "STATIC" | "DYNAMIC";
+
+export interface RuleCondition {
+  field: string;
+  eq?: unknown;
+  neq?: unknown;
+  gt?: number;
+  lt?: number;
+  gte?: number;
+  lte?: number;
+  in?: unknown[];
+  between?: [number, number];
+  contains?: string;
+}
+
+export interface RuleGroup {
+  all?: (RuleCondition | RuleGroup)[];
+  any?: (RuleCondition | RuleGroup)[];
+}
+
+export interface Segment {
+  id: string;
+  programId: string;
+  name: string;
+  description: string | null;
+  type: SegmentType;
+  rules: RuleGroup | null;
+  memberIds: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SegmentMemberCount {
+  count: number;
+}

@@ -22,6 +22,7 @@
     "@fastify/swagger-ui": "^3.0.0",
     "@loyaltyos/campaigns": "workspace:*",
     "@loyaltyos/coupons": "workspace:*",
+    "@loyaltyos/segments": "workspace:*",
     "@loyaltyos/core": "workspace:*",
     "@prisma/client": "^5.15.0",
     "fastify": "^4.28.0",
