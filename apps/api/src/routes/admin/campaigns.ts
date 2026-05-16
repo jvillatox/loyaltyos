@@ -52,9 +52,10 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
   // POST /admin/campaigns — Create campaign
   app.post("/admin/campaigns", async (request, reply) => {
     const body = createSchema.parse(request.body);
+    const programId = request.programId || (request.headers["x-program-id"] as string);
     const campaign = await campaigns.create({
       ...body,
-      programId: request.programId,
+      programId,
     });
     return reply.status(201).send({ data: campaign });
   });
@@ -136,6 +137,24 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
     const { id } = z.object({ id: z.string() }).parse(request.params);
     await campaigns.archive(id);
     return reply.status(204).send();
+  });
+
+  // POST /admin/campaigns/estimate — Estimate impact before creation
+  app.post("/admin/campaigns/estimate", async (request, reply) => {
+    const body = z
+      .object({
+        type: z.string().optional(),
+        multiplier: z.number().optional(),
+        maxBudget: z.number().optional(),
+      })
+      .parse(request.body);
+
+    const result = await campaigns.estimateImpact({
+      programId: request.programId,
+      multiplier: body.multiplier,
+      maxBudget: body.maxBudget,
+    });
+    return reply.send({ data: result });
   });
 
   // POST /admin/campaigns/:id/estimate — Estimate campaign impact

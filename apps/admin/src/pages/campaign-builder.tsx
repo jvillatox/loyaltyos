@@ -168,14 +168,14 @@ export function CampaignBuilderPage(): JSX.Element {
     setEstimating(true);
     try {
       const values = form.getValues();
+      const payload: Record<string, unknown> = {
+        multiplier: values.multiplier ?? 1,
+      };
+      if (values.maxBudget != null) payload.maxBudget = values.maxBudget;
+
       const res = await fetchApi<CampaignEstimate>("/admin/campaigns/estimate", {
         method: "POST",
-        body: JSON.stringify({
-          type: values.type,
-          multiplier: values.multiplier ?? 1,
-          maxBudget: values.maxBudget,
-          programId: "prog_dev",
-        }),
+        body: JSON.stringify(payload),
       });
       setEstimate(res);
     } catch {
@@ -546,19 +546,19 @@ export function CampaignBuilderPage(): JSX.Element {
                 <div className="grid grid-cols-3 gap-4">
                   <div className="rounded-lg border p-3 text-center">
                     <p className="text-2xl font-bold">
-                      {estimate.eligibleMembers.toLocaleString()}
+                      {estimate.estimatedMembers.toLocaleString()}
                     </p>
                     <p className="text-sm text-muted-foreground">Eligible Members</p>
                   </div>
                   <div className="rounded-lg border p-3 text-center">
                     <p className="text-2xl font-bold">
-                      {estimate.projectedPoints.toLocaleString()}
+                      {estimate.estimatedPoints.toLocaleString()}
                     </p>
                     <p className="text-sm text-muted-foreground">Projected Points</p>
                   </div>
                   <div className="rounded-lg border p-3 text-center">
-                    <p className="text-2xl font-bold">{estimate.budgetUtilization}%</p>
-                    <p className="text-sm text-muted-foreground">Budget Utilization</p>
+                    <p className="text-2xl font-bold">{estimate.estimatedCost.toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">Est. Cost (pts)</p>
                   </div>
                 </div>
               ) : (

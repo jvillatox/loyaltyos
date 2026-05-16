@@ -85,9 +85,9 @@ export interface Campaign {
 }
 
 export interface CampaignEstimate {
-  eligibleMembers: number;
-  projectedPoints: number;
-  budgetUtilization: number;
+  estimatedMembers: number;
+  estimatedPoints: number;
+  estimatedCost: number;
 }
 
 export type CouponMode = "SHARED" | "INDIVIDUAL" | "LIMITED";
