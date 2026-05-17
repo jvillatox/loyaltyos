@@ -36,7 +36,6 @@ async function triggerNotification(
         lastName: member?.lastName,
         currentTier,
       },
-      points: member?.pointAccount?.balance ?? 0,
     };
     await notificationsService.sendTrigger(programId, triggerEvent, memberId, context);
   } catch (err) {
