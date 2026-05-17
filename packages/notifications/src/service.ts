@@ -108,6 +108,11 @@ export class NotificationsService {
     const templates = await this.repo.findTemplatesByTrigger(programId, triggerEvent);
     if (templates.length === 0) return [];
 
+    const member = context.member as Record<string, unknown> | undefined;
+    const metadata: Record<string, unknown> = {};
+    if (member?.email) metadata.email = member.email;
+    if (member?.phone) metadata.phone = member.phone;
+
     const notifications: NotificationRow[] = [];
 
     for (const template of templates) {
@@ -124,6 +129,7 @@ export class NotificationsService {
         channel: template.channel,
         subject,
         body,
+        metadata,
       });
 
       // Attempt to send immediately
