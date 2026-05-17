@@ -71,9 +71,10 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
     }
 
     // Create event
+    const programId = request.programId || (request.headers["x-program-id"] as string);
     const event = await prisma.event.create({
       data: {
-        programId: request.programId,
+        programId,
         type: body.type,
         memberId: body.memberId,
         payload: body.payload as Prisma.InputJsonValue,
@@ -96,7 +97,7 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
           if (amount > 0) {
             const result = await points.earn({
               memberId: body.memberId,
-              programId: request.programId,
+              programId: programId,
               amount,
               source: `event:${body.type}`,
               idempotencyKey: `${idempotencyKey}-earn`,
@@ -107,7 +108,7 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
             const evaluation = await campaigns.evaluateForEvent({
               type: body.type,
               memberId: body.memberId,
-              programId: request.programId,
+              programId: programId,
               amount,
               payload: body.payload,
             });
@@ -120,7 +121,7 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
                   {
                     type: body.type,
                     memberId: body.memberId,
-                    programId: request.programId,
+                    programId: programId,
                     amount,
                     payload: body.payload,
                   },
@@ -141,7 +142,7 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
             });
 
             // Fire notification trigger (fire-and-forget)
-            void triggerNotification("points.earned", body.memberId, request.programId, {
+            void triggerNotification("points.earned", body.memberId, programId, {
               points: result.amount,
               balance: result.balanceAfter,
               amount,
@@ -159,7 +160,7 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
           const bonus = 500; // Default signup bonus
           const result = await points.earn({
             memberId: body.memberId,
-            programId: request.programId,
+            programId: programId,
             amount: bonus,
             source: "signup_bonus",
             idempotencyKey: `${idempotencyKey}-bonus`,
@@ -171,7 +172,7 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
           });
 
           // Fire notification trigger (fire-and-forget)
-          void triggerNotification("registration", body.memberId, request.programId, {
+          void triggerNotification("registration", body.memberId, programId, {
             bonus,
             points: result.amount,
             balance: result.balanceAfter,

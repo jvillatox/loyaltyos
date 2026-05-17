@@ -2,6 +2,18 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 
 import type { CampaignCreateInput, CampaignUpdateInput, CampaignWithVariants } from "./types.js";
 
+const VALID_CAMPAIGN_TYPES = new Set([
+  "BONUS_POINTS",
+  "SPEND_AND_GET",
+  "FREQUENCY",
+  "MILESTONE",
+  "REFERRAL",
+  "BIRTHDAY",
+  "ANNIVERSARY",
+  "FLASH_SALE",
+  "TIER_UPGRADE_BONUS",
+]);
+
 function asJson(value: Record<string, unknown> | undefined): Prisma.InputJsonValue | undefined {
   return value as Prisma.InputJsonValue | undefined;
 }
@@ -58,6 +70,7 @@ export function createRepository(prisma: PrismaClient) {
       programId: string,
       eventType: string,
     ): Promise<CampaignWithVariants[]> {
+      if (!VALID_CAMPAIGN_TYPES.has(eventType)) return [];
       const now = new Date();
       return (await prisma.campaign.findMany({
         where: {
