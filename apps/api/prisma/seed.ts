@@ -459,6 +459,20 @@ async function main(): Promise<void> {
   );
   console.log("Created events, tiers, badges, and segment assignments\n");
 
+  // === Notification Templates ===
+  await prisma.notificationTemplate.create({
+    data: {
+      programId: program.id,
+      name: "Points Earned",
+      channel: "EMAIL",
+      triggerEvent: "points.earned",
+      subject: "You earned {{points}} points!",
+      bodyHtml:
+        "<h1>Points Earned 🎉</h1><p>Hi {{member.firstName}},</p><p>You just earned <strong>{{points}} points</strong>! Your new balance is <strong>{{balance}} points</strong>.</p>",
+    },
+  });
+  console.log("Created notification template: Points Earned");
+
   // === Summary ===
   const counts = {
     programs: await prisma.program.count(),

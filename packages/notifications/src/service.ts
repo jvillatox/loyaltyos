@@ -30,6 +30,7 @@ interface PaginatedResult<T> {
 export class NotificationsService {
   private repo: ReturnType<typeof createRepository>;
   private providers: Map<NotificationChannel, NotificationProvider>;
+  private enqueueFn: ((notificationId: string) => Promise<void>) | null = null;
 
   constructor(prisma: PrismaClient) {
     this.repo = createRepository(prisma);
@@ -42,6 +43,11 @@ export class NotificationsService {
 
   setProvider(channel: NotificationChannel, provider: NotificationProvider): void {
     this.providers.set(channel, provider);
+  }
+
+  /** Set a function that enqueues notifications for async delivery. When set, `send()` enqueues instead of sending directly. */
+  setEnqueue(fn: (notificationId: string) => Promise<void>): void {
+    this.enqueueFn = fn;
   }
 
   // ── Templates ──────────────────────────────────────────
@@ -133,7 +139,22 @@ export class NotificationsService {
     return notifications;
   }
 
+  /** Send a notification. If an enqueue function is set, enqueues for async delivery instead of sending directly. */
   async send(id: string): Promise<NotificationRow> {
+    const notification = await this.repo.findNotificationById(id);
+    if (!notification) throw new NotificationNotFoundError(id);
+
+    // If an async queue is configured, enqueue and return immediately
+    if (this.enqueueFn) {
+      await this.enqueueFn(id);
+      return notification;
+    }
+
+    return this.deliver(id);
+  }
+
+  /** Deliver a notification via its channel's provider (used by the worker). */
+  async deliver(id: string): Promise<NotificationRow> {
     const notification = await this.repo.findNotificationById(id);
     if (!notification) throw new NotificationNotFoundError(id);
 
@@ -157,6 +178,61 @@ export class NotificationsService {
     const notification = await this.repo.findNotificationById(id);
     if (!notification) throw new NotificationNotFoundError(id);
     return this.repo.updateNotificationStatus(id, "READ");
+  }
+
+  // ── Webhooks ─────────────────────────────────────────
+
+  async createWebhook(input: { programId: string; url: string; events: string[]; secret: string }) {
+    return this.repo.createWebhook(input);
+  }
+
+  async getWebhook(id: string) {
+    const wh = await this.repo.findWebhookById(id);
+    if (!wh) throw new Error("Webhook not found");
+    return wh;
+  }
+
+  async listWebhooks(
+    programId: string,
+    filters: { isActive?: boolean; page?: number; pageSize?: number } = {},
+  ) {
+    const { items, total } = await this.repo.findWebhooks(programId, filters);
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 20;
+    return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  }
+
+  async updateWebhook(
+    id: string,
+    data: { url?: string; events?: string[]; secret?: string; isActive?: boolean },
+  ) {
+    const wh = await this.repo.findWebhookById(id);
+    if (!wh) throw new Error("Webhook not found");
+    return this.repo.updateWebhook(id, data);
+  }
+
+  async deleteWebhook(id: string): Promise<void> {
+    const wh = await this.repo.findWebhookById(id);
+    if (!wh) throw new Error("Webhook not found");
+    await this.repo.deleteWebhook(id);
+  }
+
+  // ── Admin notification list ────────────────────────
+
+  async listNotifications(
+    programId: string,
+    filters: {
+      channel?: string;
+      status?: string;
+      memberId?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ) {
+    const { items, total } = await this.repo.findNotifications(programId, filters);
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 20;
+    return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
   async getMemberNotifications(

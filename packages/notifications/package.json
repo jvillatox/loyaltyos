@@ -14,11 +14,14 @@
   "dependencies": {
     "@loyaltyos/core": "workspace:*",
     "@prisma/client": "^5.15.0",
+    "handlebars": "^4.7.9",
+    "nodemailer": "^8.0.7",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@loyaltyos/config-eslint": "workspace:*",
     "@loyaltyos/config-prettier": "workspace:*",
+    "@types/nodemailer": "^8.0.0",
     "typescript": "^5.5.2",
     "vitest": "^1.6.0"
   }

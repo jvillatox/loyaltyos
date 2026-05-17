@@ -59,9 +59,10 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // POST /admin/coupons — Create coupon
   app.post("/admin/coupons", async (request, reply) => {
     const body = createSchema.parse(request.body);
+    const programId = request.programId || (request.headers["x-program-id"] as string);
     const coupon = await coupons.create({
       ...body,
-      programId: request.programId,
+      programId,
     });
     return reply.status(201).send({ data: coupon });
   });
@@ -69,9 +70,10 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // POST /admin/coupons/generate — Generate bulk codes
   app.post("/admin/coupons/generate", async (request, reply) => {
     const body = generateSchema.parse(request.body);
+    const programId = request.programId || (request.headers["x-program-id"] as string);
     const codes = await coupons.generateCodes({
       ...body,
-      programId: request.programId,
+      programId,
     });
     return reply.status(201).send({ data: codes });
   });
@@ -94,7 +96,8 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
       })
       .parse(request.query);
 
-    const result = await coupons.list(request.programId, query);
+    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const result = await coupons.list(programId, query);
     return reply.send({ data: result });
   });
 

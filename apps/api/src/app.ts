@@ -9,6 +9,7 @@ import { errorHandler } from "./lib/error-handler.js";
 import { authPlugin } from "./plugins/auth.js";
 import { adminCampaignsRoutes } from "./routes/admin/campaigns.js";
 import { adminCouponsRoutes } from "./routes/admin/coupons.js";
+import { adminNotificationsRoutes } from "./routes/admin/notifications.js";
 import { adminSegmentsRoutes } from "./routes/admin/segments.js";
 import { couponsRoutes } from "./routes/coupons.js";
 import { eventsRoutes } from "./routes/events.js";
@@ -73,6 +74,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   await app.register(statsRoutes, { prefix: "/api/v1" });
   await app.register(adminSegmentsRoutes, { prefix: "/api/v1" });
   await app.register(adminCouponsRoutes, { prefix: "/api/v1" });
+  await app.register(adminNotificationsRoutes, { prefix: "/api/v1" });
   await app.register(couponsRoutes, { prefix: "/api/v1" });
 
   return app;

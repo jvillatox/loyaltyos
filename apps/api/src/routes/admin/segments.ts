@@ -45,9 +45,10 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
   // POST /admin/segments — Create segment
   app.post("/admin/segments", async (request, reply) => {
     const body = createSchema.parse(request.body);
+    const programId = request.programId || (request.headers["x-program-id"] as string);
     const segment = await segments.create({
       ...body,
-      programId: request.programId,
+      programId,
     } as Parameters<typeof segments.create>[0]);
     return reply.status(201).send({ data: segment });
   });
@@ -71,8 +72,17 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
       })
       .parse(request.query);
 
-    const result = await segments.list(request.programId, query);
+    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const result = await segments.list(programId, query);
     return reply.send({ data: result });
+  });
+
+  // POST /admin/segments/estimate — Estimate segment member count before creation
+  app.post("/admin/segments/estimate", async (request, reply) => {
+    const { rules } = z.object({ rules: ruleGroupSchema.optional() }).parse(request.body);
+    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const count = await segments.estimateCount(programId, rules as Record<string, unknown> | null);
+    return reply.send({ data: { count } });
   });
 
   // GET /admin/segments/:id — Get segment by id

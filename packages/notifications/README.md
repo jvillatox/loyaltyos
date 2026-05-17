@@ -4,51 +4,112 @@ Multi-channel notification engine for LoyaltyOS. Create templates, send notifica
 
 ## Features
 
-- **Template management** — create reusable notification templates with Handlebars-style variable interpolation
+- **Template management** — create reusable notification templates with Handlebars variable interpolation
 - **Multi-channel** — EMAIL, SMS, PUSH, IN_APP, WEBHOOK
 - **Trigger-based sending** — match templates by event type and auto-send
-- **Provider abstraction** — pluggable providers per channel with NoopProvider and LogProvider built-in
+- **Provider abstraction** — pluggable providers per channel (SMTP, Webhook, Noop, Log)
+- **Handlebars rendering** — `{{var}}`, `{{nested.path}}`, `{{#if}}`, `{{#each}}`, `{{#unless}}`, `{{eq}}`, `{{neq}}`
+- **BullMQ integration** — async delivery with exponential retries and dead-letter queue
 - **Status lifecycle** — PENDING → SENT / FAILED → READ
 
 ## Usage
 
 ```typescript
-import { NotificationsService } from "@loyaltyos/notifications";
+import { NotificationsService, createSmtpProvider } from "@loyaltyos/notifications";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const notifications = new NotificationsService(prisma);
+
+// Register SMTP provider for email delivery
+notifications.setProvider("EMAIL", createSmtpProvider());
+
+// Wire async queue delivery
+notifications.setEnqueue(async (notificationId) => {
+  await myQueue.add("send", { notificationId });
+});
 
 // Create a template
 const template = await notifications.createTemplate({
   programId: "prog-1",
   name: "Welcome Email",
   channel: "EMAIL",
-  subject: "Welcome, {{firstName}}!",
-  bodyHtml: "<p>Hi {{firstName}}, you've earned {{pointsAwarded}} points.</p>",
-  triggerEvent: "registration",
+  subject: "Welcome, {{member.firstName}}!",
+  bodyHtml:
+    "<p>Hi {{member.firstName}}, you earned {{points}} points. Your balance is {{balance}}.</p>",
+  triggerEvent: "points.earned",
 });
 
-// Send notifications when a registration event fires
-const results = await notifications.sendTrigger("prog-1", "registration", "mem-1", {
-  firstName: "Jaime",
-  pointsAwarded: 500,
+// Send notifications when an event fires
+const results = await notifications.sendTrigger("prog-1", "points.earned", "mem-1", {
+  points: 500,
+  balance: 1500,
+  member: { firstName: "Jaime", email: "jaime@example.com" },
 });
-console.log(results.length); // 1 notification sent
+// Each notification is enqueued for async delivery
 
 // Get member's notifications
 const { items, total } = await notifications.getMemberNotifications("mem-1");
-console.log(`${total} notifications`);
-
-// Register a custom provider
-notifications.setProvider("EMAIL", {
-  channel: "EMAIL",
-  async send(notification) {
-    // Call Resend, SendGrid, etc.
-    return { success: true };
-  },
-});
 ```
+
+## Template Syntax (Handlebars)
+
+```
+Hi {{member.firstName}}, your balance is {{balance}} points.
+
+{{#if member.currentTier}}
+  Your tier: {{member.currentTier}}
+{{else}}
+  Start earning to unlock tiers!
+{{/if}}
+
+{{#each items}}
+  - {{name}}: {{price}}
+{{/each}}
+```
+
+Handlebars is sandboxed — dangerous globals like `constructor`, `__proto__`, `require`, `process`, `global` are blocked.
+
+## Providers
+
+### SmtpProvider
+
+Uses nodemailer. Configure via environment:
+
+```bash
+SMTP_HOST=localhost     # default
+SMTP_PORT=1025          # default (MailHog)
+SMTP_USER=              # optional
+SMTP_PASS=              # optional
+SMTP_FROM=noreply@loyaltyos.dev  # default
+```
+
+### WebhookProvider
+
+Sends signed HTTP callbacks with HMAC-SHA256:
+
+```typescript
+import { WebhookProvider } from "@loyaltyos/notifications";
+
+const provider = new WebhookProvider({
+  url: "https://partner.example.com/webhooks",
+  secret: "whsec_...",
+});
+
+notifications.setProvider("WEBHOOK", provider);
+```
+
+Headers: `X-LoyaltyOS-Event`, `X-LoyaltyOS-Signature`, `X-LoyaltyOS-Timestamp`.
+
+Verify incoming webhooks:
+
+```typescript
+const valid = WebhookProvider.verify(payload, signature, timestamp, secret);
+```
+
+### NoopProvider / LogProvider
+
+Built-in for testing and debugging.
 
 ## API Reference
 
@@ -62,7 +123,7 @@ Create a notifications service. All channels default to `NoopProvider`.
 | ------------------------------------ | ------------------------------------------------------ |
 | `createTemplate(input)`              | Create a template                                      |
 | `updateTemplate(id, input)`          | Partial update                                         |
-| `deleteTemplate(id)`                 | Hard delete (templates have no soft-delete)            |
+| `deleteTemplate(id)`                 | Hard delete                                            |
 | `getTemplate(id)`                    | Get by id                                              |
 | `listTemplates(programId, filters?)` | Paginated list, filterable by channel and triggerEvent |
 
@@ -71,8 +132,9 @@ Create a notifications service. All channels default to `NoopProvider`.
 | Method                                                    | Description                                                    |
 | --------------------------------------------------------- | -------------------------------------------------------------- |
 | `createNotification(input)`                               | Create a PENDING notification directly                         |
-| `sendTrigger(programId, triggerEvent, memberId, context)` | Find matching templates, render, create and send notifications |
-| `send(id)`                                                | Send a PENDING notification via its channel's provider         |
+| `sendTrigger(programId, triggerEvent, memberId, context)` | Find matching templates, render, create and enqueue            |
+| `send(id)`                                                | Enqueue notification (async) or send directly (no queue)       |
+| `deliver(id)`                                             | Deliver notification via its channel provider (used by worker) |
 | `markRead(id)`                                            | Mark notification as READ                                      |
 | `getMemberNotifications(memberId, pagination?)`           | Paginated member notifications                                 |
 
@@ -81,55 +143,32 @@ Create a notifications service. All channels default to `NoopProvider`.
 | Method                           | Description                              |
 | -------------------------------- | ---------------------------------------- |
 | `setProvider(channel, provider)` | Register a custom provider for a channel |
+| `setEnqueue(fn)`                 | Set async enqueue callback for BullMQ    |
 
-## Template Variables
+### Webhook Management
 
-Templates use `{{variable}}` syntax. Supports nested paths with dot notation:
+| Method                              | Description                 |
+| ----------------------------------- | --------------------------- |
+| `createWebhook(input)`              | Create webhook subscription |
+| `getWebhook(id)`                    | Get by id                   |
+| `listWebhooks(programId, filters?)` | Paginated list              |
+| `updateWebhook(id, data)`           | Update webhook              |
+| `deleteWebhook(id)`                 | Delete webhook              |
 
-```
-Hello {{firstName}}, your balance is {{balance}} points.
-Your tier: {{tier.name}}
-Address: {{metadata.city}}, {{metadata.country}}
-```
+### Admin Notification List
 
-Variables are resolved from the context object passed to `sendTrigger`. Missing variables are replaced with an empty string.
+| Method                                   | Description            |
+| ---------------------------------------- | ---------------------- |
+| `listNotifications(programId, filters?)` | Paginated list (admin) |
 
-## Channels
+## End-to-End Flow
 
-| Channel | Description             | Default Provider |
-| ------- | ----------------------- | ---------------- |
-| EMAIL   | Email notifications     | NoopProvider     |
-| SMS     | Text messages           | NoopProvider     |
-| PUSH    | Push notifications      | NoopProvider     |
-| IN_APP  | In-app widget messages  | NoopProvider     |
-| WEBHOOK | External HTTP callbacks | NoopProvider     |
-
-## Providers
-
-Implement the `NotificationProvider` interface to integrate with real services:
-
-```typescript
-import type { NotificationProvider, NotificationRow } from "@loyaltyos/notifications";
-
-const resendProvider: NotificationProvider = {
-  channel: "EMAIL",
-  async send(notification: NotificationRow) {
-    try {
-      await resend.emails.send({ ... });
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  },
-};
-
-notifications.setProvider("EMAIL", resendProvider);
-```
-
-Built-in providers:
-
-- **NoopProvider** — always returns success (default for all channels)
-- **LogProvider** — logs to console and returns success (for debugging)
+1. Admin creates a template via `POST /api/v1/admin/notification-templates`
+2. An event fires (e.g., `points.earned`) → `sendTrigger()` finds matching templates
+3. Templates are rendered with Handlebars using member context
+4. Notifications are created as PENDING and enqueued to BullMQ
+5. Worker picks up jobs, delivers via SMTP/Webhook provider
+6. Status updated to SENT or FAILED (with retries)
 
 ## Errors
 

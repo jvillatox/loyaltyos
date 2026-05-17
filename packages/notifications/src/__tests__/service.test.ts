@@ -16,6 +16,14 @@ const mockPrisma = vi.hoisted(() => ({
     update: vi.fn(),
     count: vi.fn(),
   },
+  webhookSubscription: {
+    create: vi.fn(),
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(),
+  },
 }));
 
 vi.mock("@prisma/client", () => ({}));
@@ -199,7 +207,7 @@ describe("NotificationsService.sendTrigger", () => {
     });
   });
 
-  it("renders template variables", async () => {
+  it("renders template with Handlebars variables", async () => {
     mockPrisma.notificationTemplate.findMany.mockResolvedValue([
       templateRow({
         subject: "Hi {{firstName}}",
@@ -240,7 +248,7 @@ describe("NotificationsService.sendTrigger", () => {
   });
 });
 
-// ── Send ─────────────────────────────────────────────────
+// ── Send / Deliver ───────────────────────────────────────
 
 describe("NotificationsService.send", () => {
   it("sends notification via provider and marks SENT", async () => {
@@ -282,6 +290,72 @@ describe("NotificationsService.send", () => {
     await svc.send("notif-1");
     expect(called).toBe(true);
   });
+
+  it("enqueues when enqueueFn is set instead of delivering directly", async () => {
+    mockPrisma.notification.findFirst.mockResolvedValue(notificationRow({ status: "PENDING" }));
+
+    const svc = new NotificationsService(mockPrisma as never);
+    let enqueuedId: string | null = null;
+    svc.setEnqueue((id) => {
+      enqueuedId = id;
+      return Promise.resolve();
+    });
+
+    const result = await svc.send("notif-1");
+    expect(enqueuedId).toBe("notif-1");
+    expect(result.status).toBe("PENDING"); // not yet delivered
+  });
+});
+
+describe("NotificationsService.deliver", () => {
+  it("delivers via provider and marks SENT on success", async () => {
+    mockPrisma.notification.findFirst.mockResolvedValue(notificationRow({ status: "PENDING" }));
+    mockPrisma.notification.update.mockResolvedValue(
+      notificationRow({ status: "SENT", sentAt: new Date() }),
+    );
+
+    const svc = new NotificationsService(mockPrisma as never);
+    const result = await svc.deliver("notif-1");
+
+    expect(result.status).toBe("SENT");
+  });
+
+  it("marks FAILED on provider error", async () => {
+    mockPrisma.notification.findFirst.mockResolvedValue(notificationRow({ status: "PENDING" }));
+    mockPrisma.notification.update.mockResolvedValue(
+      notificationRow({ status: "FAILED", error: "send failed" }),
+    );
+
+    const svc = new NotificationsService(mockPrisma as never);
+    svc.setProvider("EMAIL", {
+      channel: "EMAIL",
+      async send() {
+        await Promise.resolve();
+        return { success: false, error: "send failed" };
+      },
+    });
+
+    const result = await svc.deliver("notif-1");
+    expect(result.status).toBe("FAILED");
+  });
+
+  it("throws ProviderNotFoundError for unregistered channel", async () => {
+    // Create a notification with a channel that has no provider
+    const svc = new NotificationsService(mockPrisma as never);
+    // Remove the default NoopProvider for IN_APP
+    svc.setProvider("IN_APP", undefined as never);
+
+    mockPrisma.notification.findFirst.mockResolvedValue(notificationRow({ channel: "IN_APP" }));
+
+    await expect(svc.deliver("notif-1")).rejects.toThrow("No provider registered");
+  });
+
+  it("throws NotificationNotFoundError", async () => {
+    mockPrisma.notification.findFirst.mockResolvedValue(null);
+
+    const svc = new NotificationsService(mockPrisma as never);
+    await expect(svc.deliver("nonexistent")).rejects.toThrow("Notification not found");
+  });
 });
 
 // ── Status ───────────────────────────────────────────────
@@ -311,7 +385,147 @@ describe("NotificationsService.getMemberNotifications", () => {
   });
 });
 
-// ── Renderer ─────────────────────────────────────────────
+// ── Webhook CRUD ─────────────────────────────────────────
+
+describe("NotificationsService.createWebhook", () => {
+  it("creates a webhook subscription", async () => {
+    const wh = {
+      id: "wh-1",
+      programId: "prog-1",
+      url: "https://example.com/webhook",
+      events: ["points.earned"],
+      secret: "whsec_1234567890123456",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    mockPrisma.webhookSubscription.create.mockResolvedValue(wh);
+
+    const svc = new NotificationsService(mockPrisma as never);
+    const result = await svc.createWebhook({
+      programId: "prog-1",
+      url: "https://example.com/webhook",
+      events: ["points.earned"],
+      secret: "whsec_1234567890123456",
+    });
+
+    expect(result.url).toBe("https://example.com/webhook");
+  });
+});
+
+describe("NotificationsService.getWebhook", () => {
+  it("returns webhook by id", async () => {
+    const wh = {
+      id: "wh-1",
+      programId: "prog-1",
+      url: "https://example.com/webhook",
+      events: ["points.earned"],
+      secret: "whsec_1234567890123456",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    mockPrisma.webhookSubscription.findFirst.mockResolvedValue(wh);
+
+    const svc = new NotificationsService(mockPrisma as never);
+    const result = await svc.getWebhook("wh-1");
+
+    expect(result.id).toBe("wh-1");
+  });
+
+  it("throws when webhook not found", async () => {
+    mockPrisma.webhookSubscription.findFirst.mockResolvedValue(null);
+
+    const svc = new NotificationsService(mockPrisma as never);
+    await expect(svc.getWebhook("nonexistent")).rejects.toThrow("Webhook not found");
+  });
+});
+
+describe("NotificationsService.listWebhooks", () => {
+  it("returns paginated webhooks", async () => {
+    const wh = {
+      id: "wh-1",
+      programId: "prog-1",
+      url: "https://example.com/webhook",
+      events: ["points.earned"],
+      secret: "whsec_1234567890123456",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    mockPrisma.webhookSubscription.findMany.mockResolvedValue([wh]);
+    mockPrisma.webhookSubscription.count.mockResolvedValue(1);
+
+    const svc = new NotificationsService(mockPrisma as never);
+    const result = await svc.listWebhooks("prog-1");
+
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+  });
+});
+
+describe("NotificationsService.updateWebhook", () => {
+  it("updates webhook fields", async () => {
+    const wh = {
+      id: "wh-1",
+      programId: "prog-1",
+      url: "https://example.com/webhook",
+      events: ["points.earned"],
+      secret: "whsec_1234567890123456",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    mockPrisma.webhookSubscription.findFirst.mockResolvedValue(wh);
+    mockPrisma.webhookSubscription.update.mockResolvedValue({
+      ...wh,
+      url: "https://new.example.com/webhook",
+    });
+
+    const svc = new NotificationsService(mockPrisma as never);
+    const result = await svc.updateWebhook("wh-1", { url: "https://new.example.com/webhook" });
+
+    expect(result.url).toBe("https://new.example.com/webhook");
+  });
+});
+
+describe("NotificationsService.deleteWebhook", () => {
+  it("deletes a webhook", async () => {
+    const wh = {
+      id: "wh-1",
+      programId: "prog-1",
+      url: "https://example.com/webhook",
+      events: ["points.earned"],
+      secret: "whsec_1234567890123456",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    mockPrisma.webhookSubscription.findFirst.mockResolvedValue(wh);
+
+    const svc = new NotificationsService(mockPrisma as never);
+    await svc.deleteWebhook("wh-1");
+
+    expect(mockPrisma.webhookSubscription.delete).toHaveBeenCalledWith({
+      where: { id: "wh-1" },
+    });
+  });
+});
+
+describe("NotificationsService.listNotifications", () => {
+  it("returns paginated admin notifications", async () => {
+    mockPrisma.notification.findMany.mockResolvedValue([notificationRow()]);
+    mockPrisma.notification.count.mockResolvedValue(1);
+
+    const svc = new NotificationsService(mockPrisma as never);
+    const result = await svc.listNotifications("prog-1");
+
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+  });
+});
+
+// ── Renderer: Handlebars ─────────────────────────────────
 
 import { render } from "../renderer.js";
 
@@ -350,9 +564,94 @@ describe("render", () => {
     const result = render("You have {{points}} points", { points: 500 });
     expect(result).toBe("You have 500 points");
   });
+
+  // Handlebars-specific: block helpers
+  it("supports {{#if}} truthy block", () => {
+    const tpl = "{{#if member.currentTier}}Tier: {{member.currentTier}}{{else}}No tier{{/if}}";
+    expect(render(tpl, { member: { currentTier: "Gold" } })).toBe("Tier: Gold");
+  });
+
+  it("supports {{#if}} falsy block (else branch)", () => {
+    const tpl = "{{#if member.currentTier}}Tier: {{member.currentTier}}{{else}}No tier{{/if}}";
+    expect(render(tpl, { member: {} })).toBe("No tier");
+  });
+
+  it("supports {{#unless}}", () => {
+    const tpl = "{{#unless optedOut}}You are subscribed{{else}}Unsubscribed{{/unless}}";
+    expect(render(tpl, { optedOut: false })).toBe("You are subscribed");
+    expect(render(tpl, { optedOut: true })).toBe("Unsubscribed");
+  });
+
+  it("supports {{#each}} with array", () => {
+    const tpl = "Items:{{#each items}} {{name}}:{{price}}{{/each}}";
+    const result = render(tpl, {
+      items: [
+        { name: "Coffee", price: 5 },
+        { name: "Tea", price: 3 },
+      ],
+    });
+    expect(result).toBe("Items: Coffee:5 Tea:3");
+  });
+
+  it("supports {{#each}} with empty array (else branch)", () => {
+    const tpl = "{{#each items}}Has items{{else}}No items{{/each}}";
+    expect(render(tpl, { items: [] })).toBe("No items");
+  });
+
+  it("supports {{#each}} with @index, @first, @last data", () => {
+    const tpl = "{{#each items}}{{#unless @first}}, {{/unless}}{{@index}}:{{name}}{{/each}}";
+    const result = render(tpl, {
+      items: [{ name: "A" }, { name: "B" }, { name: "C" }],
+    });
+    expect(result).toBe("0:A, 1:B, 2:C");
+  });
+
+  it("supports {{eq}} helper", () => {
+    const tpl = '{{#if (eq status "active")}}Active{{else}}Inactive{{/if}}';
+    expect(render(tpl, { status: "active" })).toBe("Active");
+    expect(render(tpl, { status: "inactive" })).toBe("Inactive");
+  });
+
+  it("supports {{neq}} helper", () => {
+    const tpl = '{{#if (neq type "banned")}}Allowed{{else}}Blocked{{/if}}';
+    expect(render(tpl, { type: "normal" })).toBe("Allowed");
+    expect(render(tpl, { type: "banned" })).toBe("Blocked");
+  });
+
+  // Sandbox
+  it("blocks constructor access in templates", () => {
+    const result = render("{{constructor}}", {});
+    expect(result).toBe("");
+  });
+
+  it("blocks __proto__ access in templates", () => {
+    const result = render("{{__proto__}}", {});
+    expect(result).toBe("");
+  });
+
+  it("blocks require access in templates", () => {
+    const result = render("{{require}}", {});
+    expect(result).toBe("");
+  });
+
+  it("blocks process access in templates", () => {
+    const result = render("{{process}}", {});
+    expect(result).toBe("");
+  });
+
+  it("blocks global access in templates", () => {
+    const result = render("{{global}}", {});
+    expect(result).toBe("");
+  });
+
+  it("HTML-escapes by default", () => {
+    const result = render("Hello {{name}}", { name: "<script>alert('xss')</script>" });
+    expect(result).toContain("&lt;script&gt;");
+    expect(result).not.toContain("<script>");
+  });
 });
 
-// ── Providers ────────────────────────────────────────────
+// ── Providers: Noop / Log ────────────────────────────────
 
 import { LogProvider, NoopProvider } from "../provider.js";
 
@@ -369,5 +668,283 @@ describe("LogProvider", () => {
     const p = new LogProvider("SMS");
     const result = await p.send(notificationRow({ channel: "SMS" }) as never);
     expect(result.success).toBe(true);
+  });
+});
+
+// ── Providers: SMTP ──────────────────────────────────────
+
+import { createSmtpProvider, type SmtpConfig, SmtpProvider } from "../providers/smtp.js";
+
+const mockSendMail = vi.fn();
+const mockCreateTransport = vi.fn();
+
+vi.mock("nodemailer", () => ({
+  createTransport: (...args: unknown[]) => {
+    mockCreateTransport(...args);
+    return { sendMail: mockSendMail };
+  },
+}));
+
+describe("SmtpProvider", () => {
+  beforeEach(() => {
+    mockSendMail.mockReset();
+    mockCreateTransport.mockReset();
+  });
+
+  const config: SmtpConfig = {
+    host: "smtp.example.com",
+    port: 587,
+    user: "testuser",
+    pass: "testpass",
+    from: "noreply@example.com",
+  };
+
+  it("creates transport with provided config", () => {
+    new SmtpProvider(config);
+    expect(mockCreateTransport).toHaveBeenCalledWith({
+      host: "smtp.example.com",
+      port: 587,
+      secure: false,
+      auth: { user: "testuser", pass: "testpass" },
+    });
+  });
+
+  it("uses secure: true for port 465", () => {
+    new SmtpProvider({ ...config, port: 465 });
+    expect(mockCreateTransport).toHaveBeenCalledWith(expect.objectContaining({ secure: true }));
+  });
+
+  it("omits auth when user is not provided", () => {
+    new SmtpProvider({ host: "localhost", port: 1025, from: "noreply@example.com" });
+    expect(mockCreateTransport).toHaveBeenCalledWith(expect.objectContaining({ auth: undefined }));
+  });
+
+  it("sends email with correct parameters", async () => {
+    mockSendMail.mockResolvedValue({ messageId: "<abc123@example.com>" });
+
+    const provider = new SmtpProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "EMAIL",
+        subject: "Welcome!",
+        body: "<p>Hello</p>",
+        metadata: { email: "user@example.com" },
+      }) as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockSendMail).toHaveBeenCalledWith({
+      from: "noreply@example.com",
+      to: "user@example.com",
+      subject: "Welcome!",
+      html: "<p>Hello</p>",
+    });
+  });
+
+  it("returns failure on sendMail error", async () => {
+    mockSendMail.mockRejectedValue(new Error("Connection refused"));
+
+    const provider = new SmtpProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "EMAIL",
+        metadata: { email: "user@example.com" },
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Connection refused");
+  });
+
+  it("handles missing subject gracefully", async () => {
+    mockSendMail.mockResolvedValue({});
+
+    const provider = new SmtpProvider(config);
+    await provider.send(
+      notificationRow({
+        channel: "EMAIL",
+        subject: null,
+        metadata: { email: "user@example.com" },
+      }) as never,
+    );
+
+    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({ subject: "" }));
+  });
+});
+
+describe("createSmtpProvider", () => {
+  it("reads from environment variables", () => {
+    createSmtpProvider({
+      SMTP_HOST: "mail.example.com",
+      SMTP_PORT: "2525",
+      SMTP_USER: "envuser",
+      SMTP_PASS: "envpass",
+      SMTP_FROM: "from-env@example.com",
+    });
+
+    expect(mockCreateTransport).toHaveBeenCalledWith({
+      host: "mail.example.com",
+      port: 2525,
+      secure: false,
+      auth: { user: "envuser", pass: "envpass" },
+    });
+  });
+
+  it("uses defaults when env vars are missing", () => {
+    createSmtpProvider({});
+    expect(mockCreateTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "localhost",
+        port: 1025,
+      }),
+    );
+  });
+});
+
+// ── Providers: Webhook ───────────────────────────────────
+
+import { createWebhookProvider, WebhookProvider } from "../providers/webhook.js";
+
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+describe("WebhookProvider", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  const config = {
+    url: "https://partner.example.com/webhooks",
+    secret: "whsec_supersecret32bytes_key!",
+  };
+
+  it("signs payload with HMAC-SHA256", () => {
+    const provider = new WebhookProvider(config);
+    const sig = provider.sign("test-payload", "1234567890");
+    expect(sig).toMatch(/^sha256=[a-f0-9]{64}$/);
+  });
+
+  it("sends signed POST request", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 200 }));
+
+    const provider = new WebhookProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        id: "notif-xyz",
+        memberId: "mem-1",
+        channel: "WEBHOOK",
+        subject: "Test Event",
+        body: "Body content",
+        metadata: { key: "value" },
+      }) as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(url).toBe("https://partner.example.com/webhooks");
+    expect(init.method).toBe("POST");
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(headers["X-LoyaltyOS-Event"]).toBe("notification.sent");
+    expect(headers["X-LoyaltyOS-Signature"]).toMatch(/^sha256=[a-f0-9]{64}$/);
+    expect(headers["X-LoyaltyOS-Timestamp"]).toBeTruthy();
+
+    const body = JSON.parse(init.body as string);
+    expect(body.notificationId).toBe("notif-xyz");
+    expect(body.subject).toBe("Test Event");
+  });
+
+  it("returns failure on non-2xx response", async () => {
+    mockFetch.mockResolvedValue(new Response("Internal Server Error", { status: 500 }));
+
+    const provider = new WebhookProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "WEBHOOK",
+        metadata: {},
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("500");
+  });
+
+  it("returns failure on network error", async () => {
+    mockFetch.mockRejectedValue(new Error("Network unreachable"));
+
+    const provider = new WebhookProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "WEBHOOK",
+        metadata: {},
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Network unreachable");
+  });
+});
+
+describe("WebhookProvider.verify", () => {
+  const secret = "whsec_test_secret_12345";
+
+  it("verifies a valid signature", () => {
+    const payload = JSON.stringify({ event: "points.earned", points: 500 });
+    const timestamp = "1715900000";
+
+    // Generate a valid signature
+    const provider = new WebhookProvider({ url: "https://example.com/webhook", secret });
+    const signature = provider.sign(payload, timestamp);
+
+    const valid = WebhookProvider.verify(payload, signature, timestamp, secret);
+    expect(valid).toBe(true);
+  });
+
+  it("rejects an invalid signature", () => {
+    const payload = JSON.stringify({ event: "points.earned", points: 500 });
+    const timestamp = "1715900000";
+
+    const valid = WebhookProvider.verify(payload, "sha256_" + "a".repeat(64), timestamp, secret);
+    expect(valid).toBe(false);
+  });
+
+  it("rejects tampered payload", () => {
+    const payload = JSON.stringify({ event: "points.earned" });
+    const timestamp = "1715900000";
+
+    const provider = new WebhookProvider({ url: "https://example.com/webhook", secret });
+    const signature = provider.sign(payload, timestamp);
+
+    const valid = WebhookProvider.verify(
+      JSON.stringify({ event: "points.spent" }), // tampered
+      signature,
+      timestamp,
+      secret,
+    );
+    expect(valid).toBe(false);
+  });
+
+  it("rejects wrong timestamp", () => {
+    const payload = JSON.stringify({ event: "points.earned" });
+    const timestamp = "1715900000";
+
+    const provider = new WebhookProvider({ url: "https://example.com/webhook", secret });
+    const signature = provider.sign(payload, timestamp);
+
+    const valid = WebhookProvider.verify(payload, signature, "9999999999", secret);
+    expect(valid).toBe(false);
+  });
+});
+
+describe("createWebhookProvider", () => {
+  it("creates a provider from a subscription object", () => {
+    const provider = createWebhookProvider({
+      url: "https://partner.example.com/webhooks",
+      secret: "whsec_abc123",
+    });
+    expect(provider).toBeInstanceOf(WebhookProvider);
+    expect(provider.channel).toBe("WEBHOOK");
   });
 });

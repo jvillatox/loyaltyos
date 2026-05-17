@@ -169,9 +169,9 @@ export function CampaignBuilderPage(): JSX.Element {
     try {
       const values = form.getValues();
       const payload: Record<string, unknown> = {
-        multiplier: values.multiplier ?? 1,
+        multiplier: Number.isFinite(values.multiplier) ? values.multiplier! : 1,
       };
-      if (values.maxBudget != null) payload.maxBudget = values.maxBudget;
+      if (Number.isFinite(values.maxBudget)) payload.maxBudget = values.maxBudget;
 
       const res = await fetchApi<CampaignEstimate>("/admin/campaigns/estimate", {
         method: "POST",
@@ -186,6 +186,9 @@ export function CampaignBuilderPage(): JSX.Element {
   };
 
   const handleSave = async () => {
+    const valid = await form.trigger();
+    if (!valid) return;
+
     setSaving(true);
     setError(null);
     try {
@@ -194,14 +197,16 @@ export function CampaignBuilderPage(): JSX.Element {
         name: values.name,
         description: values.description,
         type: values.type,
-        multiplier: values.multiplier,
-        maxBudget: values.maxBudget ?? undefined,
-        maxUsesPerMember: values.maxUsesPerMember ?? undefined,
+        multiplier: Number.isFinite(values.multiplier) ? values.multiplier! : 1,
+        maxBudget: Number.isFinite(values.maxBudget) ? values.maxBudget! : undefined,
+        maxUsesPerMember: Number.isFinite(values.maxUsesPerMember)
+          ? values.maxUsesPerMember!
+          : undefined,
         isStackable: values.isStackable ?? false,
         abTesting: values.abTesting ?? false,
         channels: values.channels ?? [],
-        startsAt: values.startsAt ?? undefined,
-        endsAt: values.endsAt ?? undefined,
+        startsAt: values.startsAt !== "" ? values.startsAt : undefined,
+        endsAt: values.endsAt !== "" ? values.endsAt : undefined,
       };
 
       if (isEdit) {

@@ -160,21 +160,11 @@ export class SegmentsService {
     return { ...result, page, pageSize, totalPages: Math.ceil(result.total / pageSize) };
   }
 
-  async count(segmentId: string): Promise<number> {
-    const segment = await this.repo.findById(segmentId);
-    if (!segment) throw new SegmentNotFoundError(segmentId);
-
-    if (segment.type === "STATIC") {
-      return segment.memberIds.length;
-    }
-
-    const rules = segment.rules as Record<string, unknown> | null;
-    if (!rules || Object.keys(rules).length === 0) {
-      return 0;
-    }
+  async estimateCount(programId: string, rules: Record<string, unknown> | null): Promise<number> {
+    if (!rules || Object.keys(rules).length === 0) return 0;
 
     if (hasComputedFields(rules)) {
-      const allMembers = await this.repo.findMembersWithAccounts(segment.programId);
+      const allMembers = await this.repo.findMembersWithAccounts(programId);
       return allMembers.filter((m) => {
         const context: Record<string, unknown> = {
           totalSpent: m.totalSpent,
@@ -192,6 +182,17 @@ export class SegmentsService {
 
     const where = ruleGroupToPrismaWhere(rules);
     return this.repo.countMembersByWhere(where);
+  }
+
+  async count(segmentId: string): Promise<number> {
+    const segment = await this.repo.findById(segmentId);
+    if (!segment) throw new SegmentNotFoundError(segmentId);
+
+    if (segment.type === "STATIC") {
+      return segment.memberIds.length;
+    }
+
+    return this.estimateCount(segment.programId, segment.rules as Record<string, unknown> | null);
   }
 
   async addMembers(segmentId: string, memberIds: string[]): Promise<SegmentRow> {

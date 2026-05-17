@@ -301,6 +301,9 @@ export function SegmentBuilderPage(): JSX.Element {
   };
 
   const handleSave = async () => {
+    const valid = await form.trigger();
+    if (!valid) return;
+
     setSaving(true);
     setError(null);
     try {

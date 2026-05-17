@@ -83,6 +83,14 @@ export function CouponBulkGeneratePage(): JSX.Element {
         body: JSON.stringify({
           ...values,
           channels: values.channels ?? [],
+          startsAt: values.startsAt !== "" ? values.startsAt : undefined,
+          expiresAt: values.expiresAt !== "" ? values.expiresAt : undefined,
+          discountValue: Number.isFinite(values.discountValue) ? values.discountValue : undefined,
+          minPurchase: Number.isFinite(values.minPurchase) ? values.minPurchase : undefined,
+          maxUses: Number.isFinite(values.maxUses) ? values.maxUses : undefined,
+          maxUsesPerMember: Number.isFinite(values.maxUsesPerMember)
+            ? values.maxUsesPerMember
+            : undefined,
         }),
       });
       setResults(codes);

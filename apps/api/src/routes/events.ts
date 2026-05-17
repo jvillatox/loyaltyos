@@ -5,9 +5,45 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
+import { notificationsService } from "../lib/notifications-setup.js";
 
 const points = new PointsService(prisma);
 const campaigns = new CampaignsService(prisma, points);
+
+/** Fire a notification trigger asynchronously (fire-and-forget). */
+async function triggerNotification(
+  triggerEvent: string,
+  memberId: string,
+  programId: string,
+  baseContext: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const member = await prisma.member.findFirst({
+      where: { id: memberId },
+      include: {
+        pointAccount: true,
+        memberTiers: { include: { tier: true } },
+      },
+    });
+    const currentTier = member?.memberTiers.find((mt) => !mt.downgradedAt)?.tier.name;
+    const context: Record<string, unknown> = {
+      ...baseContext,
+      member: {
+        id: member?.id,
+        email: member?.email,
+        phone: member?.phone,
+        firstName: member?.firstName,
+        lastName: member?.lastName,
+        currentTier,
+      },
+      points: member?.pointAccount?.balance ?? 0,
+    };
+    await notificationsService.sendTrigger(programId, triggerEvent, memberId, context);
+  } catch (err) {
+    // Fire-and-forget: never fail the main operation
+    console.error(`[Notifications] Trigger ${triggerEvent} failed:`, err);
+  }
+}
 
 const eventSchema = z.object({
   type: z.string().min(1),
@@ -104,6 +140,14 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
               },
             });
 
+            // Fire notification trigger (fire-and-forget)
+            void triggerNotification("points.earned", body.memberId, request.programId, {
+              points: result.amount,
+              balance: result.balanceAfter,
+              amount,
+              transactionId: result.transactionId,
+            });
+
             return reply.status(201).send({
               data: { event, earnResult: result, appliedCampaigns },
             });
@@ -124,6 +168,13 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
           await prisma.event.update({
             where: { id: event.id },
             data: { processed: true, processedAt: new Date() },
+          });
+
+          // Fire notification trigger (fire-and-forget)
+          void triggerNotification("registration", body.memberId, request.programId, {
+            bonus,
+            points: result.amount,
+            balance: result.balanceAfter,
           });
 
           return reply.status(201).send({ data: { event, earnResult: result } });

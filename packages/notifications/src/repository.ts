@@ -121,6 +121,81 @@ export function createRepository(prisma: PrismaClient) {
 
       return { items, total };
     },
+
+    // Webhook Subscriptions
+    async createWebhook(data: {
+      programId: string;
+      url: string;
+      events: string[];
+      secret: string;
+    }) {
+      return prisma.webhookSubscription.create({ data });
+    },
+
+    async findWebhookById(id: string) {
+      return prisma.webhookSubscription.findFirst({ where: { id } });
+    },
+
+    async findWebhooks(
+      programId: string,
+      filters: { isActive?: boolean; page?: number; pageSize?: number } = {},
+    ) {
+      const where: Prisma.WebhookSubscriptionWhereInput = { programId };
+      if (filters.isActive !== undefined) where.isActive = filters.isActive;
+      const page = filters.page ?? 1;
+      const pageSize = filters.pageSize ?? 20;
+      const [items, total] = await Promise.all([
+        prisma.webhookSubscription.findMany({
+          where,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.webhookSubscription.count({ where }),
+      ]);
+      return { items, total };
+    },
+
+    async updateWebhook(
+      id: string,
+      data: { url?: string; events?: string[]; secret?: string; isActive?: boolean },
+    ) {
+      return prisma.webhookSubscription.update({ where: { id }, data });
+    },
+
+    async deleteWebhook(id: string): Promise<void> {
+      await prisma.webhookSubscription.delete({ where: { id } });
+    },
+
+    // Notification list (admin)
+    async findNotifications(
+      _programId: string,
+      filters: {
+        channel?: string;
+        status?: string;
+        memberId?: string;
+        page?: number;
+        pageSize?: number;
+      } = {},
+    ) {
+      const where: Prisma.NotificationWhereInput = {};
+      if (filters.channel) where.channel = filters.channel as never;
+      if (filters.status) where.status = filters.status as never;
+      if (filters.memberId) where.memberId = filters.memberId;
+      const page = filters.page ?? 1;
+      const pageSize = filters.pageSize ?? 20;
+      const [items, total] = await Promise.all([
+        prisma.notification.findMany({
+          where,
+          include: { template: true },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.notification.count({ where }),
+      ]);
+      return { items, total };
+    },
   };
 }
 
