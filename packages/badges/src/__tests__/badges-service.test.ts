@@ -182,7 +182,7 @@ describe("BadgesService.evaluateOnEvent", () => {
     });
     mockPrisma.event.findMany.mockResolvedValue([]);
     mockPrisma.memberBadge.findMany.mockResolvedValue([
-      { memberId: "mem-1", badgeId: badge.id, unlockedAt: new Date(), badgeId: badge.id },
+      { memberId: "mem-1", badgeId: badge.id, unlockedAt: new Date(), progress: 100 },
     ]);
     mockPrisma.memberBadge.upsert.mockResolvedValue({
       id: "mb-1",
