@@ -1,3 +1,4 @@
+import { BadgesService, TiersService } from "@loyaltyos/badges";
 import { PointsService } from "@loyaltyos/core";
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -6,6 +7,8 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 
 const points = new PointsService(prisma);
+const badges = new BadgesService(prisma);
+const tiers = new TiersService(prisma);
 
 const createMemberSchema = z.object({
   externalId: z.string().optional(),
@@ -134,6 +137,20 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
       idempotencyKey,
     });
     return reply.status(201).send({ data: result });
+  });
+
+  // GET /members/:id/badges — Get member badges with progress
+  app.get("/members/:id/badges", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const result = await badges.getMemberBadges(id);
+    return reply.send({ data: result });
+  });
+
+  // GET /members/:id/tier — Get member tier with progress to next
+  app.get("/members/:id/tier", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const result = await tiers.getMemberTier(id, request.programId);
+    return reply.send({ data: result });
   });
 
   done();

@@ -1,6 +1,8 @@
 import { Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/app-layout";
+import { BadgeEditorPage } from "@/pages/badge-editor";
+import { BadgesListPage } from "@/pages/badges-list";
 import { CampaignBuilderPage } from "@/pages/campaign-builder";
 import { CampaignsListPage } from "@/pages/campaigns-list";
 import { CouponBulkGeneratePage } from "@/pages/coupon-bulk-generate";
@@ -10,6 +12,7 @@ import { MemberDetailPage } from "@/pages/member-detail";
 import { MembersListPage } from "@/pages/members-list";
 import { SegmentBuilderPage } from "@/pages/segment-builder";
 import { SegmentsListPage } from "@/pages/segments-list";
+import { TiersListPage } from "@/pages/tiers-list";
 
 export function App(): JSX.Element {
   return (
@@ -26,6 +29,10 @@ export function App(): JSX.Element {
         <Route path="/segments" element={<SegmentsListPage />} />
         <Route path="/segments/new" element={<SegmentBuilderPage />} />
         <Route path="/segments/:id/edit" element={<SegmentBuilderPage />} />
+        <Route path="/badges" element={<BadgesListPage />} />
+        <Route path="/badges/new" element={<BadgeEditorPage />} />
+        <Route path="/badges/:id/edit" element={<BadgeEditorPage />} />
+        <Route path="/tiers" element={<TiersListPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

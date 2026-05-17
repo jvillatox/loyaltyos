@@ -1,3 +1,4 @@
+import { BadgesService, TiersService } from "@loyaltyos/badges";
 import { CampaignsService } from "@loyaltyos/campaigns";
 import { PointsService } from "@loyaltyos/core";
 import type { Prisma } from "@prisma/client";
@@ -9,6 +10,8 @@ import { notificationsService } from "../lib/notifications-setup.js";
 
 const points = new PointsService(prisma);
 const campaigns = new CampaignsService(prisma, points);
+const badges = new BadgesService(prisma);
+const tiers = new TiersService(prisma);
 
 /** Fire a notification trigger asynchronously (fire-and-forget). */
 async function triggerNotification(
@@ -147,6 +150,44 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
               amount,
               transactionId: result.transactionId,
             });
+
+            // Evaluate tier changes (fire-and-forget)
+            void (async () => {
+              try {
+                const tierResult = await tiers.evaluateMember(body.memberId!, programId);
+                if (tierResult.changed && tierResult.direction === "upgrade") {
+                  void triggerNotification("tier.changed", body.memberId!, programId, {
+                    previousTier: tierResult.previousTier?.name,
+                    currentTier: tierResult.currentTier?.name,
+                    direction: "upgrade",
+                  });
+                }
+              } catch (err) {
+                console.error("[Tiers] Evaluation failed:", err);
+              }
+            })();
+
+            // Evaluate badges for this event (fire-and-forget)
+            void (async () => {
+              try {
+                const badgeResult = await badges.evaluateOnEvent({
+                  type: body.type,
+                  memberId: body.memberId!,
+                  programId,
+                  amount,
+                  payload: body.payload,
+                });
+                for (const unlocked of badgeResult.unlocked) {
+                  void triggerNotification("badge.unlocked", body.memberId!, programId, {
+                    badgeId: unlocked.id,
+                    badgeName: unlocked.name,
+                    badgeType: unlocked.type,
+                  });
+                }
+              } catch (err) {
+                console.error("[Badges] Evaluation failed:", err);
+              }
+            })();
 
             return reply.status(201).send({
               data: { event, earnResult: result, appliedCampaigns },
