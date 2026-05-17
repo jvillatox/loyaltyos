@@ -21,6 +21,13 @@ import {
   CouponNotStartedError,
 } from "@loyaltyos/coupons";
 import {
+  RewardInsufficientPointsError,
+  RewardNotActiveError,
+  RewardNotFoundError,
+  RewardOutOfStockError,
+  RewardTierInsufficientError,
+} from "@loyaltyos/rewards";
+import {
   InvalidSegmentRuleError,
   SegmentNotActiveError,
   SegmentNotFoundError,
@@ -177,6 +184,42 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
     return {
       status: 422,
       body: { error: { code: "COUPON_CHANNEL_ERROR", message: err.message } },
+    };
+  }
+
+  // Reward domain errors
+  if (err instanceof RewardNotFoundError) {
+    return {
+      status: 404,
+      body: { error: { code: "REWARD_NOT_FOUND", message: err.message } },
+    };
+  }
+
+  if (err instanceof RewardNotActiveError) {
+    return {
+      status: 422,
+      body: { error: { code: "REWARD_NOT_ACTIVE", message: err.message } },
+    };
+  }
+
+  if (err instanceof RewardOutOfStockError) {
+    return {
+      status: 422,
+      body: { error: { code: "REWARD_OUT_OF_STOCK", message: err.message } },
+    };
+  }
+
+  if (err instanceof RewardTierInsufficientError) {
+    return {
+      status: 422,
+      body: { error: { code: "REWARD_TIER_INSUFFICIENT", message: err.message } },
+    };
+  }
+
+  if (err instanceof RewardInsufficientPointsError) {
+    return {
+      status: 422,
+      body: { error: { code: "REWARD_INSUFFICIENT_POINTS", message: err.message } },
     };
   }
 

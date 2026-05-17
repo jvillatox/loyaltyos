@@ -24,6 +24,7 @@
     "@loyaltyos/campaigns": "workspace:*",
     "@loyaltyos/core": "workspace:*",
     "@loyaltyos/coupons": "workspace:*",
+    "@loyaltyos/rewards": "workspace:*",
     "@loyaltyos/notifications": "workspace:*",
     "@loyaltyos/segments": "workspace:*",
     "@prisma/client": "^5.15.0",

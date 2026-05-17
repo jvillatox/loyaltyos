@@ -11,12 +11,14 @@ import { adminBadgesRoutes } from "./routes/admin/badges.js";
 import { adminCampaignsRoutes } from "./routes/admin/campaigns.js";
 import { adminCouponsRoutes } from "./routes/admin/coupons.js";
 import { adminNotificationsRoutes } from "./routes/admin/notifications.js";
+import { adminRewardsRoutes } from "./routes/admin/rewards.js";
 import { adminSegmentsRoutes } from "./routes/admin/segments.js";
 import { adminTiersRoutes } from "./routes/admin/tiers.js";
 import { couponsRoutes } from "./routes/coupons.js";
 import { eventsRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { membersRoutes } from "./routes/members.js";
+import { rewardsRoutes } from "./routes/rewards.js";
 import { statsRoutes } from "./routes/stats.js";
 
 export async function buildApp(opts: { logger?: boolean } = {}) {
@@ -80,6 +82,8 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   await app.register(adminCouponsRoutes, { prefix: "/api/v1" });
   await app.register(adminNotificationsRoutes, { prefix: "/api/v1" });
   await app.register(couponsRoutes, { prefix: "/api/v1" });
+  await app.register(rewardsRoutes, { prefix: "/api/v1" });
+  await app.register(adminRewardsRoutes, { prefix: "/api/v1" });
 
   return app;
 }
