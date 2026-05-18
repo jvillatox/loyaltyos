@@ -948,3 +948,334 @@ describe("createWebhookProvider", () => {
     expect(provider.channel).toBe("WEBHOOK");
   });
 });
+
+// ── Providers: Twilio SMS ─────────────────────────────────
+
+import { createTwilioProvider, TwilioSmsProvider } from "../providers/twilio.js";
+
+describe("TwilioSmsProvider", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  const config = {
+    accountSid: "AC_test_sid",
+    authToken: "test_auth_token",
+    from: "+1234567890",
+  };
+
+  it("has channel SMS", () => {
+    const provider = new TwilioSmsProvider(config);
+    expect(provider.channel).toBe("SMS");
+  });
+
+  it("sends SMS with correct parameters", async () => {
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ sid: "SM123" }), { status: 201 }));
+
+    const provider = new TwilioSmsProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "SMS",
+        subject: "Welcome!",
+        body: "Hello Carlos, you earned 100 points",
+        metadata: { phone: "+521234567890" },
+      }) as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(url).toContain("api.twilio.com");
+    expect(url).toContain("AC_test_sid");
+    expect(init.method).toBe("POST");
+    expect(headers.Authorization).toBe(
+      `Basic ${Buffer.from("AC_test_sid:test_auth_token").toString("base64")}`,
+    );
+    expect(headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
+
+    const body = init.body as string;
+    expect(body).toContain("To=%2B521234567890");
+    expect(body).toContain("From=%2B1234567890");
+  });
+
+  it("uses body text as SMS content", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 201 }));
+
+    const provider = new TwilioSmsProvider(config);
+    await provider.send(
+      notificationRow({
+        channel: "SMS",
+        subject: null,
+        body: "Plain text SMS body",
+        metadata: { phone: "+521234567890" },
+      }) as never,
+    );
+
+    const body = mockFetch.mock.calls[0][1].body as string;
+    expect(body).toContain("Body=Plain+text+SMS+body");
+  });
+
+  it("falls back to subject when body is missing", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 201 }));
+
+    const provider = new TwilioSmsProvider(config);
+    await provider.send(
+      notificationRow({
+        channel: "SMS",
+        subject: "Subject as fallback",
+        body: null,
+        metadata: { phone: "+521234567890" },
+      }) as never,
+    );
+
+    const body = mockFetch.mock.calls[0][1].body as string;
+    expect(body).toContain("Body=Subject+as+fallback");
+  });
+
+  it("returns failure when phone is missing", async () => {
+    const provider = new TwilioSmsProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "SMS",
+        metadata: {},
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No phone number");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("returns failure on non-2xx response", async () => {
+    mockFetch.mockResolvedValue(new Response("Unauthorized", { status: 401 }));
+
+    const provider = new TwilioSmsProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "SMS",
+        metadata: { phone: "+521234567890" },
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("401");
+  });
+
+  it("returns failure on network error", async () => {
+    mockFetch.mockRejectedValue(new Error("Network unreachable"));
+
+    const provider = new TwilioSmsProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "SMS",
+        metadata: { phone: "+521234567890" },
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Network unreachable");
+  });
+});
+
+describe("createTwilioProvider", () => {
+  it("returns a provider when all env vars are set", () => {
+    const provider = createTwilioProvider({
+      TWILIO_ACCOUNT_SID: "AC_env_sid",
+      TWILIO_AUTH_TOKEN: "env_token",
+      TWILIO_PHONE_NUMBER: "+1555000111",
+    });
+    expect(provider).toBeInstanceOf(TwilioSmsProvider);
+    expect(provider?.channel).toBe("SMS");
+  });
+
+  it("returns null when account SID is missing", () => {
+    const provider = createTwilioProvider({
+      TWILIO_AUTH_TOKEN: "env_token",
+      TWILIO_PHONE_NUMBER: "+1555000111",
+    });
+    expect(provider).toBeNull();
+  });
+
+  it("returns null when auth token is missing", () => {
+    const provider = createTwilioProvider({
+      TWILIO_ACCOUNT_SID: "AC_env_sid",
+      TWILIO_PHONE_NUMBER: "+1555000111",
+    });
+    expect(provider).toBeNull();
+  });
+
+  it("returns null when phone number is missing", () => {
+    const provider = createTwilioProvider({
+      TWILIO_ACCOUNT_SID: "AC_env_sid",
+      TWILIO_AUTH_TOKEN: "env_token",
+    });
+    expect(provider).toBeNull();
+  });
+});
+
+// ── Providers: OneSignal Push ─────────────────────────────
+
+import { createOneSignalProvider, OneSignalPushProvider } from "../providers/onesignal.js";
+
+describe("OneSignalPushProvider", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  const config = {
+    appId: "test-app-id-1234",
+    apiKey: "os_api_key_xyz",
+  };
+
+  it("has channel PUSH", () => {
+    const provider = new OneSignalPushProvider(config);
+    expect(provider.channel).toBe("PUSH");
+  });
+
+  it("sends push notification with correct parameters", async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ id: "notif-os-1" }), { status: 200 }),
+    );
+
+    const provider = new OneSignalPushProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "PUSH",
+        memberId: "mem-42",
+        subject: "Points Earned!",
+        body: "You just earned 500 points",
+        metadata: { deeplink: "loyaltyos://home" },
+      }) as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(url).toBe("https://onesignal.com/api/v1/notifications");
+    expect(init.method).toBe("POST");
+    expect(headers.Authorization).toBe("Basic os_api_key_xyz");
+    expect(headers["Content-Type"]).toBe("application/json");
+
+    const body = JSON.parse(init.body as string);
+    expect(body.app_id).toBe("test-app-id-1234");
+    expect(body.contents.en).toBe("You just earned 500 points");
+    expect(body.headings.en).toBe("Points Earned!");
+    expect(body.include_external_user_ids).toEqual(["mem-42"]);
+    expect(body.data.deeplink).toBe("loyaltyos://home");
+  });
+
+  it("omits headings when subject is missing", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 200 }));
+
+    const provider = new OneSignalPushProvider(config);
+    await provider.send(
+      notificationRow({
+        channel: "PUSH",
+        memberId: "mem-1",
+        subject: null,
+        body: "Body only notification",
+      }) as never,
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.headings).toBeUndefined();
+    expect(body.contents.en).toBe("Body only notification");
+  });
+
+  it("uses subject as body when body is missing", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 200 }));
+
+    const provider = new OneSignalPushProvider(config);
+    await provider.send(
+      notificationRow({
+        channel: "PUSH",
+        memberId: "mem-1",
+        subject: "Subject only",
+        body: null,
+      }) as never,
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.contents.en).toBe("Subject only");
+  });
+
+  it("omits data when metadata is empty", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 200 }));
+
+    const provider = new OneSignalPushProvider(config);
+    await provider.send(
+      notificationRow({
+        channel: "PUSH",
+        memberId: "mem-1",
+        metadata: {},
+      }) as never,
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.data).toBeUndefined();
+  });
+
+  it("returns failure on non-2xx response", async () => {
+    mockFetch.mockResolvedValue(new Response("Bad Request", { status: 400 }));
+
+    const provider = new OneSignalPushProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "PUSH",
+        memberId: "mem-1",
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("400");
+  });
+
+  it("returns failure on network error", async () => {
+    mockFetch.mockRejectedValue(new Error("Connection timeout"));
+
+    const provider = new OneSignalPushProvider(config);
+    const result = await provider.send(
+      notificationRow({
+        channel: "PUSH",
+        memberId: "mem-1",
+      }) as never,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Connection timeout");
+  });
+});
+
+describe("createOneSignalProvider", () => {
+  it("returns a provider when all env vars are set", () => {
+    const provider = createOneSignalProvider({
+      ONESIGNAL_APP_ID: "env-app-id",
+      ONESIGNAL_API_KEY: "env-api-key",
+    });
+    expect(provider).toBeInstanceOf(OneSignalPushProvider);
+    expect(provider?.channel).toBe("PUSH");
+  });
+
+  it("returns null when app ID is missing", () => {
+    const provider = createOneSignalProvider({
+      ONESIGNAL_API_KEY: "env-api-key",
+    });
+    expect(provider).toBeNull();
+  });
+
+  it("returns null when API key is missing", () => {
+    const provider = createOneSignalProvider({
+      ONESIGNAL_APP_ID: "env-app-id",
+    });
+    expect(provider).toBeNull();
+  });
+
+  it("returns null when no env vars are set", () => {
+    const provider = createOneSignalProvider({});
+    expect(provider).toBeNull();
+  });
+});
