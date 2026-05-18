@@ -10,6 +10,8 @@ export const templateCreateSchema = z.object({
   bodyHtml: z.string().optional(),
   bodyText: z.string().optional(),
   triggerEvent: z.string().optional(),
+  transactional: z.boolean().optional(),
+  fallbackChannel: channelEnum.optional(),
 });
 
 export const templateUpdateSchema = z.object({
@@ -18,6 +20,8 @@ export const templateUpdateSchema = z.object({
   bodyHtml: z.string().optional(),
   bodyText: z.string().optional(),
   triggerEvent: z.string().optional(),
+  transactional: z.boolean().optional(),
+  fallbackChannel: channelEnum.optional().nullable(),
 });
 
 export const notificationCreateSchema = z.object({

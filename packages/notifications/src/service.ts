@@ -145,10 +145,18 @@ export class NotificationsService {
     return notifications;
   }
 
-  /** Send a notification. If an enqueue function is set, enqueues for async delivery instead of sending directly. */
+  /** Send a notification. Checks opt-out preferences, then enqueues or delivers. */
   async send(id: string): Promise<NotificationRow> {
     const notification = await this.repo.findNotificationById(id);
     if (!notification) throw new NotificationNotFoundError(id);
+
+    // Check opt-out preferences (skip for transactional notifications)
+    const skipReason = await this.checkOptOut(notification);
+    if (skipReason) {
+      return this.repo.updateNotificationStatus(id, "SKIPPED_OPT_OUT", {
+        error: skipReason,
+      });
+    }
 
     // If an async queue is configured, enqueue and return immediately
     if (this.enqueueFn) {
@@ -159,11 +167,37 @@ export class NotificationsService {
     return this.deliver(id);
   }
 
-  /** Deliver a notification via its channel's provider (used by the worker). */
+  /** Check if the member has opted out of this notification's channel. Returns the reason string if skipped, null otherwise. */
+  private async checkOptOut(notification: NotificationRow): Promise<string | null> {
+    if (!notification.templateId) return null;
+
+    const template = await this.repo.findTemplateById(notification.templateId);
+    if (!template) return null;
+
+    // Transactional notifications ignore preferences
+    if (template.transactional) return null;
+
+    // Check member preferences — need programId from template
+    const programId = template.programId;
+    const prefs = await this.repo.findMemberPreferences(
+      notification.memberId,
+      programId,
+      notification.channel,
+    );
+
+    if (prefs && !prefs.optedIn) {
+      return `Member opted out of ${notification.channel} notifications`;
+    }
+
+    return null;
+  }
+
+  /** Deliver a notification via its channel's provider (used by the worker). Falls back to fallbackChannel on failure. */
   async deliver(id: string): Promise<NotificationRow> {
     const notification = await this.repo.findNotificationById(id);
     if (!notification) throw new NotificationNotFoundError(id);
 
+    // Try primary channel
     const provider = this.providers.get(notification.channel);
     if (!provider) throw new ProviderNotFoundError(notification.channel);
 
@@ -175,9 +209,65 @@ export class NotificationsService {
       });
     }
 
+    // Check for fallback channel on the template
+    const fallbackChannel = await this.getFallbackChannel(notification);
+    if (fallbackChannel && fallbackChannel !== notification.channel) {
+      const fallbackProvider = this.providers.get(fallbackChannel);
+      if (fallbackProvider) {
+        const fallbackResult = await fallbackProvider.send({
+          ...notification,
+          channel: fallbackChannel,
+        });
+
+        if (fallbackResult.success) {
+          return this.repo.updateNotificationStatus(id, "SENT", {
+            sentAt: new Date(),
+          });
+        }
+
+        return this.repo.updateNotificationStatus(id, "FAILED", {
+          error: `Primary and fallback both failed. Primary: ${result.error ?? "unknown"}. Fallback (${fallbackChannel}): ${fallbackResult.error ?? "unknown"}`,
+        });
+      }
+    }
+
     return this.repo.updateNotificationStatus(id, "FAILED", {
       error: result.error ?? "Unknown error",
     });
+  }
+
+  /** Get the fallback channel from the notification's template, if any. */
+  private async getFallbackChannel(
+    notification: NotificationRow,
+  ): Promise<NotificationChannel | null> {
+    if (!notification.templateId) return null;
+    const template = await this.repo.findTemplateById(notification.templateId);
+    return (template?.fallbackChannel as NotificationChannel | null) ?? null;
+  }
+
+  /** Get member notification preferences for all channels. */
+  async getMemberPreferences(
+    memberId: string,
+    programId: string,
+  ): Promise<{ channel: NotificationChannel; optedIn: boolean }[]> {
+    const channels: NotificationChannel[] = ["EMAIL", "SMS", "PUSH", "IN_APP"];
+    const results = await Promise.all(
+      channels.map(async (channel) => {
+        const prefs = await this.repo.findMemberPreferences(memberId, programId, channel);
+        return { channel, optedIn: prefs?.optedIn ?? true };
+      }),
+    );
+    return results;
+  }
+
+  /** Upsert a member's notification preference for a channel. */
+  async upsertMemberPreference(
+    memberId: string,
+    programId: string,
+    channel: NotificationChannel,
+    optedIn: boolean,
+  ): Promise<void> {
+    await this.repo.upsertMemberPreference(memberId, programId, channel, optedIn);
   }
 
   async markRead(id: string): Promise<NotificationRow> {

@@ -27,6 +27,8 @@ model Program {
   rewards            Reward[]
   badges             Badge[]
   notificationTemplates NotificationTemplate[]
+  memberDevices        MemberDevice[]
+  memberNotificationPreferences MemberNotificationPreferences[]
   coalitionAccounts  CoalitionAccount[]
   adminUsers         AdminUser[]
   events             Event[]
@@ -59,6 +61,8 @@ model Member {
   rewardRedemptions  RewardRedemption[]
   memberBadges       MemberBadge[]
   notifications      Notification[]
+  memberDevices      MemberDevice[]
+  memberNotificationPreferences MemberNotificationPreferences[]
   coalitionAccounts  CoalitionAccount[]
   // Inbound events
   events             Event[]
@@ -420,19 +424,22 @@ enum NotificationStatus {
   SENT
   FAILED
   READ
+  SKIPPED_OPT_OUT
 }
 
 model NotificationTemplate {
-  id        String  @id @default(cuid())
-  programId String
-  name      String
-  channel   NotificationChannel
-  subject   String?
-  bodyHtml  String?
-  bodyText  String?
-  triggerEvent String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String              @id @default(cuid())
+  programId       String
+  name            String
+  channel         NotificationChannel
+  subject         String?
+  bodyHtml        String?
+  bodyText        String?
+  triggerEvent    String?
+  transactional   Boolean             @default(false)
+  fallbackChannel NotificationChannel?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   program       Program         @relation(fields: [programId], references: [id], onDelete: Cascade)
   notifications Notification[]
@@ -624,6 +631,43 @@ model AuditLog {
   @@index([adminUserId])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+model MemberDevice {
+  id        String         @id @default(cuid())
+  memberId  String
+  programId String
+  token     String         @unique
+  platform  DevicePlatform
+  lastSeenAt DateTime      @default(now())
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, programId])
+}
+
+model MemberNotificationPreferences {
+  id        String              @id @default(cuid())
+  memberId  String
+  programId String
+  channel   NotificationChannel
+  optedIn   Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, programId, channel])
 }
 
 model Event {

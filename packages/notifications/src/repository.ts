@@ -196,6 +196,32 @@ export function createRepository(prisma: PrismaClient) {
       ]);
       return { items, total };
     },
+
+    // Notification preferences
+    async findMemberPreferences(
+      memberId: string,
+      programId: string,
+      channel: string,
+    ): Promise<{ optedIn: boolean } | null> {
+      const row = await prisma.memberNotificationPreferences.findUnique({
+        where: { memberId_programId_channel: { memberId, programId, channel: channel as never } },
+        select: { optedIn: true },
+      });
+      return row;
+    },
+
+    async upsertMemberPreference(
+      memberId: string,
+      programId: string,
+      channel: string,
+      optedIn: boolean,
+    ): Promise<void> {
+      await prisma.memberNotificationPreferences.upsert({
+        where: { memberId_programId_channel: { memberId, programId, channel: channel as never } },
+        create: { memberId, programId, channel: channel as never, optedIn },
+        update: { optedIn, updatedAt: new Date() },
+      });
+    },
   };
 }
 

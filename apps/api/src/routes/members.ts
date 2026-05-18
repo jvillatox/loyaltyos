@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
+import { notificationsService } from "../lib/notifications-setup.js";
 
 const points = new PointsService(prisma);
 const badges = new BadgesService(prisma);
@@ -83,6 +84,23 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     });
   });
 
+  app.get("/members/me", async (request, reply) => {
+    const memberId = request.memberId;
+    if (!memberId) {
+      return reply.status(401).send({
+        error: { code: "UNAUTHORIZED", message: "Authentication required" },
+      });
+    }
+
+    const member = await prisma.member.findFirst({
+      where: { id: memberId, deletedAt: null },
+    });
+    if (!member) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+    }
+    return reply.send({ data: member });
+  });
+
   app.get("/members/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
 
@@ -93,6 +111,65 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Member not found" } });
     }
     return reply.send({ data: member });
+  });
+
+  // GET /members/me/balance — authenticated member balance
+  app.get("/members/me/balance", async (request, reply) => {
+    const memberId = request.memberId;
+    if (!memberId) {
+      return reply
+        .status(401)
+        .send({ error: { code: "UNAUTHORIZED", message: "Authentication required" } });
+    }
+    const result = await points.balance(memberId, request.programId);
+    return reply.send({ data: result });
+  });
+
+  // GET /members/me/transactions — authenticated member transaction history
+  app.get("/members/me/transactions", async (request, reply) => {
+    const memberId = request.memberId;
+    if (!memberId) {
+      return reply
+        .status(401)
+        .send({ error: { code: "UNAUTHORIZED", message: "Authentication required" } });
+    }
+    const query = z
+      .object({
+        page: z.coerce.number().int().min(1).optional().default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+        type: z.string().optional(),
+      })
+      .parse(request.query);
+
+    const result = await points.history(memberId, request.programId, {
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    return reply.send({ data: result });
+  });
+
+  // GET /members/me/badges — authenticated member badges
+  app.get("/members/me/badges", async (request, reply) => {
+    const memberId = request.memberId;
+    if (!memberId) {
+      return reply
+        .status(401)
+        .send({ error: { code: "UNAUTHORIZED", message: "Authentication required" } });
+    }
+    const result = await badges.getMemberBadges(memberId);
+    return reply.send({ data: result });
+  });
+
+  // GET /members/me/tier — authenticated member tier progress
+  app.get("/members/me/tier", async (request, reply) => {
+    const memberId = request.memberId;
+    if (!memberId) {
+      return reply
+        .status(401)
+        .send({ error: { code: "UNAUTHORIZED", message: "Authentication required" } });
+    }
+    const result = await tiers.getMemberTier(memberId, request.programId);
+    return reply.send({ data: result });
   });
 
   app.get("/members/:id/balance", async (request, reply) => {
@@ -151,6 +228,84 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const result = await tiers.getMemberTier(id, request.programId);
     return reply.send({ data: result });
+  });
+
+  // ═══ Member Devices ═══
+
+  const deviceCreateSchema = z.object({
+    token: z.string().min(1),
+    platform: z.enum(["IOS", "ANDROID", "WEB"]),
+  });
+
+  // POST /members/:id/devices — idempotent upsert by token
+  app.post("/members/:id/devices", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = deviceCreateSchema.parse(request.body);
+
+    const device = await prisma.memberDevice.upsert({
+      where: { token: body.token },
+      create: {
+        memberId: id,
+        programId: request.programId,
+        token: body.token,
+        platform: body.platform,
+        lastSeenAt: new Date(),
+      },
+      update: {
+        lastSeenAt: new Date(),
+        platform: body.platform,
+      },
+    });
+
+    return reply.status(201).send({ data: device });
+  });
+
+  // DELETE /members/:id/devices/:deviceId
+  app.delete("/members/:id/devices/:deviceId", async (request, reply) => {
+    const { id, deviceId } = z
+      .object({ id: z.string(), deviceId: z.string() })
+      .parse(request.params);
+
+    const device = await prisma.memberDevice.findFirst({
+      where: { id: deviceId, memberId: id },
+    });
+    if (!device) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Device not found" } });
+    }
+
+    await prisma.memberDevice.delete({ where: { id: deviceId } });
+    return reply.status(204).send();
+  });
+
+  // ═══ Notification Preferences ═══
+
+  const preferenceUpdateSchema = z.object({
+    channel: z.enum(["EMAIL", "SMS", "PUSH", "IN_APP"]),
+    optedIn: z.boolean(),
+  });
+
+  // GET /members/:id/preferences
+  app.get("/members/:id/preferences", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const prefs = await notificationsService.getMemberPreferences(id, request.programId);
+    return reply.send({ data: prefs });
+  });
+
+  // PATCH /members/:id/preferences
+  app.patch("/members/:id/preferences", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = preferenceUpdateSchema.parse(request.body);
+
+    await notificationsService.upsertMemberPreference(
+      id,
+      request.programId,
+      body.channel,
+      body.optedIn,
+    );
+
+    // Return updated preferences
+    const prefs = await notificationsService.getMemberPreferences(id, request.programId);
+    return reply.send({ data: prefs });
   });
 
   done();

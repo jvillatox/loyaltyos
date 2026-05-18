@@ -18,6 +18,8 @@ export interface TemplateCreateInput {
   bodyHtml?: string;
   bodyText?: string;
   triggerEvent?: string;
+  transactional?: boolean;
+  fallbackChannel?: NotificationChannel;
 }
 
 export interface TemplateUpdateInput {
@@ -26,6 +28,8 @@ export interface TemplateUpdateInput {
   bodyHtml?: string;
   bodyText?: string;
   triggerEvent?: string;
+  transactional?: boolean;
+  fallbackChannel?: NotificationChannel | null;
 }
 
 export interface TemplateListFilters {
