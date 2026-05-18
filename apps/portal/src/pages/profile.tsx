@@ -1,9 +1,20 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle, Download, Globe, LogOut, Mail, Moon, Sun } from "lucide-react";
+import {
+  Bell,
+  CheckCircle,
+  Download,
+  Globe,
+  LogOut,
+  Mail,
+  MessageSquare,
+  Moon,
+  Smartphone,
+  Sun,
+} from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { fetchApi, postApi } from "../lib/api-client";
+import { fetchApi, patchApi, postApi } from "../lib/api-client";
 import { clearSession, getSession, isAuthenticated, sendMagicLink } from "../lib/auth";
 import { applyTheme } from "../lib/theme";
 import type { MemberProfile } from "../types";
@@ -19,10 +30,19 @@ export default function Profile() {
     () => (sessionStorage.getItem("theme") as "light" | "dark" | "auto" | null) ?? "auto",
   );
 
+  const memberId = session?.memberId;
+
   const profile = useQuery({
     queryKey: ["profile"],
     queryFn: () => fetchApi<MemberProfile>("/members/me"),
     enabled: authed,
+  });
+
+  const prefs = useQuery({
+    queryKey: ["notification-prefs", memberId],
+    queryFn: () =>
+      fetchApi<{ channel: string; optedIn: boolean }[]>(`/members/${memberId ?? ""}/preferences`),
+    enabled: authed && !!memberId,
   });
 
   const magicLinkMutation = useMutation({
@@ -36,6 +56,17 @@ export default function Profile() {
     mutationFn: () => postApi<{ downloadUrl: string }>("/members/me/gdpr-export", {}),
     onSuccess: (data) => {
       if (data.downloadUrl) window.open(data.downloadUrl, "_blank");
+    },
+  });
+
+  const prefsMutation = useMutation({
+    mutationFn: (input: { channel: string; optedIn: boolean }) =>
+      patchApi<{ channel: string; optedIn: boolean }[]>(
+        `/members/${memberId ?? ""}/preferences`,
+        input,
+      ),
+    onSuccess: () => {
+      void prefs.refetch();
     },
   });
 
@@ -211,6 +242,53 @@ export default function Profile() {
             </div>
           </div>
         </div>
+
+        {authed && prefs.data && (
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-4">
+            <h3 className="mb-3 text-sm font-semibold">{t("notificationPreferences")}</h3>
+            {(["EMAIL", "SMS", "PUSH", "IN_APP"] as const).map((channel) => {
+              const pref = prefs.data.find((p) => p.channel === channel);
+              const optedIn = pref?.optedIn ?? true;
+              const icons: Record<string, JSX.Element> = {
+                EMAIL: <Mail className="h-4 w-4 text-[var(--color-text-secondary)]" />,
+                SMS: <MessageSquare className="h-4 w-4 text-[var(--color-text-secondary)]" />,
+                PUSH: <Smartphone className="h-4 w-4 text-[var(--color-text-secondary)]" />,
+                IN_APP: <Bell className="h-4 w-4 text-[var(--color-text-secondary)]" />,
+              };
+              const labels: Record<string, string> = {
+                EMAIL: t("emailChannel"),
+                SMS: t("smsChannel"),
+                PUSH: t("pushChannel"),
+                IN_APP: t("inAppChannel"),
+              };
+              return (
+                <div key={channel} className="flex items-center gap-3 py-1.5">
+                  {icons[channel]}
+                  <span className="flex-1 text-sm">{labels[channel]}</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={optedIn}
+                    aria-label={labels[channel]}
+                    onClick={() => {
+                      prefsMutation.mutate({ channel, optedIn: !optedIn });
+                    }}
+                    disabled={prefsMutation.isPending}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:opacity-50 ${
+                      optedIn ? "bg-[var(--color-primary)]" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform ${
+                        optedIn ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );

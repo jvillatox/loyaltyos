@@ -11,14 +11,13 @@ export class ApiError extends Error {
 }
 
 export async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = sessionStorage.getItem("auth-token");
   const programId = sessionStorage.getItem("program-id") ?? "prog_001";
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "X-Program-Id": programId,
       ...(options.headers as Record<string, string> | undefined),
     },
@@ -26,6 +25,7 @@ export async function fetchApi<T>(path: string, options: RequestInit = {}): Prom
 
   if (response.status === 401) {
     sessionStorage.removeItem("auth-token");
+    sessionStorage.removeItem("member-id");
     window.dispatchEvent(new CustomEvent("loyaltyos:auth-required"));
     throw new ApiError(401, "Session expired");
   }
@@ -41,6 +41,13 @@ export async function fetchApi<T>(path: string, options: RequestInit = {}): Prom
 export async function postApi<T>(path: string, data: unknown): Promise<T> {
   return fetchApi<T>(path, {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function patchApi<T>(path: string, data: unknown): Promise<T> {
+  return fetchApi<T>(path, {
+    method: "PATCH",
     body: JSON.stringify(data),
   });
 }
