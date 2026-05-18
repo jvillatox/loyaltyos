@@ -1,0 +1,50 @@
+/* ── LoyaltyOS Widget Design Tokens ──────────────────────────────────────
+   Override these custom properties on <loyalty-widget> to theme the widget:
+     loyalty-widget { --loy-color-primary: #0066ff; }
+   ─────────────────────────────────────────────────────────────────────── */
+
+:host {
+  /* Colors */
+  --loy-color-primary: #7c3aed;
+  --loy-color-primary-text: #ffffff;
+  --loy-color-surface: #ffffff;
+  --loy-color-surface-secondary: #f8fafc;
+  --loy-color-text: #0f172a;
+  --loy-color-text-secondary: #64748b;
+  --loy-color-success: #22c55e;
+  --loy-color-success-bg: #f0fdf4;
+  --loy-color-danger: #ef4444;
+  --loy-color-danger-bg: #fef2f2;
+  --loy-color-warning: #f59e0b;
+  --loy-color-warning-bg: #fffbeb;
+  --loy-color-border: #e2e8f0;
+
+  /* Spacing */
+  --loy-space-xs: 4px;
+  --loy-space-sm: 8px;
+  --loy-space-md: 16px;
+  --loy-space-lg: 24px;
+  --loy-space-xl: 32px;
+
+  /* Typography */
+  --loy-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --loy-font-size-sm: 12px;
+  --loy-font-size-md: 14px;
+  --loy-font-size-lg: 18px;
+  --loy-font-size-xl: 24px;
+  --loy-font-weight-normal: 400;
+  --loy-font-weight-semibold: 600;
+  --loy-font-weight-bold: 700;
+
+  /* Radii */
+  --loy-radius-sm: 6px;
+  --loy-radius-md: 8px;
+  --loy-radius-lg: 12px;
+  --loy-radius-full: 9999px;
+
+  /* Shadows */
+  --loy-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  /* Transitions */
+  --loy-transition: 150ms ease;
+}
