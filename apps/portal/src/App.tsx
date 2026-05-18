@@ -8,6 +8,7 @@ import Profile from "./pages/profile";
 import RewardDetail from "./pages/reward-detail";
 import Rewards from "./pages/rewards";
 import Transactions from "./pages/transactions";
+import Verify from "./pages/verify";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated()) {
@@ -19,6 +20,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <Routes>
+      <Route path="/verify" element={<Verify />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<Home />} />
         <Route

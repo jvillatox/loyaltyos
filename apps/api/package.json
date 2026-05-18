@@ -24,14 +24,16 @@
     "@loyaltyos/campaigns": "workspace:*",
     "@loyaltyos/core": "workspace:*",
     "@loyaltyos/coupons": "workspace:*",
-    "@loyaltyos/rewards": "workspace:*",
     "@loyaltyos/notifications": "workspace:*",
+    "@loyaltyos/rewards": "workspace:*",
     "@loyaltyos/segments": "workspace:*",
+    "@lucia-auth/adapter-prisma": "^4.0.1",
     "@prisma/client": "^5.15.0",
     "bullmq": "^5.76.9",
     "fastify": "^4.28.0",
     "fastify-plugin": "^5.1.0",
     "ioredis": "^5.10.1",
+    "lucia": "^3.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

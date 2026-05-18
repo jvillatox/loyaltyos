@@ -62,6 +62,8 @@ model Member {
   coalitionAccounts  CoalitionAccount[]
   // Inbound events
   events             Event[]
+  sessions           Session[]
+  magicLinkTokens    MagicLinkToken[]
 
   @@unique([programId, externalId])
   @@index([programId])
@@ -539,6 +541,30 @@ model AdminUser {
 
   @@index([programId])
   @@index([email])
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user Member @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MagicLinkToken {
+  id         String    @id @default(cuid())
+  memberId   String
+  tokenHash  String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
 }
 
 model ApiKey {

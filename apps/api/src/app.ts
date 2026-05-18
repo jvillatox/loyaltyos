@@ -14,6 +14,7 @@ import { adminNotificationsRoutes } from "./routes/admin/notifications.js";
 import { adminRewardsRoutes } from "./routes/admin/rewards.js";
 import { adminSegmentsRoutes } from "./routes/admin/segments.js";
 import { adminTiersRoutes } from "./routes/admin/tiers.js";
+import { authRoutes } from "./routes/auth.js";
 import { couponsRoutes } from "./routes/coupons.js";
 import { eventsRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
@@ -64,13 +65,16 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
     routePrefix: "/docs",
   });
 
+  // Error handling (must be set before routes to apply globally)
+  app.setErrorHandler(errorHandler);
+
+  // Public routes (before auth plugin)
+  await app.register(authRoutes, { prefix: "/api/v1" });
+
   // Custom plugins
   await app.register(authPlugin);
 
-  // Error handling
-  app.setErrorHandler(errorHandler);
-
-  // Routes
+  // Protected routes (after auth plugin)
   await app.register(healthRoutes, { prefix: "/" });
   await app.register(membersRoutes, { prefix: "/api/v1" });
   await app.register(eventsRoutes, { prefix: "/api/v1" });

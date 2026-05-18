@@ -29,7 +29,7 @@ export function clearSession(): void {
 }
 
 export function isAuthenticated(): boolean {
-  return sessionStorage.getItem("auth-token") !== null;
+  return sessionStorage.getItem("member-id") !== null;
 }
 
 export async function sendMagicLink(email: string, locale = "en"): Promise<void> {
@@ -37,9 +37,26 @@ export async function sendMagicLink(email: string, locale = "en"): Promise<void>
 }
 
 export async function verifyMagicLink(token: string): Promise<AuthSession> {
-  const result = await postApi<AuthSession>("/auth/verify-magic-link", { token });
-  setSession(result);
-  return result;
+  const result = await postApi<{
+    sessionId: string;
+    expiresAt: string;
+    member: {
+      id: string;
+      email: string | null;
+      phone: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      programId: string;
+      joinedAt: string;
+    };
+  }>("/auth/verify-magic-link", { token });
+  const session = {
+    token: result.sessionId,
+    memberId: result.member.id,
+    programId: result.member.programId,
+  };
+  setSession(session);
+  return session;
 }
 
 export async function loginWithOtp(email: string, otp: string): Promise<AuthSession> {

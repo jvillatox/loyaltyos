@@ -473,6 +473,19 @@ async function main(): Promise<void> {
   });
   console.log("Created notification template: Points Earned");
 
+  await prisma.notificationTemplate.create({
+    data: {
+      programId: program.id,
+      name: "Magic Link",
+      channel: "EMAIL",
+      triggerEvent: "auth.magic_link",
+      subject: "Sign in to {{program.name}}",
+      bodyHtml:
+        '<h1>Sign in to {{program.name}}</h1><p>Hi {{member.firstName}},</p><p>Click the link below to sign in to your rewards account:</p><p><a href="{{magicLinkUrl}}">Sign in to {{program.name}}</a></p><p>This link expires in 15 minutes. If you didn\'t request this, you can safely ignore this email.</p>',
+    },
+  });
+  console.log("Created notification template: Magic Link");
+
   // === Summary ===
   const counts = {
     programs: await prisma.program.count(),
