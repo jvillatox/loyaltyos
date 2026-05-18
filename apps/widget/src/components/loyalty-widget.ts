@@ -2,39 +2,19 @@ import "./ui/error-message.js";
 import "./ui/spinner.js";
 import "./loyalty-badges-gallery.js";
 import "./loyalty-points-card.js";
-import "./loyalty-reward-detail.js";
-import "./loyalty-rewards-catalog.js";
+import "./loyalty-rewards-top3.js";
 import "./loyalty-tier-card.js";
-import "./loyalty-transactions-list.js";
 
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
-import { fetchApi } from "../lib/api-client.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
-import type { MemberProfile } from "../types.js";
-
-type Tab = "home" | "points" | "badges" | "rewards" | "tier" | "history" | "profile";
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: "home", label: "Home" },
-  { id: "points", label: "Points" },
-  { id: "badges", label: "Badges" },
-  { id: "rewards", label: "Rewards" },
-  { id: "tier", label: "Tier" },
-  { id: "history", label: "History" },
-  { id: "profile", label: "Profile" },
-];
 
 @customElement("loyalty-widget")
 export class LoyaltyWidget extends LitElement {
   private controller = new WidgetConfigController(this);
 
-  @state() private activeTab: Tab = "home";
-  @state() private selectedRewardId: string | null = null;
-  @state() private profile: MemberProfile | null = null;
-  @state() private profileLoading = false;
-  @state() private profileError = "";
+  @state() private authDismissed = false;
 
   static override styles = css`
     :host {
@@ -47,245 +27,180 @@ export class LoyaltyWidget extends LitElement {
         Roboto,
         sans-serif
       );
-      max-width: 800px;
+      max-width: 420px;
       margin: 0 auto;
-      padding: var(--loy-space-md, 16px);
       color: var(--loy-color-text, #0f172a);
       background: var(--loy-color-surface, #ffffff);
-      min-height: 100vh;
-    }
-    .tabs {
-      display: flex;
-      gap: 2px;
-      margin-bottom: var(--loy-space-lg, 24px);
-      border-bottom: 2px solid var(--loy-color-border, #e2e8f0);
-      overflow-x: auto;
-    }
-    .tab-btn {
-      padding: var(--loy-space-sm, 8px) var(--loy-space-md, 16px);
-      border: none;
-      background: transparent;
-      font-size: var(--loy-font-size-md, 14px);
-      font-weight: var(--loy-font-weight-semibold, 600);
-      color: var(--loy-color-text-secondary, #64748b);
-      cursor: pointer;
-      white-space: nowrap;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-      transition:
-        color var(--loy-transition, 150ms ease),
-        border-color var(--loy-transition, 150ms ease);
-    }
-    .tab-btn:hover {
-      color: var(--loy-color-text, #0f172a);
-    }
-    .tab-btn.active {
-      color: var(--loy-color-primary, #7c3aed);
-      border-bottom-color: var(--loy-color-primary, #7c3aed);
-    }
-    .content {
-      min-height: 300px;
-    }
-    .home-grid {
-      display: flex;
-      flex-direction: column;
-      gap: var(--loy-space-lg, 24px);
-    }
-    .profile-card {
-      background: var(--loy-color-surface, #ffffff);
-      border: 1px solid var(--loy-color-border, #e2e8f0);
       border-radius: var(--loy-radius-lg, 12px);
+      box-shadow: var(--loy-shadow-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+      overflow: hidden;
+    }
+    .widget-inner {
       padding: var(--loy-space-lg, 24px);
     }
-    .profile-card h2 {
-      margin: 0 0 var(--loy-space-md, 16px);
-      font-size: var(--loy-font-size-xl, 24px);
-      font-weight: var(--loy-font-weight-bold, 700);
+    .auth-cta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--loy-space-xl, 32px) var(--loy-space-lg, 24px);
+      text-align: center;
+      gap: var(--loy-space-md, 16px);
     }
-    .profile-field {
-      margin-bottom: var(--loy-space-sm, 8px);
+    .auth-cta p {
+      margin: 0;
+      font-size: var(--loy-font-size-md, 14px);
+      color: var(--loy-color-text-secondary, #64748b);
     }
-    .profile-field label {
-      display: block;
+    .auth-cta button {
+      padding: var(--loy-space-sm, 8px) var(--loy-space-xl, 24px);
+      background: var(--loy-color-primary, #7c3aed);
+      color: var(--loy-color-primary-text, #ffffff);
+      border: none;
+      border-radius: var(--loy-radius-md, 8px);
+      font-size: var(--loy-font-size-md, 14px);
+      font-weight: var(--loy-font-weight-semibold, 600);
+      cursor: pointer;
+      transition: opacity var(--loy-transition, 150ms ease);
+    }
+    .auth-cta button:hover {
+      opacity: 0.9;
+    }
+    .widget-section {
+      margin-bottom: var(--loy-space-lg, 24px);
+    }
+    .widget-section:last-child {
+      margin-bottom: 0;
+    }
+    .section-title {
       font-size: var(--loy-font-size-sm, 12px);
+      font-weight: var(--loy-font-weight-semibold, 600);
       color: var(--loy-color-text-secondary, #64748b);
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      margin-bottom: 2px;
+      margin-bottom: var(--loy-space-md, 12px);
     }
-    .profile-field span {
+    .portal-link {
+      display: block;
+      text-align: center;
+      padding: var(--loy-space-md, 16px) 0 0;
       font-size: var(--loy-font-size-md, 14px);
+      color: var(--loy-color-primary, #7c3aed);
+      text-decoration: none;
+      font-weight: var(--loy-font-weight-semibold, 600);
+    }
+    .portal-link:hover {
+      text-decoration: underline;
+    }
+    .mini-layout {
+      display: flex;
+      flex-direction: column;
     }
   `;
 
   override connectedCallback(): void {
     super.connectedCallback();
-    this.addEventListener("loy-reward-select", this.onRewardSelect as EventListener);
-    this.addEventListener("loy-reward-close", this.onRewardClose as EventListener);
+    window.addEventListener("loyaltyos:auth-required", this.onAuthRequired);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
-    this.removeEventListener("loy-reward-select", this.onRewardSelect as EventListener);
-    this.removeEventListener("loy-reward-close", this.onRewardClose as EventListener);
+    window.removeEventListener("loyaltyos:auth-required", this.onAuthRequired);
   }
 
-  private onRewardSelect = (e: CustomEvent): void => {
-    const detail = e.detail as { rewardId: string };
-    this.selectedRewardId = detail.rewardId;
+  private onAuthRequired = (): void => {
+    this.authDismissed = false;
+    this.requestUpdate();
   };
 
-  private onRewardClose = (): void => {
-    this.selectedRewardId = null;
+  private handleSignIn = (): void => {
+    const config = this.controller.config;
+    const portalBase = config.apiBase.replace(/\/api$/, "");
+    const loginUrl = `https://${portalBase}/portal/login`;
+    window.open(loginUrl, "loyaltyos-portal", "width=480,height=720");
   };
 
-  private switchTab(tab: Tab): void {
-    this.activeTab = tab;
-    this.selectedRewardId = null;
-    if (tab === "profile" && !this.profile && !this.profileLoading) {
-      void this.fetchProfile();
-    }
-  }
-
-  private fetchProfile = async (): Promise<void> => {
+  private applyTheme(): void {
     if (!this.controller.hasConfig) return;
-    this.profileLoading = true;
-    this.profileError = "";
-    try {
-      this.profile = await fetchApi<MemberProfile>(
-        this.controller.config,
-        `/members/${this.controller.config.memberId}`,
-      );
-    } catch (err) {
-      this.profileError = (err as Error).message;
-    } finally {
-      this.profileLoading = false;
-    }
-  };
+    const config = this.controller.config;
+    const isDark =
+      config.theme === "dark" ||
+      (config.theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-  private renderHomeTab() {
-    return html`
-      <div class="home-grid">
-        <loyalty-points-card></loyalty-points-card>
-        <loyalty-tier-card></loyalty-tier-card>
-        <loyalty-badges-gallery></loyalty-badges-gallery>
-      </div>
-    `;
-  }
-
-  private renderRewardsTab() {
-    if (this.selectedRewardId) {
-      return html`<loyalty-reward-detail
-        reward-id=${this.selectedRewardId}
-      ></loyalty-reward-detail>`;
-    }
-    return html`<loyalty-rewards-catalog></loyalty-rewards-catalog>`;
-  }
-
-  private renderProfileTab() {
-    if (this.profileLoading) return html`<loy-spinner></loy-spinner>`;
-    if (this.profileError)
-      return html`<loy-error
-        message=${this.profileError}
-        retryable
-        @loy-retry=${() => {
-          void this.fetchProfile();
-        }}
-      ></loy-error>`;
-    if (!this.profile) return null;
-
-    const p = this.profile;
-    return html`
-      <div class="profile-card">
-        <h2>${p.firstName ? `${p.firstName} ${p.lastName ?? ""}` : "Member"}</h2>
-        <div class="profile-field">
-          <label>Member ID</label>
-          <span>${p.id}</span>
-        </div>
-        ${p.email
-          ? html`
-              <div class="profile-field">
-                <label>Email</label>
-                <span>${p.email}</span>
-              </div>
-            `
-          : null}
-        ${p.phone
-          ? html`
-              <div class="profile-field">
-                <label>Phone</label>
-                <span>${p.phone}</span>
-              </div>
-            `
-          : null}
-        ${p.externalId
-          ? html`
-              <div class="profile-field">
-                <label>External ID</label>
-                <span>${p.externalId}</span>
-              </div>
-            `
-          : null}
-        <div class="profile-field">
-          <label>Joined</label>
-          <span>${new Date(p.joinedAt).toLocaleDateString()}</span>
-        </div>
-        ${p.tags.length > 0
-          ? html`
-              <div class="profile-field">
-                <label>Tags</label>
-                <span>${p.tags.join(", ")}</span>
-              </div>
-            `
-          : null}
-      </div>
-    `;
-  }
-
-  private renderTabContent() {
-    switch (this.activeTab) {
-      case "home":
-        return this.renderHomeTab();
-      case "points":
-        return html`<loyalty-points-card></loyalty-points-card>`;
-      case "badges":
-        return html`<loyalty-badges-gallery></loyalty-badges-gallery>`;
-      case "rewards":
-        return this.renderRewardsTab();
-      case "tier":
-        return html`<loyalty-tier-card></loyalty-tier-card>`;
-      case "history":
-        return html`<loyalty-transactions-list></loyalty-transactions-list>`;
-      case "profile":
-        return this.renderProfileTab();
-      default:
-        return null;
-    }
+    const s = this.style;
+    s.setProperty("--loy-color-primary", config.accentColor);
+    s.setProperty("--loy-color-primary-text", "#ffffff");
+    s.setProperty("--loy-color-text", isDark ? "#f1f5f9" : "#0f172a");
+    s.setProperty("--loy-color-text-secondary", isDark ? "#94a3b8" : "#64748b");
+    s.setProperty("--loy-color-surface", isDark ? "#1e293b" : "#ffffff");
+    s.setProperty("--loy-color-surface-secondary", isDark ? "#334155" : "#f1f5f9");
+    s.setProperty("--loy-color-border", isDark ? "#334155" : "#e2e8f0");
   }
 
   override render() {
     if (!this.controller.hasConfig) {
-      return html`<div>
-        Please provide configuration: api-key, api-url, program-id, member-id.
+      return html`<div class="widget-inner">
+        Please provide configuration: program-id, api-base.
       </div>`;
     }
 
+    this.applyTheme();
+    const config = this.controller.config;
+
+    if (!this.controller.isAuthenticated && !this.authDismissed) {
+      return html`
+        <div class="auth-cta">
+          <p>Sign in to view your loyalty rewards</p>
+          <button @click=${this.handleSignIn}>Sign in</button>
+          <a
+            href="#"
+            style="font-size:12px;color:var(--loy-color-text-secondary);text-decoration:underline"
+            @click=${(e: Event) => {
+              e.preventDefault();
+              this.authDismissed = true;
+              this.requestUpdate();
+            }}
+            >Not now</a
+          >
+        </div>
+      `;
+    }
+
+    const portalBase = config.apiBase.replace(/\/api$/, "");
+    const portalUrl = `https://${portalBase}/portal`;
+
+    if (config.mode === "mini") {
+      return html`
+        <div class="widget-inner mini-layout">
+          <div class="widget-section">
+            <loyalty-points-card></loyalty-points-card>
+          </div>
+          <a class="portal-link" href=${portalUrl} target="_blank" rel="noopener"
+            >View rewards in portal</a
+          >
+        </div>
+      `;
+    }
+
     return html`
-      <nav class="tabs">
-        ${TABS.map(
-          (t) => html`
-            <button
-              class="tab-btn ${this.activeTab === t.id ? "active" : ""}"
-              @click=${() => {
-                this.switchTab(t.id);
-              }}
-            >
-              ${t.label}
-            </button>
-          `,
-        )}
-      </nav>
-      <div class="content">${this.renderTabContent()}</div>
+      <div class="widget-inner">
+        <div class="widget-section">
+          <loyalty-points-card></loyalty-points-card>
+        </div>
+        <div class="widget-section">
+          <div class="section-title">Badges</div>
+          <loyalty-badges-gallery></loyalty-badges-gallery>
+        </div>
+        <div class="widget-section">
+          <div class="section-title">Top Rewards</div>
+          <loyalty-rewards-top3></loyalty-rewards-top3>
+        </div>
+        <div class="widget-section">
+          <div class="section-title">Your Tier</div>
+          <loyalty-tier-card></loyalty-tier-card>
+        </div>
+        <a class="portal-link" href=${portalUrl} target="_blank" rel="noopener">Open full portal</a>
+      </div>
     `;
   }
 }

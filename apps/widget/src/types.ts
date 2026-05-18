@@ -1,36 +1,30 @@
 // ── Widget configuration ──────────────────────────────────────────────────
 
 export interface WidgetConfig {
-  apiKey: string;
-  apiUrl: string;
   programId: string;
-  memberId: string;
+  apiBase: string;
+  authToken: string | null;
+  theme: "light" | "dark" | "auto";
+  accentColor: string;
+  locale: "en" | "es";
+  compact: boolean;
+  mode: "mini" | "full";
 }
 
-// ── API response types (mirrors backend responses) ────────────────────────
+export const DEFAULT_CONFIG: Partial<WidgetConfig> = {
+  theme: "auto",
+  accentColor: "#7c3aed",
+  locale: "en",
+  compact: false,
+  mode: "full",
+};
+
+// ── API response types ────────────────────────────────────────────────────
 
 export interface Balance {
   confirmed: number;
   pending: number;
   total: number;
-}
-
-export interface PointTransaction {
-  id: string;
-  type: "EARN" | "REDEEM" | "ADJUST" | "REVERSE" | "EXPIRE";
-  amount: number;
-  balanceAfter: number;
-  source: string;
-  description?: string;
-  createdAt: string;
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
 }
 
 export interface BadgeProgress {
@@ -76,48 +70,12 @@ export interface TierStatus {
   } | null;
 }
 
-export interface RewardRow {
+export interface RewardSummary {
   id: string;
-  programId: string;
   name: string;
   description: string | null;
   pointsCost: number;
-  stock: number | null;
   imageUrl: string | null;
   category: string | null;
-  tierRequired: string | null;
   isActive: boolean;
-  redemptions: { id: string; memberId: string }[];
-}
-
-export interface RewardDetail extends RewardRow {
-  eligible?: boolean;
-  reason?: string;
-}
-
-export interface RedeemResult {
-  redemption: {
-    id: string;
-    rewardId: string;
-    memberId: string;
-    pointsSpent: number;
-  };
-  transaction: {
-    transactionId: string;
-    amount: number;
-    balanceAfter: number;
-    idempotent: boolean;
-  };
-}
-
-export interface MemberProfile {
-  id: string;
-  externalId: string | null;
-  email: string | null;
-  phone: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  metadata: unknown;
-  tags: string[];
-  joinedAt: string;
 }

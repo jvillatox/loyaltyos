@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoyaltyOS Widget — Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    p.subtitle { color: #64748b; margin: 0 0 32px; }
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+    @media (max-width: 768px) {
+      .demo-grid { grid-template-columns: 1fr; }
+    }
+    .demo-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .demo-label {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #64748b;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .demo-dark { background: #0f172a; }
+    .demo-dark .demo-label { background: #1e293b; color: #94a3b8; border-color: #334155; }
+  </style>
+</head>
+<body>
+  <h1>LoyaltyOS Widget</h1>
+  <p class="subtitle">Four embed configurations</p>
+
+  <div class="demo-grid">
+    <!-- 1. Mini Light -->
+    <div class="demo-card">
+      <div class="demo-label">Mini mode — Light theme (default)</div>
+      <loyalty-widget
+        id="demo-mini-light"
+        program-id="demo"
+        api-base="/api"
+        mode="mini"
+        theme="light"
+        locale="en"
+      ></loyalty-widget>
+    </div>
+
+    <!-- 2. Mini Dark -->
+    <div class="demo-card demo-dark">
+      <div class="demo-label">Mini mode — Dark theme</div>
+      <loyalty-widget
+        id="demo-mini-dark"
+        program-id="demo"
+        api-base="/api"
+        mode="mini"
+        theme="dark"
+        locale="en"
+      ></loyalty-widget>
+    </div>
+
+    <!-- 3. Full Light -->
+    <div class="demo-card">
+      <div class="demo-label">Full mode — Light theme</div>
+      <loyalty-widget
+        id="demo-full-light"
+        program-id="demo"
+        api-base="/api"
+        mode="full"
+        theme="light"
+        locale="en"
+      ></loyalty-widget>
+    </div>
+
+    <!-- 4. Full Dark with custom accent -->
+    <div class="demo-card demo-dark">
+      <div class="demo-label">Full mode — Dark theme + custom accent</div>
+      <loyalty-widget
+        id="demo-full-dark"
+        program-id="demo"
+        api-base="/api"
+        mode="full"
+        theme="dark"
+        accent-color="#f59e0b"
+        locale="en"
+      ></loyalty-widget>
+    </div>
+  </div>
+
+  <script type="module" src="/src/index.ts"></script>
+</body>
+</html>

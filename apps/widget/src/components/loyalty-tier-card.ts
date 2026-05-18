@@ -91,33 +91,16 @@ export class LoyaltyTierCard extends LitElement {
     }
   `;
 
-  private onRedeemed = (): void => {
-    void this.fetchData();
-  };
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this.addEventListener("widget:redeemed", this.onRedeemed);
-  }
-
-  override disconnectedCallback(): void {
-    super.disconnectedCallback();
-    this.removeEventListener("widget:redeemed", this.onRedeemed);
-  }
-
   override firstUpdated(): void {
     void this.fetchData();
   }
 
   private fetchData = async (): Promise<void> => {
-    if (!this.controller.hasConfig) return;
+    if (!this.controller.hasConfig || !this.controller.isAuthenticated) return;
     this.loading = true;
     this.error = "";
     try {
-      this.data = await fetchApi<TierStatus>(
-        this.controller.config,
-        `/members/${this.controller.config.memberId}/tier`,
-      );
+      this.data = await fetchApi<TierStatus>(this.controller.config, `/members/me/tier`);
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
@@ -126,6 +109,7 @@ export class LoyaltyTierCard extends LitElement {
   };
 
   override render() {
+    if (!this.controller.isAuthenticated) return null;
     if (this.loading) return html`<loy-spinner></loy-spinner>`;
     if (this.error)
       return html`<loy-error
@@ -141,6 +125,7 @@ export class LoyaltyTierCard extends LitElement {
     }
 
     const progressPct = this.data.pointsProgress;
+    const locale = this.controller.hasConfig ? this.controller.config.locale : "en";
 
     return html`
       <div class="tier-card">
@@ -173,8 +158,8 @@ export class LoyaltyTierCard extends LitElement {
                 ${this.data.pointsToNext !== null
                   ? html`
                       <div class="progress-label-row" style="margin-top:var(--loy-space-xs)">
-                        <span>${formatPoints(this.data.pointsToNext)} to go</span>
-                        <span>${formatPoints(this.data.nextTier.minPoints)} needed</span>
+                        <span>${formatPoints(this.data.pointsToNext, locale)} to go</span>
+                        <span>${formatPoints(this.data.nextTier.minPoints, locale)} needed</span>
                       </div>
                     `
                   : null}

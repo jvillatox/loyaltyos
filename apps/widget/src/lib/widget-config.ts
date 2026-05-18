@@ -1,15 +1,35 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
 
-import type { WidgetConfig } from "../types.js";
+import { DEFAULT_CONFIG, type WidgetConfig } from "../types.js";
 
-const CONFIG_KEYS: (keyof WidgetConfig)[] = ["apiKey", "apiUrl", "programId", "memberId"];
+interface AttributeDef {
+  attr: string;
+  key: keyof WidgetConfig;
+  parse: (raw: string) => unknown;
+}
 
-const ATTR_MAP: Record<keyof WidgetConfig, string> = {
-  apiKey: "api-key",
-  apiUrl: "api-url",
-  programId: "program-id",
-  memberId: "member-id",
-};
+const ATTRS: AttributeDef[] = [
+  { attr: "program-id", key: "programId", parse: String },
+  { attr: "api-base", key: "apiBase", parse: String },
+  { attr: "auth-token", key: "authToken", parse: (s) => s || null },
+  {
+    attr: "theme",
+    key: "theme",
+    parse: (s) => (["light", "dark", "auto"].includes(s) ? s : "auto"),
+  },
+  { attr: "accent-color", key: "accentColor", parse: (s) => s || "#7c3aed" },
+  {
+    attr: "locale",
+    key: "locale",
+    parse: (s) => (["en", "es"].includes(s) ? s : "en"),
+  },
+  { attr: "compact", key: "compact", parse: (s) => s === "true" },
+  {
+    attr: "mode",
+    key: "mode",
+    parse: (s) => (["mini", "full"].includes(s) ? s : "full"),
+  },
+];
 
 export class WidgetConfigController implements ReactiveController {
   private host: ReactiveControllerHost & HTMLElement;
@@ -30,9 +50,7 @@ export class WidgetConfigController implements ReactiveController {
 
   get config(): WidgetConfig {
     if (!this._config) {
-      throw new Error(
-        "WidgetConfig not available. Set attributes: api-key, api-url, program-id, member-id.",
-      );
+      throw new Error("WidgetConfig not available. Set attributes: program-id, api-base.");
     }
     return this._config;
   }
@@ -41,27 +59,26 @@ export class WidgetConfigController implements ReactiveController {
     return this._config !== null;
   }
 
-  private resolveConfig(): void {
-    const config: Partial<WidgetConfig> = {};
+  get isAuthenticated(): boolean {
+    return this._config?.authToken != null && this._config.authToken.length > 0;
+  }
 
-    for (const key of CONFIG_KEYS) {
-      const attr = ATTR_MAP[key];
-      // First check own attribute
+  private resolveConfig(): void {
+    const partial: Record<string, unknown> = { ...DEFAULT_CONFIG };
+
+    for (const { attr, key, parse } of ATTRS) {
       let value: string | null = this.host.getAttribute(attr);
-      // Fall back to closest loyalty-widget ancestor
-      if (!value) {
+      if (value === null) {
         const parent = this.host.closest("loyalty-widget");
-        if (parent) {
-          value = parent.getAttribute(attr);
-        }
+        if (parent) value = parent.getAttribute(attr);
       }
-      if (value) {
-        (config as Record<string, string>)[key] = value;
+      if (value !== null) {
+        partial[key] = parse(value);
       }
     }
 
-    if (config.apiKey && config.apiUrl && config.programId && config.memberId) {
-      this._config = config as WidgetConfig;
+    if (typeof partial.programId === "string" && typeof partial.apiBase === "string") {
+      this._config = partial as unknown as WidgetConfig;
     }
   }
 }

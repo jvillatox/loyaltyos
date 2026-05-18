@@ -10,10 +10,11 @@
 </head>
 <body>
   <loyalty-widget
-    api-key="dev-api-key"
-    api-url="/api"
     program-id="prog_001"
-    member-id="mem_001"
+    api-base="/api"
+    auth-token="dev-token"
+    mode="full"
+    locale="en"
   ></loyalty-widget>
   <script type="module" src="/src/index.ts"></script>
 </body>

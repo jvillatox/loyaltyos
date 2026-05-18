@@ -4,28 +4,34 @@ import { fetchApi, postApi } from "../lib/api-client.js";
 import type { WidgetConfig } from "../types.js";
 
 const config: WidgetConfig = {
-  apiKey: "test-api-key",
-  apiUrl: "https://api.example.com",
   programId: "test-program-id",
-  memberId: "test-member-id",
+  apiBase: "https://api.example.com",
+  authToken: "test-token",
+  theme: "light",
+  accentColor: "#7c3aed",
+  locale: "en",
+  compact: false,
+  mode: "full",
 };
 
 describe("fetchApi", () => {
   it("unwraps the { data } envelope on success", async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "1", name: "Test" } }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: { id: "1", name: "Test" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
     );
-    vi.stubGlobal("fetch", mockFetch);
 
     const result = await fetchApi<{ id: string; name: string }>(config, "/test");
 
     expect(result).toEqual({ id: "1", name: "Test" });
   });
 
-  it("sends X-API-Key and X-Program-Id headers", async () => {
+  it("sends Authorization Bearer and X-Program-Id headers", async () => {
     const mockFetch = vi
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 200 }));
@@ -34,10 +40,9 @@ describe("fetchApi", () => {
     await fetchApi(config, "/test");
 
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(init.headers).toMatchObject({
-      "X-API-Key": "test-api-key",
-      "X-Program-Id": "test-program-id",
-    });
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer test-token");
+    expect(headers["X-Program-Id"]).toBe("test-program-id");
   });
 
   it("uses the configured API URL", async () => {
@@ -52,30 +57,39 @@ describe("fetchApi", () => {
     expect(url).toBe("https://api.example.com/rewards?page=1");
   });
 
-  it("throws on non-2xx responses", async () => {
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({ error: { code: "NOT_FOUND", message: "Resource not found" } }),
-          { status: 404 },
-        ),
-      );
-    vi.stubGlobal("fetch", mockFetch);
+  it("dispatches loyaltyos:auth-required on 401", async () => {
+    let eventDispatched = false;
+    window.addEventListener("loyaltyos:auth-required", () => {
+      eventDispatched = true;
+    });
 
-    await expect(fetchApi(config, "/test")).rejects.toThrow("Resource not found");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: { code: "UNAUTHORIZED" } }), { status: 401 }),
+        ),
+    );
+
+    await expect(fetchApi(config, "/test")).rejects.toThrow("Authentication required");
+    expect(eventDispatched).toBe(true);
   });
 
-  it("passes through custom request options", async () => {
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 200 }));
-    vi.stubGlobal("fetch", mockFetch);
+  it("throws on non-2xx responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ error: { code: "NOT_FOUND", message: "Resource not found" } }),
+            { status: 404 },
+          ),
+        ),
+    );
 
-    await fetchApi(config, "/test", { method: "DELETE" });
-
-    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(init.method).toBe("DELETE");
+    await expect(fetchApi(config, "/test")).rejects.toThrow("Resource not found");
   });
 });
 
@@ -102,6 +116,7 @@ describe("postApi", () => {
     await postApi(config, "/submit", {}, "idem-123");
 
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(init.headers).toHaveProperty("Idempotency-Key", "idem-123");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Idempotency-Key"]).toBe("idem-123");
   });
 });

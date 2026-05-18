@@ -1,24 +1,6 @@
-/* ── LoyaltyOS Widget Design Tokens ──────────────────────────────────────
-   Override these custom properties on <loyalty-widget> to theme the widget:
-     loyalty-widget { --loy-color-primary: #0066ff; }
-   ─────────────────────────────────────────────────────────────────────── */
+/* LoyaltyOS Widget — base design tokens. Theme values are injected at runtime. */
 
 :host {
-  /* Colors */
-  --loy-color-primary: #7c3aed;
-  --loy-color-primary-text: #ffffff;
-  --loy-color-surface: #ffffff;
-  --loy-color-surface-secondary: #f8fafc;
-  --loy-color-text: #0f172a;
-  --loy-color-text-secondary: #64748b;
-  --loy-color-success: #22c55e;
-  --loy-color-success-bg: #f0fdf4;
-  --loy-color-danger: #ef4444;
-  --loy-color-danger-bg: #fef2f2;
-  --loy-color-warning: #f59e0b;
-  --loy-color-warning-bg: #fffbeb;
-  --loy-color-border: #e2e8f0;
-
   /* Spacing */
   --loy-space-xs: 4px;
   --loy-space-sm: 8px;
@@ -27,7 +9,6 @@
   --loy-space-xl: 32px;
 
   /* Typography */
-  --loy-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --loy-font-size-sm: 12px;
   --loy-font-size-md: 14px;
   --loy-font-size-lg: 18px;
@@ -43,8 +24,14 @@
   --loy-radius-full: 9999px;
 
   /* Shadows */
-  --loy-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --loy-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --loy-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 
   /* Transitions */
   --loy-transition: 150ms ease;
+
+  /* Success / Danger / Warning (static) */
+  --loy-color-success: #22c55e;
+  --loy-color-danger: #ef4444;
+  --loy-color-warning: #f59e0b;
 }

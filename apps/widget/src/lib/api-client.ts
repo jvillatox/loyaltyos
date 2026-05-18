@@ -1,6 +1,6 @@
 import type { WidgetConfig } from "../types.js";
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
@@ -16,17 +16,24 @@ export async function fetchApi<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const url = `${config.apiUrl}${path}`;
+  const url = `${config.apiBase}${path}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": config.apiKey,
-      "X-Program-Id": config.programId,
-      ...options.headers,
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Program-Id": config.programId,
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
+  if (config.authToken) {
+    headers.Authorization = `Bearer ${config.authToken}`;
+  }
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    window.dispatchEvent(new CustomEvent("loyaltyos:auth-required"));
+    throw new ApiError(401, "UNAUTHORIZED", "Authentication required");
+  }
 
   const body = (await response.json()) as { data?: T; error?: { code: string; message: string } };
 
@@ -47,14 +54,14 @@ export async function postApi<T>(
   data: unknown,
   idempotencyKey?: string,
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const customHeaders: Record<string, string> = {};
   if (idempotencyKey) {
-    headers["Idempotency-Key"] = idempotencyKey;
+    customHeaders["Idempotency-Key"] = idempotencyKey;
   }
 
   return fetchApi<T>(config, path, {
     method: "POST",
     body: JSON.stringify(data),
-    headers,
+    headers: customHeaders,
   });
 }

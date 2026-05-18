@@ -100,14 +100,11 @@ export class LoyaltyBadgesGallery extends LitElement {
   }
 
   private fetchData = async (): Promise<void> => {
-    if (!this.controller.hasConfig) return;
+    if (!this.controller.hasConfig || !this.controller.isAuthenticated) return;
     this.loading = true;
     this.error = "";
     try {
-      this.badges = await fetchApi<BadgeProgress[]>(
-        this.controller.config,
-        `/members/${this.controller.config.memberId}/badges`,
-      );
+      this.badges = await fetchApi<BadgeProgress[]>(this.controller.config, `/members/me/badges`);
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
@@ -116,6 +113,7 @@ export class LoyaltyBadgesGallery extends LitElement {
   };
 
   override render() {
+    if (!this.controller.isAuthenticated) return null;
     if (this.loading) return html`<loy-spinner></loy-spinner>`;
     if (this.error)
       return html`<loy-error
