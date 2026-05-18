@@ -7,13 +7,17 @@ import { notificationsService as notifications } from "../../lib/notifications-s
 
 // ── Schemas ──────────────────────────────────────────────────
 
+const channelEnum = z.enum(["EMAIL", "SMS", "PUSH", "IN_APP", "WEBHOOK"]);
+
 const templateCreateBody = z.object({
   name: z.string().min(1).max(100),
-  channel: z.enum(["EMAIL", "SMS", "PUSH", "IN_APP", "WEBHOOK"]),
+  channel: channelEnum,
   subject: z.string().optional(),
   bodyHtml: z.string().optional(),
   bodyText: z.string().optional(),
   triggerEvent: z.string().optional(),
+  transactional: z.boolean().optional(),
+  fallbackChannel: channelEnum.optional(),
 });
 
 const templateUpdateBody = z.object({
@@ -22,6 +26,8 @@ const templateUpdateBody = z.object({
   bodyHtml: z.string().optional(),
   bodyText: z.string().optional(),
   triggerEvent: z.string().optional(),
+  transactional: z.boolean().optional(),
+  fallbackChannel: channelEnum.optional().nullable(),
 });
 
 const webhookCreateBody = z.object({
@@ -162,37 +168,67 @@ export function adminNotificationsRoutes(
   // POST /admin/notification-templates/:id/test-send
   app.post("/admin/notification-templates/:id/test-send", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
-    const { memberId } = z.object({ memberId: z.string().min(1) }).parse(request.body);
+    const { memberId, channel, recipient } = z
+      .object({
+        memberId: z.string().min(1).optional(),
+        channel: z.enum(["EMAIL", "SMS", "PUSH", "IN_APP", "WEBHOOK"]).optional(),
+        recipient: z.string().optional(),
+      })
+      .parse(request.body);
 
-    const template = await notifications.getTemplate(id);
-
-    // Load member data for variable interpolation
-    const member = await prisma.member.findFirst({
-      where: { id: memberId },
-      include: {
-        pointAccount: true,
-        memberTiers: { include: { tier: true } },
-      },
-    });
-
-    if (!member) {
-      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+    if (!memberId && !recipient) {
+      return reply.status(400).send({
+        error: { code: "INVALID_INPUT", message: "Either memberId or recipient is required" },
+      });
     }
 
-    const currentTier = member.memberTiers.find((mt) => !mt.downgradedAt)?.tier.name;
+    const template = await notifications.getTemplate(id);
+    const targetChannel = channel ?? template.channel;
+    let context: Record<string, unknown> = {};
+    let targetMemberId: string;
+    const metadata: Record<string, unknown> = {};
 
-    const context: Record<string, unknown> = {
-      member: {
-        id: member.id,
-        email: member.email,
-        phone: member.phone,
-        firstName: member.firstName,
-        lastName: member.lastName,
-        tags: member.tags,
-        currentTier,
-      },
-      points: member.pointAccount?.balance ?? 0,
-    };
+    if (memberId) {
+      // Load member data for variable interpolation
+      const member = await prisma.member.findFirst({
+        where: { id: memberId },
+        include: {
+          pointAccount: true,
+          memberTiers: { include: { tier: true } },
+        },
+      });
+
+      if (!member) {
+        return reply
+          .status(404)
+          .send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+      }
+
+      targetMemberId = member.id;
+      const currentTier = member.memberTiers.find((mt) => !mt.downgradedAt)?.tier.name;
+
+      context = {
+        member: {
+          id: member.id,
+          email: member.email,
+          phone: member.phone,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          tags: member.tags,
+          currentTier,
+        },
+        points: member.pointAccount?.balance ?? 0,
+      };
+
+      if (member.email) metadata.email = member.email;
+      if (member.phone) metadata.phone = member.phone;
+    } else {
+      // recipient present without memberId — use recipient directly
+      targetMemberId = "test-recipient";
+      if (targetChannel === "EMAIL") metadata.email = recipient;
+      if (targetChannel === "SMS") metadata.phone = recipient;
+      if (targetChannel === "PUSH") metadata.deviceToken = recipient;
+    }
 
     const subject = template.subject ? render(template.subject, context) : undefined;
     const body = template.bodyHtml
@@ -203,10 +239,11 @@ export function adminNotificationsRoutes(
 
     const notification = await notifications.createNotification({
       templateId: template.id,
-      memberId,
-      channel: template.channel,
+      memberId: targetMemberId,
+      channel: targetChannel,
       subject,
       body,
+      metadata,
     });
 
     // Try to send via provider
@@ -218,7 +255,8 @@ export function adminNotificationsRoutes(
 
     await audit(getProgramId(request), "SEND_TEST_NOTIFICATION", "Notification", notification.id, {
       templateId: id,
-      memberId,
+      memberId: targetMemberId,
+      channel: targetChannel,
     });
 
     return reply.status(201).send({ data: notification });
