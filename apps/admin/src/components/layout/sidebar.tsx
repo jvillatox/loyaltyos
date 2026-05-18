@@ -1,6 +1,7 @@
 import {
   Award,
   BarChart3,
+  Gift,
   LayoutDashboard,
   Megaphone,
   PieChart,
@@ -20,6 +21,7 @@ const links = [
   { to: "/segments", label: "Segments", icon: PieChart },
   { to: "/badges", label: "Badges", icon: Award },
   { to: "/tiers", label: "Tiers", icon: BarChart3 },
+  { to: "/rewards", label: "Rewards", icon: Gift },
 ];
 
 export function Sidebar(): JSX.Element {

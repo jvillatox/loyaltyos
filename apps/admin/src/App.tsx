@@ -10,6 +10,9 @@ import { CouponsListPage } from "@/pages/coupons-list";
 import { DashboardPage } from "@/pages/dashboard";
 import { MemberDetailPage } from "@/pages/member-detail";
 import { MembersListPage } from "@/pages/members-list";
+import { RewardsEditorPage } from "@/pages/rewards/rewards-editor";
+import { RewardsListPage } from "@/pages/rewards/rewards-list";
+import { RewardsRedemptionsPage } from "@/pages/rewards/rewards-redemptions";
 import { SegmentBuilderPage } from "@/pages/segment-builder";
 import { SegmentsListPage } from "@/pages/segments-list";
 import { TiersListPage } from "@/pages/tiers-list";
@@ -33,6 +36,10 @@ export function App(): JSX.Element {
         <Route path="/badges/new" element={<BadgeEditorPage />} />
         <Route path="/badges/:id/edit" element={<BadgeEditorPage />} />
         <Route path="/tiers" element={<TiersListPage />} />
+        <Route path="/rewards" element={<RewardsListPage />} />
+        <Route path="/rewards/new" element={<RewardsEditorPage />} />
+        <Route path="/rewards/:id/edit" element={<RewardsEditorPage />} />
+        <Route path="/rewards/:id/redemptions" element={<RewardsRedemptionsPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
