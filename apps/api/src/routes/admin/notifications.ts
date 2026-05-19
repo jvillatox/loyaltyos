@@ -213,6 +213,7 @@ export function adminNotificationsRoutes(
           currentTier,
         },
         points: member.pointAccount?.balance ?? 0,
+        balance: member.pointAccount?.balance ?? 0,
       };
 
       if (member.email) metadata.email = member.email;
