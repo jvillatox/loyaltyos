@@ -219,8 +219,20 @@ export function adminNotificationsRoutes(
       if (member.email) metadata.email = member.email;
       if (member.phone) metadata.phone = member.phone;
     } else {
-      // recipient present without memberId — use recipient directly
-      targetMemberId = "test-recipient";
+      // recipient present without memberId — pick any member for FK, deliver to recipient via metadata
+      const fallbackMember = await prisma.member.findFirst({
+        where: { programId: template.programId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!fallbackMember) {
+        return reply.status(400).send({
+          error: {
+            code: "NO_MEMBERS",
+            message: "Program has no members to anchor the test notification",
+          },
+        });
+      }
+      targetMemberId = fallbackMember.id;
       if (targetChannel === "EMAIL") metadata.email = recipient;
       if (targetChannel === "SMS") metadata.phone = recipient;
       if (targetChannel === "PUSH") metadata.deviceToken = recipient;
