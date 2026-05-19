@@ -1077,6 +1077,30 @@ describe("TwilioSmsProvider", () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe("Network unreachable");
   });
+
+  it("uses custom apiBase when configured", async () => {
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ sid: "SM123" }), { status: 201 }));
+
+    const provider = new TwilioSmsProvider({
+      ...config,
+      apiBase: "https://sandbox.twilio.com",
+    });
+    await provider.send(
+      notificationRow({
+        channel: "SMS",
+        metadata: { phone: "+521234567890" },
+      }) as never,
+    );
+
+    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("sandbox.twilio.com");
+    expect(url).not.toContain("api.twilio.com");
+  });
+
+  it("defaults apiBase to https://api.twilio.com", () => {
+    const provider = new TwilioSmsProvider(config);
+    expect(provider.config.apiBase).toBe("https://api.twilio.com");
+  });
 });
 
 describe("createTwilioProvider", () => {
@@ -1112,6 +1136,17 @@ describe("createTwilioProvider", () => {
       TWILIO_AUTH_TOKEN: "env_token",
     });
     expect(provider).toBeNull();
+  });
+
+  it("passes TWILIO_API_BASE through to the provider", () => {
+    const provider = createTwilioProvider({
+      TWILIO_ACCOUNT_SID: "AC_env_sid",
+      TWILIO_AUTH_TOKEN: "env_token",
+      TWILIO_PHONE_NUMBER: "+1555000111",
+      TWILIO_API_BASE: "https://twilio-mock.local",
+    });
+    expect(provider).toBeInstanceOf(TwilioSmsProvider);
+    expect(provider?.config.apiBase).toBe("https://twilio-mock.local");
   });
 });
 
@@ -1248,6 +1283,30 @@ describe("OneSignalPushProvider", () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe("Connection timeout");
   });
+
+  it("uses custom apiBase when configured", async () => {
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ id: "notif-1" }), { status: 200 }));
+
+    const provider = new OneSignalPushProvider({
+      ...config,
+      apiBase: "https://onesignal-mock.local",
+    });
+    await provider.send(
+      notificationRow({
+        channel: "PUSH",
+        memberId: "mem-1",
+      }) as never,
+    );
+
+    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://onesignal-mock.local/api/v1/notifications");
+    expect(url).not.toContain("onesignal.com");
+  });
+
+  it("defaults apiBase to https://onesignal.com", () => {
+    const provider = new OneSignalPushProvider(config);
+    expect(provider.config.apiBase).toBe("https://onesignal.com");
+  });
 });
 
 describe("createOneSignalProvider", () => {
@@ -1277,5 +1336,15 @@ describe("createOneSignalProvider", () => {
   it("returns null when no env vars are set", () => {
     const provider = createOneSignalProvider({});
     expect(provider).toBeNull();
+  });
+
+  it("passes ONESIGNAL_API_BASE through to the provider", () => {
+    const provider = createOneSignalProvider({
+      ONESIGNAL_APP_ID: "env-app-id",
+      ONESIGNAL_API_KEY: "env-api-key",
+      ONESIGNAL_API_BASE: "https://onesignal-mock.local",
+    });
+    expect(provider).toBeInstanceOf(OneSignalPushProvider);
+    expect(provider?.config.apiBase).toBe("https://onesignal-mock.local");
   });
 });

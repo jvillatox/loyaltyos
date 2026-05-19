@@ -4,14 +4,15 @@ export interface TwilioConfig {
   accountSid: string;
   authToken: string;
   from: string;
+  apiBase?: string;
 }
 
 export class TwilioSmsProvider implements NotificationProvider {
   readonly channel = "SMS" as const;
-  private config: TwilioConfig;
+  private config: { apiBase: string } & Omit<TwilioConfig, "apiBase">;
 
   constructor(config: TwilioConfig) {
-    this.config = config;
+    this.config = { ...config, apiBase: config.apiBase ?? "https://api.twilio.com" };
   }
 
   async send(notification: NotificationRow): Promise<{ success: boolean; error?: string }> {
@@ -35,7 +36,7 @@ export class TwilioSmsProvider implements NotificationProvider {
       formData.append("Body", body);
 
       const response = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${this.config.accountSid}/Messages.json`,
+        `${this.config.apiBase}/2010-04-01/Accounts/${this.config.accountSid}/Messages.json`,
         {
           method: "POST",
           headers: {
@@ -74,5 +75,10 @@ export function createTwilioProvider(env = process.env): TwilioSmsProvider | nul
     return null;
   }
 
-  return new TwilioSmsProvider({ accountSid, authToken, from });
+  return new TwilioSmsProvider({
+    accountSid,
+    authToken,
+    from,
+    apiBase: env.TWILIO_API_BASE,
+  });
 }

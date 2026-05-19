@@ -3,14 +3,15 @@ import type { NotificationProvider, NotificationRow } from "../types.js";
 export interface OneSignalConfig {
   appId: string;
   apiKey: string;
+  apiBase?: string;
 }
 
 export class OneSignalPushProvider implements NotificationProvider {
   readonly channel = "PUSH" as const;
-  private config: OneSignalConfig;
+  private config: { apiBase: string } & Omit<OneSignalConfig, "apiBase">;
 
   constructor(config: OneSignalConfig) {
-    this.config = config;
+    this.config = { ...config, apiBase: config.apiBase ?? "https://onesignal.com" };
   }
 
   async send(notification: NotificationRow): Promise<{ success: boolean; error?: string }> {
@@ -34,7 +35,7 @@ export class OneSignalPushProvider implements NotificationProvider {
         payload.data = meta;
       }
 
-      const response = await fetch("https://onesignal.com/api/v1/notifications", {
+      const response = await fetch(`${this.config.apiBase}/api/v1/notifications`, {
         method: "POST",
         headers: {
           Authorization: `Basic ${this.config.apiKey}`,
@@ -70,5 +71,5 @@ export function createOneSignalProvider(env = process.env): OneSignalPushProvide
     return null;
   }
 
-  return new OneSignalPushProvider({ appId, apiKey });
+  return new OneSignalPushProvider({ appId, apiKey, apiBase: env.ONESIGNAL_API_BASE });
 }
