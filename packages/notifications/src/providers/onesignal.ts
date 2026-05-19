@@ -14,6 +14,10 @@ export class OneSignalPushProvider implements NotificationProvider {
     this.config = { ...config, apiBase: config.apiBase ?? "https://onesignal.com" };
   }
 
+  get apiBaseUrl(): string {
+    return this.config.apiBase;
+  }
+
   async send(notification: NotificationRow): Promise<{ success: boolean; error?: string }> {
     try {
       const contents = notification.body ?? notification.subject ?? "";

@@ -15,6 +15,10 @@ export class TwilioSmsProvider implements NotificationProvider {
     this.config = { ...config, apiBase: config.apiBase ?? "https://api.twilio.com" };
   }
 
+  get apiBaseUrl(): string {
+    return this.config.apiBase;
+  }
+
   async send(notification: NotificationRow): Promise<{ success: boolean; error?: string }> {
     try {
       const meta = notification.metadata as Record<string, string> | undefined;

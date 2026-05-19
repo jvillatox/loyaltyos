@@ -1099,7 +1099,7 @@ describe("TwilioSmsProvider", () => {
 
   it("defaults apiBase to https://api.twilio.com", () => {
     const provider = new TwilioSmsProvider(config);
-    expect(provider.config.apiBase).toBe("https://api.twilio.com");
+    expect(provider.apiBaseUrl).toBe("https://api.twilio.com");
   });
 });
 
@@ -1146,7 +1146,7 @@ describe("createTwilioProvider", () => {
       TWILIO_API_BASE: "https://twilio-mock.local",
     });
     expect(provider).toBeInstanceOf(TwilioSmsProvider);
-    expect(provider?.config.apiBase).toBe("https://twilio-mock.local");
+    expect(provider?.apiBaseUrl).toBe("https://twilio-mock.local");
   });
 });
 
@@ -1305,7 +1305,7 @@ describe("OneSignalPushProvider", () => {
 
   it("defaults apiBase to https://onesignal.com", () => {
     const provider = new OneSignalPushProvider(config);
-    expect(provider.config.apiBase).toBe("https://onesignal.com");
+    expect(provider.apiBaseUrl).toBe("https://onesignal.com");
   });
 });
 
@@ -1345,6 +1345,6 @@ describe("createOneSignalProvider", () => {
       ONESIGNAL_API_BASE: "https://onesignal-mock.local",
     });
     expect(provider).toBeInstanceOf(OneSignalPushProvider);
-    expect(provider?.config.apiBase).toBe("https://onesignal-mock.local");
+    expect(provider?.apiBaseUrl).toBe("https://onesignal-mock.local");
   });
 });
