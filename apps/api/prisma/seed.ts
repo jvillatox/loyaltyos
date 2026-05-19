@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   console.log(`Created API key: ${apiKey.key}`);
 
   // === Admin User ===
-  const adminUser = await prisma.adminUser.create({
+  const admin = await prisma.adminUser.create({
     data: {
       email: "admin@loyaltyos.dev",
       name: "Admin Demo",
@@ -70,7 +70,7 @@ async function main(): Promise<void> {
       programId: program.id,
     },
   });
-  console.log(`Created admin user: ${adminUser.email}`);
+  console.log(`Created admin user: ${admin.email}`);
 
   // === Tiers ===
   const tiers = await Promise.all([
@@ -460,7 +460,7 @@ async function main(): Promise<void> {
   console.log("Created events, tiers, badges, and segment assignments\n");
 
   // === Notification Templates ===
-  await prisma.notificationTemplate.create({
+  const pointsEarnedTemplate = await prisma.notificationTemplate.create({
     data: {
       programId: program.id,
       name: "Points Earned",
@@ -503,8 +503,26 @@ async function main(): Promise<void> {
 
   console.log("Seed complete!\n");
   console.table(counts);
-  console.log("\nAdmin UI ready at http://localhost:5173");
-  console.log("API ready at http://localhost:3002");
+
+  console.log("\n" + "=".repeat(60));
+  console.log("Demo credentials");
+  console.log("=".repeat(60));
+  console.log(`Program ID:           ${program.id}`);
+  console.log(`Program Name:         ${program.name}`);
+  console.log(`API Key (X-API-Key):  ${apiKey.key}`);
+  console.log(`Admin Email:          ${admin.email}`);
+  console.log(`Admin Password:       demo1234   (dev only)`);
+  console.log(`Demo Member ID:       ${members[0]!.id}`);
+  console.log(`Demo Member Email:    ${members[0]!.email ?? ""}`);
+  console.log(`Template points.earned ID:  ${pointsEarnedTemplate.id}`);
+  console.log("=".repeat(60));
+  console.log("\nNext steps:");
+  console.log("  Portal:   http://localhost:5173");
+  console.log("  Admin:    http://localhost:5174");
+  console.log("  API docs: http://localhost:3002/docs");
+  console.log("  MailHog:  http://localhost:8025");
+  console.log("  Adminer:  http://localhost:8080");
+  console.log("");
 }
 
 main()
