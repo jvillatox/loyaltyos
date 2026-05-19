@@ -5,6 +5,36 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-19
+
+### Added
+
+- **Badges engine (`packages/badges`)** — 5 badge types (Achievement, Status, Temporal, Collectible, Social) with condition DSL, temporal operators (`count_in_window`, `within`, `since`), progress tracking (0-100%), and event-driven auto-evaluation.
+- **Tiers engine (`packages/badges`)** — configurable rank hierarchy with threshold-based upgrades, inactivity downgrade job, progress-to-next-tier tracking, and tier benefits.
+- **Badges admin API** — CRUD endpoints, manual award, member badge list with progress, badge distribution stats.
+- **Tiers admin API** — CRUD, reorder, tier stats (member count per tier), member tier evaluation.
+- **Badges admin UI** — list with type filter, editor with condition config, image upload.
+- **Tiers admin UI** — list with inline editing, color picker, drag-to-reorder, pyramid visualization.
+- **Rewards engine (`packages/rewards`)** — 6 categories (Discount, Physical Product, Gift Card, Experience, Charity, Coalition Transfer), eligibility checks (points, tier, stock), stock management, and idempotent redemption.
+- **Rewards admin API** — CRUD, publish/archive, restock, redemptions history.
+- **Rewards admin UI** — table/grid toggle view with category badges, editor, redemptions log.
+- **Customer Portal (`apps/portal`)** — React 18 + Vite + Tailwind with magic-link auth (Lucia), i18n (en/es), home dashboard (balance, tier progress, top rewards, badges), rewards catalog with wishlist and category filter, reward detail with eligibility and redeem, badges gallery with progress, transaction history, profile with notification preferences, and PWA manifest.
+- **Loyalty Widget (`apps/widget`)** — Lit Web Components: `<loyalty-widget>` (full/mini modes), `<loyalty-points-card>`, `<loyalty-tier-card>`, `<loyalty-rewards-top3>`, `<loyalty-badges-gallery>`. Themeable via CSS custom properties, sub-50 KB bundle.
+- **Magic-link auth** — passwordless login via email magic links (Resend), session cookies, and public auth API endpoints.
+- **Notification preferences & opt-out** — member-level channel preferences with opt-out check before send, device token registration for push.
+- **Twilio SMS provider** — REST API integration with configurable API base URL.
+- **OneSignal push provider** — REST API integration with configurable API base URL.
+- **Notification test-send** — admin endpoint with memberId/recipient overrides, template preview with real member context.
+- **Idempotency-key support** — on points accumulate, redeem, and adjust operations.
+- **Audit trail** — discriminator-based actor tracking (API_KEY, MEMBER, ADMIN) for all admin operations.
+- **CHANGELOG** — this file.
+
+### Changed
+
+- Widget refactored to support mini/full display modes per spec, sub-50 KB bundle.
+- Auth plugin encapsulated via `fastify-plugin` for correct hook firing on all routes.
+- Template variable context now includes `balance` alongside `points` for parity between triggers and test-send.
+
 ## [0.2.0] - 2026-05-16
 
 ### Added

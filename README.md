@@ -3,8 +3,8 @@
 > Open source customer loyalty platform with native coalition support. MIT licensed.
 
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-0.2.0-blue)
-![Phase](https://img.shields.io/badge/phase-2%20Engagement-blue)
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Phase](https://img.shields.io/badge/phase-3%20Gamification-blue)
 
 **LoyaltyOS** is a modular, API-first loyalty platform designed to be simple to deploy but powerful in operation. Connect your sales channels, run campaigns, issue coupons, manage tiers and badges, and integrate with coalition point systems (Puntos Apprecio) — all from a single Dockerized stack.
 
@@ -14,11 +14,14 @@
 - **Multi-tenant** — multiple programs under a single installation, scoped via API key + program ID headers.
 - **Admin Dashboard** — React UI with KPI cards, member management, point balance, and transaction history.
 - **REST API** — Fastify-based with Zod validation, Swagger docs, rate limiting, and CORS.
-- **Tiers & Badges** — configurable rank tiers (Silver, Gold, Platinum) and gamification badges.
-- **Campaigns** — time-boxed multipliers (bonus points, flash sales) with budget capping.
-- **Coupons & Rewards** — percentage/fixed discount coupons and points-based reward catalog.
+- **Tiers & Badges** — 5 badge types with condition DSL, rank tiers with progress tracking and pyramid visualization.
+- **Rewards Catalog** — 6 categories, eligibility checks, stock management, and idempotent redemption.
+- **Campaigns** — 8 types with budget capping, stacking rules, A/B testing, and impact estimation.
+- **Coupons** — 6 discount types, 3 modes, bulk generation, usage tracking.
 - **Segments** — dynamic rule builder with AND/OR conditions (eq, gt, contains, between) and static lists.
-- **Notifications** — multi-channel delivery (email, SMS, push, in-app, webhook) with template rendering.
+- **Notifications** — multi-channel delivery (email, SMS, push, in-app, webhook) with Handlebars templates.
+- **Customer Portal** — mobile-first React PWA with magic-link auth, i18n, rewards catalog, badges gallery.
+- **Loyalty Widget** — embeddable Lit Web Component with mini/full modes, themeable via CSS custom properties.
 - **Privacy-first** — soft-delete on members, GDPR-ready data isolation.
 
 ## Architecture
@@ -27,8 +30,9 @@
 graph TB
     subgraph "Client Layer"
         Admin["Admin UI<br/>React + Vite"]
+        Portal["Customer Portal<br/>React PWA"]
         Widget["Loyalty Widget<br/>Web Component"]
-        API_Consumer["External Systems<br/>REST / GraphQL"]
+        API_Consumer["External Systems<br/>REST"]
     end
 
     subgraph "API Layer"
@@ -38,7 +42,9 @@ graph TB
 
     subgraph "Business Logic"
         Core["Points Engine<br/>Core Package"]
-        Campaigns["Campaigns<br/>Segments<br/>Coupons"]
+        Campaigns["Campaigns"]
+        Notifications["Notifications<br/>Email / SMS / Push"]
+        Gamification["Badges + Tiers<br/>+ Rewards"]
         Coalition["Coalition Adapter<br/>Apprecio"]
     end
 
@@ -48,11 +54,14 @@ graph TB
     end
 
     Admin --> Fastify
+    Portal --> Fastify
     Widget --> Fastify
     API_Consumer --> Fastify
     Fastify --> Auth
     Auth --> Core
     Core --> Campaigns
+    Core --> Notifications
+    Core --> Gamification
     Core --> Coalition
     Core --> PG
     Core --> Redis
@@ -67,7 +76,7 @@ graph TB
 | Setup                     | Complex         | Docker one-liner         |
 | Embeddable Widget         | No              | Yes (Web Component)      |
 | A/B Testing for Campaigns | No              | Yes                      |
-| GraphQL API               | No              | Yes (planned Phase 3)    |
+| Customer Portal (PWA)     | No              | Yes                      |
 | Multi-tenant              | Enterprise only | Included                 |
 | Visual Segment Builder    | Basic           | Advanced                 |
 
@@ -109,13 +118,14 @@ pnpm --filter @loyaltyos/api db:seed      # seed demo data
 pnpm dev
 ```
 
-| App      | URL                        |
-| -------- | -------------------------- |
-| Admin UI | http://localhost:5173      |
-| REST API | http://localhost:3002      |
-| Swagger  | http://localhost:3002/docs |
-| Adminer  | http://localhost:8080      |
-| MailHog  | http://localhost:8025      |
+| App             | URL                        |
+| --------------- | -------------------------- |
+| Admin UI        | http://localhost:5173      |
+| Customer Portal | http://localhost:5174      |
+| REST API        | http://localhost:3002      |
+| Swagger         | http://localhost:3002/docs |
+| Adminer         | http://localhost:8080      |
+| MailHog         | http://localhost:8025      |
 
 ### Demo credentials
 
@@ -146,21 +156,25 @@ loyaltyos/
 ├── apps/
 │   ├── api/                 # REST API (Fastify + Prisma + Zod)
 │   ├── admin/               # Admin UI (React + Vite + shadcn/ui)
-│   └── widget/              # Embeddable loyalty widget (planned)
+│   ├── portal/              # Customer Portal (React PWA + i18n)
+│   └── widget/              # Embeddable loyalty widget (Lit Web Components)
 ├── packages/
 │   ├── core/                # Points engine — accumulate, redeem, expire, adjust
 │   ├── campaigns/           # Campaign rules engine (8 types, budgets, A/B testing)
 │   ├── coupons/             # Coupon system (6 discount types, 3 modes, bulk ops)
 │   ├── segments/            # Dynamic segments DSL with rule evaluator
-│   ├── notifications/       # Multi-channel notifications with template rendering
-│   ├── badges/              # Badge definitions and award rules
-│   ├── rewards/             # Reward catalog with points-based redemption
+│   ├── notifications/       # Multi-channel notifications with Handlebars templates
+│   ├── badges/              # Badges engine + tiers (5 types, condition DSL, progress tracking)
+│   ├── rewards/             # Reward catalog with eligibility, stock, and redemption
 │   ├── coalition/           # Coalition adapter (Apprecio + generic)
 │   └── config-eslint/       # Shared ESLint configuration
 ├── docker-compose.yml       # Local dev infrastructure
 ├── turbo.json               # Turborepo pipeline
 └── docs/
-    └── SPEC.md              # Full architecture and roadmap
+    ├── SPEC.md              # Full architecture and roadmap
+    ├── customer-portal.md   # Customer portal guide
+    ├── widget-integration.md # Widget integration guide
+    └── notifications.md     # Notifications setup guide
 ```
 
 ## Tech Stack
@@ -171,6 +185,8 @@ loyaltyos/
 | Database  | PostgreSQL 15, Prisma ORM                           |
 | Cache     | Redis 7                                             |
 | Admin UI  | React 18, Vite, Tailwind, shadcn/ui, TanStack Query |
+| Portal    | React 18, Vite, Tailwind, i18next, PWA              |
+| Widget    | Lit 3, Web Components, ~45 KB bundle                |
 | Charts    | Recharts                                            |
 | Dev Tools | Turborepo, ESLint, Prettier, Husky, commitlint      |
 | Testing   | Vitest, Supertest                                   |
@@ -193,26 +209,40 @@ loyaltyos/
 
 All endpoints require `X-API-Key` and `X-Program-Id` headers.
 
-| Method | Endpoint                           | Description                                 |
-| ------ | ---------------------------------- | ------------------------------------------- |
-| `GET`  | `/healthz`                         | Health check                                |
-| `GET`  | `/readyz`                          | Readiness probe (DB check)                  |
-| `GET`  | `/api/v1/stats/dashboard`          | KPI aggregates                              |
-| `GET`  | `/api/v1/members`                  | List members (paginated)                    |
-| `POST` | `/api/v1/members`                  | Create a member                             |
-| `GET`  | `/api/v1/members/:id`              | Get member by ID                            |
-| `GET`  | `/api/v1/members/:id/balance`      | Get member point balance                    |
-| `GET`  | `/api/v1/members/:id/transactions` | Get member transaction history              |
-| `POST` | `/api/v1/members/:id/adjust`       | Adjust points (requires Idempotency-Key)    |
-| `POST` | `/api/v1/events`                   | Ingest an event                             |
-| `GET`  | `/api/v1/admin/campaigns`          | List campaigns (paginated)                  |
-| `POST` | `/api/v1/admin/campaigns`          | Create a campaign                           |
-| `POST` | `/api/v1/admin/campaigns/estimate` | Estimate campaign impact                    |
-| `GET`  | `/api/v1/admin/coupons`            | List coupons (paginated, with mode filter)  |
-| `POST` | `/api/v1/admin/coupons/generate`   | Bulk generate coupon codes                  |
-| `GET`  | `/api/v1/admin/segments`           | List segments (paginated, with type filter) |
-| `POST` | `/api/v1/admin/segments`           | Create a segment                            |
-| `POST` | `/api/v1/admin/segments/estimate`  | Estimate segment member count               |
+| Method  | Endpoint                               | Description                               |
+| ------- | -------------------------------------- | ----------------------------------------- |
+| `GET`   | `/healthz`                             | Health check                              |
+| `GET`   | `/readyz`                              | Readiness probe (DB check)                |
+| `GET`   | `/api/v1/stats/dashboard`              | KPI aggregates                            |
+| `GET`   | `/api/v1/members`                      | List members (paginated)                  |
+| `POST`  | `/api/v1/members`                      | Create a member                           |
+| `GET`   | `/api/v1/members/:id`                  | Get member by ID                          |
+| `GET`   | `/api/v1/members/:id/balance`          | Get member point balance                  |
+| `GET`   | `/api/v1/members/:id/transactions`     | Get member transaction history            |
+| `POST`  | `/api/v1/members/:id/adjust`           | Adjust points (requires Idempotency-Key)  |
+| `POST`  | `/api/v1/events`                       | Ingest an event                           |
+| `GET`   | `/api/v1/admin/campaigns`              | List campaigns (paginated)                |
+| `POST`  | `/api/v1/admin/campaigns`              | Create a campaign                         |
+| `POST`  | `/api/v1/admin/campaigns/estimate`     | Estimate campaign impact                  |
+| `GET`   | `/api/v1/admin/coupons`                | List coupons (paginated)                  |
+| `POST`  | `/api/v1/admin/coupons/generate`       | Bulk generate coupon codes                |
+| `GET`   | `/api/v1/admin/segments`               | List segments (paginated)                 |
+| `POST`  | `/api/v1/admin/segments`               | Create a segment                          |
+| `POST`  | `/api/v1/admin/segments/estimate`      | Estimate segment member count             |
+| `GET`   | `/api/v1/admin/badges`                 | List badges (paginated, with type filter) |
+| `POST`  | `/api/v1/admin/badges`                 | Create a badge                            |
+| `GET`   | `/api/v1/admin/tiers`                  | List tiers (ordered by rank)              |
+| `POST`  | `/api/v1/admin/tiers`                  | Create a tier                             |
+| `PATCH` | `/api/v1/admin/tiers/reorder`          | Reorder tier ranks                        |
+| `GET`   | `/api/v1/rewards`                      | List rewards (paginated, with filters)    |
+| `POST`  | `/api/v1/admin/rewards`                | Create a reward                           |
+| `POST`  | `/api/v1/rewards/:id/redeem`           | Redeem a reward                           |
+| `POST`  | `/api/v1/auth/login`                   | Request magic link                        |
+| `GET`   | `/api/v1/auth/verify`                  | Verify magic-link token                   |
+| `GET`   | `/api/v1/admin/notification-templates` | List templates (paginated)                |
+| `POST`  | `/api/v1/admin/notification-templates` | Create a template                         |
+| `GET`   | `/api/v1/admin/webhooks`               | List webhooks (paginated)                 |
+| `POST`  | `/api/v1/admin/webhooks`               | Create a webhook subscription             |
 
 Full OpenAPI spec at `/docs` when the API is running.
 
@@ -231,7 +261,7 @@ Full OpenAPI spec at `/docs` when the API is running.
 | ----- | -------------------------------------------------------------- | -------- |
 | 1     | Core MVP — monorepo, points engine, REST API, Admin UI, Docker | Complete |
 | 2     | Engagement — campaigns, coupons, notifications, segments       | Complete |
-| 3     | Gamification — badges, tiers, rewards, customer widget         | Planned  |
+| 3     | Gamification — badges, tiers, rewards, customer portal, widget | Complete |
 | 4     | Coalition — Apprecio adapter, coalition accounts, admin panel  | Planned  |
 | 5     | Production — Helm charts, OTel, Docusaurus, CI/CD, v1.0.0      | Planned  |
 
