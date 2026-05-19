@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../db.js";
+import { audit } from "../../lib/audit.js";
 import { notificationsService as notifications } from "../../lib/notifications-setup.js";
 
 // ── Schemas ──────────────────────────────────────────────────
@@ -42,27 +43,6 @@ const webhookUpdateBody = z.object({
   secret: z.string().min(16).optional(),
   isActive: z.boolean().optional(),
 });
-
-// ── Audit helper ─────────────────────────────────────────────
-
-async function audit(
-  programId: string,
-  action: string,
-  entityType: string,
-  entityId: string | null,
-  diff: Record<string, unknown> = {},
-): Promise<void> {
-  await prisma.auditLog.create({
-    data: {
-      programId,
-      adminUserId: "api-key", // API-key auth uses this placeholder
-      action: action as never,
-      entityType,
-      entityId,
-      diff: diff as never,
-    },
-  });
-}
 
 function getProgramId(request: {
   programId: string;
@@ -105,10 +85,17 @@ export function adminNotificationsRoutes(
       ...body,
       programId,
     });
-    await audit(programId, "CREATE_NOTIFICATION_TEMPLATE", "NotificationTemplate", template.id, {
-      name: body.name,
-      channel: body.channel,
-    });
+    await audit(
+      programId,
+      request.actor,
+      "CREATE_NOTIFICATION_TEMPLATE",
+      "NotificationTemplate",
+      template.id,
+      {
+        name: body.name,
+        channel: body.channel,
+      },
+    );
     return reply.status(201).send({ data: template });
   });
 
@@ -126,6 +113,7 @@ export function adminNotificationsRoutes(
     const template = await notifications.updateTemplate(id, body);
     await audit(
       getProgramId(request),
+      request.actor,
       "UPDATE_NOTIFICATION_TEMPLATE",
       "NotificationTemplate",
       id,
@@ -138,7 +126,13 @@ export function adminNotificationsRoutes(
   app.delete("/admin/notification-templates/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     await notifications.deleteTemplate(id);
-    await audit(getProgramId(request), "DELETE_NOTIFICATION_TEMPLATE", "NotificationTemplate", id);
+    await audit(
+      getProgramId(request),
+      request.actor,
+      "DELETE_NOTIFICATION_TEMPLATE",
+      "NotificationTemplate",
+      id,
+    );
     return reply.status(204).send();
   });
 
@@ -156,6 +150,7 @@ export function adminNotificationsRoutes(
 
     await audit(
       getProgramId(request),
+      request.actor,
       "PREVIEW_NOTIFICATION_TEMPLATE",
       "NotificationTemplate",
       id,
@@ -253,11 +248,18 @@ export function adminNotificationsRoutes(
       // Leave as PENDING
     }
 
-    await audit(getProgramId(request), "SEND_TEST_NOTIFICATION", "Notification", notification.id, {
-      templateId: id,
-      memberId: targetMemberId,
-      channel: targetChannel,
-    });
+    await audit(
+      getProgramId(request),
+      request.actor,
+      "SEND_TEST_NOTIFICATION",
+      "Notification",
+      notification.id,
+      {
+        templateId: id,
+        memberId: targetMemberId,
+        channel: targetChannel,
+      },
+    );
 
     return reply.status(201).send({ data: notification });
   });
@@ -309,7 +311,7 @@ export function adminNotificationsRoutes(
       ...body,
       programId,
     });
-    await audit(programId, "CREATE_WEBHOOK", "WebhookSubscription", webhook.id, {
+    await audit(programId, request.actor, "CREATE_WEBHOOK", "WebhookSubscription", webhook.id, {
       url: body.url,
       events: body.events,
     });
@@ -330,6 +332,7 @@ export function adminNotificationsRoutes(
     const webhook = await notifications.updateWebhook(id, body);
     await audit(
       getProgramId(request),
+      request.actor,
       "UPDATE_WEBHOOK",
       "WebhookSubscription",
       id,
@@ -342,7 +345,7 @@ export function adminNotificationsRoutes(
   app.delete("/admin/webhooks/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     await notifications.deleteWebhook(id);
-    await audit(getProgramId(request), "DELETE_WEBHOOK", "WebhookSubscription", id);
+    await audit(getProgramId(request), request.actor, "DELETE_WEBHOOK", "WebhookSubscription", id);
     return reply.status(204).send();
   });
 

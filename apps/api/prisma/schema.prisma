@@ -612,23 +612,32 @@ enum AuditAction {
   PREVIEW_NOTIFICATION_TEMPLATE
 }
 
+enum AuditActorType {
+  ADMIN_USER
+  API_KEY
+  SYSTEM
+}
+
 model AuditLog {
-  id          String     @id @default(cuid())
+  id          String          @id @default(cuid())
   programId   String
-  adminUserId String
+  adminUserId String?
+  actorType   AuditActorType @default(API_KEY)
+  actorId     String          @default("legacy-unknown")
   action      AuditAction
   entityType  String
   entityId    String?
-  diff        Json?      @default("{}")
+  diff        Json?           @default("{}")
   reason      String?
   ipAddress   String?
-  createdAt   DateTime   @default(now())
+  createdAt   DateTime        @default(now())
 
   program   Program    @relation(fields: [programId], references: [id], onDelete: Restrict)
-  adminUser AdminUser  @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
 
   @@index([programId])
   @@index([adminUserId])
+  @@index([actorType, actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
 }
