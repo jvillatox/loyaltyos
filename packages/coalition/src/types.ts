@@ -1,9 +1,20 @@
 import type { Prisma, TransactionType } from "@prisma/client";
 
+// ── Adapter Capabilities ────────────────────────────────────────
+
+export interface AdapterCapabilities {
+  readonly accumulate: boolean;
+  readonly redeem: boolean;
+  readonly convert: boolean;
+  readonly reverseTransaction: boolean;
+  readonly historyQuery: boolean;
+}
+
 // ── CoalitionAdapter Interface ──────────────────────────────────
 
 export interface CoalitionAdapter {
-  name: string;
+  readonly name: string;
+  readonly capabilities: AdapterCapabilities;
   healthcheck(): Promise<{ ok: boolean; latencyMs?: number; details?: unknown }>;
   getBalance(externalMemberRef: string): Promise<number>;
   accumulate(
@@ -12,14 +23,15 @@ export interface CoalitionAdapter {
     txRef: string,
     metadata?: object,
   ): Promise<TxResult>;
-  redeem(
+  redeem?(
     externalMemberRef: string,
     points: number,
     txRef: string,
     metadata?: object,
   ): Promise<TxResult>;
-  convert(externalMemberRef: string, ownPoints: number, txRef: string): Promise<TxResult>;
-  reverseTransaction(txRef: string, reason: string): Promise<void>;
+  convert?(externalMemberRef: string, ownPoints: number, txRef: string): Promise<TxResult>;
+  reverseTransaction?(txRef: string, reason: string): Promise<void>;
+  queryHistory?(externalMemberRef: string, from: Date, to: Date): Promise<unknown[]>;
 }
 
 export interface TxResult {
@@ -66,6 +78,13 @@ export class CoalitionAccountNotLinkedError extends Error {
   constructor(memberId: string, programId: string) {
     super(`No coalition account linked for member "${memberId}" in program "${programId}"`);
     this.name = "CoalitionAccountNotLinkedError";
+  }
+}
+
+export class CoalitionUnsupportedError extends Error {
+  constructor(method: string, adapter: string) {
+    super(`Operation "${method}" is not supported by adapter "${adapter}"`);
+    this.name = "CoalitionUnsupportedError";
   }
 }
 

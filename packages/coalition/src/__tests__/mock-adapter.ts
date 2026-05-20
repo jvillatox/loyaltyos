@@ -1,4 +1,4 @@
-import type { CoalitionAdapter, TxResult } from "../types.js";
+import type { AdapterCapabilities, CoalitionAdapter, TxResult } from "../types.js";
 import { CoalitionBusinessError, CoalitionTransientError } from "../types.js";
 
 export interface MockAdapterOptions {
@@ -14,10 +14,21 @@ export interface MockAdapterOptions {
   externalTxId?: string;
   /** Fixed balanceAfter in TxResult. */
   balanceAfter?: number;
+  /** Override capabilities flags. */
+  capabilities?: Partial<AdapterCapabilities>;
 }
+
+const DEFAULT_CAPABILITIES: AdapterCapabilities = {
+  accumulate: true,
+  redeem: true,
+  convert: true,
+  reverseTransaction: true,
+  historyQuery: true,
+};
 
 export class MockAdapter implements CoalitionAdapter {
   name = "mock";
+  capabilities: AdapterCapabilities;
   latency: number;
   transientFails: number;
   businessError: string | undefined;
@@ -50,6 +61,7 @@ export class MockAdapter implements CoalitionAdapter {
   private transientCount = 0;
 
   constructor(options: MockAdapterOptions = {}) {
+    this.capabilities = { ...DEFAULT_CAPABILITIES, ...options.capabilities };
     this.latency = options.latency ?? 0;
     this.transientFails = options.transientFails ?? 0;
     this.businessError = options.businessError;

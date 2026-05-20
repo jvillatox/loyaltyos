@@ -4,6 +4,7 @@ export { createRepository } from "./repository.js";
 export { CoalitionService } from "./service.js";
 export type {
   AccumulateInput,
+  AdapterCapabilities,
   CoalitionAccountRow,
   CoalitionAdapter,
   CoalitionConfigRow,
@@ -19,4 +20,5 @@ export {
   CoalitionCircuitOpenError,
   CoalitionConfigNotFoundError,
   CoalitionTransientError,
+  CoalitionUnsupportedError,
 } from "./types.js";

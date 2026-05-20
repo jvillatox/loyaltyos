@@ -6,6 +6,7 @@ import type { Repository } from "./repository.js";
 import { createRepository } from "./repository.js";
 import type {
   AccumulateInput,
+  AdapterCapabilities,
   CoalitionAdapter,
   CoalitionOperationResult,
   ConvertInput,
@@ -17,6 +18,7 @@ import {
   CoalitionCircuitOpenError,
   CoalitionConfigNotFoundError,
   CoalitionTransientError,
+  CoalitionUnsupportedError,
 } from "./types.js";
 
 function isTransientError(error: Error): boolean {
@@ -26,6 +28,7 @@ function isTransientError(error: Error): boolean {
   if (error instanceof CoalitionCircuitOpenError) return false;
   if (error instanceof CoalitionConfigNotFoundError) return false;
   if (error instanceof CoalitionAccountNotLinkedError) return false;
+  if (error instanceof CoalitionUnsupportedError) return false;
 
   // Network / HTTP errors are transient
   const message = error.message.toLowerCase();
@@ -167,9 +170,12 @@ export class CoalitionService {
     // 5. Call adapter.convert() with retry + circuit breaker
     try {
       const adapter = await this.getActiveAdapter(programId);
-      const adapterResult = await this.callWithRetry(() =>
-        adapter.convert(externalMemberRef, ownPoints, txRef),
-      );
+      this.requireCapability(adapter, "convert", "convert");
+
+      const adapterResult = await this.callWithRetry(() => {
+        if (!adapter.convert) throw new CoalitionUnsupportedError("convert", adapter.name);
+        return adapter.convert(externalMemberRef, ownPoints, txRef);
+      });
 
       await this.repo.updateTxSuccess(
         tx.id,
@@ -202,20 +208,31 @@ export class CoalitionService {
           metadata: { coalitionTxId: adapterResult.externalTxId },
         });
       } catch (coreError) {
-        // Compensation: reverse the external operation
+        // Compensation: reverse the external operation (if supported)
         const reason =
           coreError instanceof Error ? coreError.message : "Local core operation failed";
-        try {
-          await adapter.reverseTransaction(adapterResult.externalTxId, reason);
-          await this.repo.updateTxReversed(tx.id, reason);
-        } catch (reverseError) {
-          console.error(
-            `[Coalition] Compensation reversal failed for ${adapterResult.externalTxId}:`,
-            reverseError,
-          );
+        if (adapter.capabilities.reverseTransaction) {
+          try {
+            if (!adapter.reverseTransaction) {
+              throw new CoalitionUnsupportedError("reverseTransaction", adapter.name);
+            }
+            await adapter.reverseTransaction(adapterResult.externalTxId, reason);
+            await this.repo.updateTxReversed(tx.id, reason);
+          } catch (reverseError) {
+            console.error(
+              `[Coalition] Compensation reversal failed for ${adapterResult.externalTxId}:`,
+              reverseError,
+            );
+            await this.repo.updateTxFailed(
+              tx.id,
+              `Local core failed AND compensation reversal failed: ${reason}`,
+              tx.attempts,
+            );
+          }
+        } else {
           await this.repo.updateTxFailed(
             tx.id,
-            `Local core failed AND compensation reversal failed: ${reason}`,
+            `Local core failed (reverse not supported by adapter): ${reason}`,
             tx.attempts,
           );
         }
@@ -291,10 +308,20 @@ export class CoalitionService {
     // 5. Call adapter with retry + circuit breaker (Phase 2)
     try {
       const adapter = await this.getActiveAdapter(programId);
-      const adapterFn =
-        txType === "EARN"
-          ? () => adapter.accumulate(externalMemberRef, points, txRef, metadata)
-          : () => adapter.redeem(externalMemberRef, points, txRef, metadata);
+
+      if (txType === "REDEEM") {
+        this.requireCapability(adapter, "redeem", "redeem");
+      }
+
+      const adapterFn = () => {
+        if (txType === "EARN") {
+          return adapter.accumulate(externalMemberRef, points, txRef, metadata);
+        }
+        if (!adapter.redeem) {
+          throw new CoalitionUnsupportedError("redeem", adapter.name);
+        }
+        return adapter.redeem(externalMemberRef, points, txRef, metadata);
+      };
 
       const adapterResult = await this.callWithRetry(adapterFn);
       await this.repo.updateTxSuccess(
@@ -349,6 +376,17 @@ export class CoalitionService {
 
   private getAnyAdapter(): CoalitionAdapter | undefined {
     return this.adapters.values().next().value;
+  }
+
+  /** Throws CoalitionUnsupportedError if the adapter does not support the given capability. */
+  private requireCapability(
+    adapter: CoalitionAdapter,
+    capability: keyof AdapterCapabilities,
+    method: string,
+  ): void {
+    if (!adapter.capabilities[capability]) {
+      throw new CoalitionUnsupportedError(method, adapter.name);
+    }
   }
 }
 

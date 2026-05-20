@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CoalitionBusinessError, CoalitionTransientError } from "../types.js";
+import {
+  CoalitionBusinessError,
+  CoalitionTransientError,
+  CoalitionUnsupportedError,
+} from "../types.js";
 
 // ── Mock Prisma ─────────────────────────────────────────────────
 
@@ -302,6 +306,30 @@ describe("CoalitionService", () => {
 
       // Should only have tried once — business errors are not retried
       expect(adapter.redeemCalls).toHaveLength(1);
+    });
+
+    it("throws CoalitionUnsupportedError when adapter does not support redeem", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
+      mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
+      mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow({ type: "REDEEM" }));
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({ capabilities: { redeem: false } });
+      svc.registerAdapter(adapter);
+
+      await expect(
+        svc.redeem({
+          programId: "prog-1",
+          memberId: "mem-1",
+          externalMemberRef: "ext-ref-1",
+          points: 100,
+          txRef: "ref-no-cap",
+        }),
+      ).rejects.toThrow(CoalitionUnsupportedError);
+
+      // Should not have called the adapter at all
+      expect(adapter.redeemCalls).toHaveLength(0);
     });
   });
 
