@@ -30,6 +30,7 @@ model Program {
   memberDevices        MemberDevice[]
   memberNotificationPreferences MemberNotificationPreferences[]
   coalitionAccounts  CoalitionAccount[]
+  coalitionConfig    CoalitionConfig?
   adminUsers         AdminUser[]
   events             Event[]
   apiKeys            ApiKey[]
@@ -470,6 +471,23 @@ model Notification {
   @@index([createdAt])
 }
 
+model CoalitionConfig {
+  id                   String   @id @default(cuid())
+  programId            String   @unique
+  program              Program  @relation(fields: [programId], references: [id], onDelete: Restrict)
+  provider             String   @default("GENERIC")
+  endpoint             String
+  encryptedCredentials String
+  conversionRate       Float    @default(1.0)
+  accumulationEnabled  Boolean  @default(false)
+  redemptionEnabled    Boolean  @default(false)
+  conversionEnabled    Boolean  @default(false)
+  minConversionPoints  Int      @default(500)
+  circuitState         Json?    @default("{}")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
 model CoalitionAccount {
   id              String   @id @default(cuid())
   memberId        String
@@ -497,8 +515,9 @@ model CoalitionTransaction {
   amount           Int
   localTxRef       String
   externalTxRef    String?
-  status           String   @default("PENDING") // PENDING, SUCCESS, FAILED, REVERSED
-  error            String?
+  status           String   @default("PENDING") // PENDING, CONFIRMED, FAILED, REVERSED
+  attempts         Int      @default(1)
+  lastError        String?
   metadata         Json?    @default("{}")
   idempotencyKey   String   @unique
   createdAt        DateTime @default(now())
