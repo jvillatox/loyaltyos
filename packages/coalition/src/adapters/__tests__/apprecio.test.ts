@@ -366,6 +366,89 @@ describe("createApprecioAdapter", () => {
     });
   });
 
+  // ═══ Private Token Leak Guards ═══
+
+  describe("private_token leak guards", () => {
+    it("error message from 401 does not contain private_token", async () => {
+      fetchMock.mockResolvedValue({
+        status: 401,
+        json: () =>
+          Promise.resolve({
+            message: `Auth failed for token ${CONFIG.privateToken}`,
+          }),
+      });
+
+      const adapter = createApprecioAdapter(CONFIG);
+
+      try {
+        await adapter.getBalance("user@test.com");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        expect(message).not.toContain(CONFIG.privateToken);
+      }
+    });
+
+    it("error message from 500 does not contain private_token", async () => {
+      fetchMock.mockResolvedValue({
+        status: 500,
+        json: () =>
+          Promise.resolve({
+            error: `Internal error ctx=${CONFIG.privateToken}`,
+          }),
+      });
+
+      const adapter = createApprecioAdapter(CONFIG);
+
+      try {
+        await adapter.getBalance("user@test.com");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        expect(message).not.toContain(CONFIG.privateToken);
+      }
+    });
+
+    it("error message from network timeout does not contain private_token", async () => {
+      fetchMock.mockRejectedValue(new Error(`Connection refused for ${CONFIG.privateToken}`));
+
+      const adapter = createApprecioAdapter(CONFIG);
+
+      try {
+        await adapter.getBalance("user@test.com");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        expect(message).not.toContain(CONFIG.privateToken);
+      }
+    });
+
+    it("any console.error/warn call argument does not contain private_token", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(vi.fn());
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(vi.fn());
+
+      fetchMock.mockResolvedValue({
+        status: 401,
+        json: () => Promise.resolve({ message: "Invalid token" }),
+      });
+
+      const adapter = createApprecioAdapter(CONFIG);
+
+      try {
+        await adapter.getBalance("user@test.com");
+      } catch {
+        // expected
+      }
+
+      const allArgs = [...errorSpy.mock.calls.flat(), ...warnSpy.mock.calls.flat()];
+      for (const arg of allArgs) {
+        if (typeof arg === "string") {
+          expect(arg).not.toContain(CONFIG.privateToken);
+        }
+      }
+
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+  });
+
   // ═══ Healthcheck ═══
 
   describe("healthcheck", () => {

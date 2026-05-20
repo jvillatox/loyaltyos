@@ -77,8 +77,9 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
       });
     } catch (err) {
       clearTimeout(timer);
-      const message = err instanceof Error ? err.message : String(err);
-      throw new CoalitionTransientError(`Apprecio network error: ${message}`);
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const safeMessage = rawMessage.split(privateToken).join("[REDACTED]");
+      throw new CoalitionTransientError(`Apprecio network error: ${safeMessage}`);
     }
     clearTimeout(timer);
 
@@ -95,32 +96,36 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
       );
     }
 
+    // Sanitize API response detail so the private token never leaks through error messages,
+    // even if the upstream API echoes it in an error response body.
+    const safeDetail = (json.message ?? json.error ?? "unknown")
+      .split(privateToken)
+      .join("[REDACTED]");
+
     // Auth errors — no retry
     if (response.status === 401 || response.status === 403) {
       throw new CoalitionBusinessError(
-        `Apprecio auth failed (HTTP ${String(response.status)}): ${json.message ?? json.error ?? "unknown"}`,
+        `Apprecio auth failed (HTTP ${String(response.status)}): ${safeDetail}`,
       );
     }
 
     // Server errors — transient, will retry
     if (response.status >= 500) {
       throw new CoalitionTransientError(
-        `Apprecio server error (HTTP ${String(response.status)}): ${json.message ?? json.error ?? "unknown"}`,
+        `Apprecio server error (HTTP ${String(response.status)}): ${safeDetail}`,
       );
     }
 
     // Other client errors — business error, no retry
     if (response.status >= 400) {
       throw new CoalitionBusinessError(
-        `Apprecio client error (HTTP ${String(response.status)}): ${json.message ?? json.error ?? "unknown"}`,
+        `Apprecio client error (HTTP ${String(response.status)}): ${safeDetail}`,
       );
     }
 
     // Business error indicated in response body (HTTP 2xx with error flag)
     if (json.success === false || json.error) {
-      throw new CoalitionBusinessError(
-        `Apprecio business error: ${json.message ?? json.error ?? "unknown"}`,
-      );
+      throw new CoalitionBusinessError(`Apprecio business error: ${safeDetail}`);
     }
 
     return json;
