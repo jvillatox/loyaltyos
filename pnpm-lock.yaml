@@ -210,6 +210,9 @@ importers:
       '@loyaltyos/campaigns':
         specifier: workspace:*
         version: link:../../packages/campaigns
+      '@loyaltyos/coalition':
+        specifier: workspace:*
+        version: link:../../packages/coalition
       '@loyaltyos/core':
         specifier: workspace:*
         version: link:../../packages/core

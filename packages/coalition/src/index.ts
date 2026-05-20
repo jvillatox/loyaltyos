@@ -1,3 +1,10 @@
+export { createApprecioAdapter } from "./adapters/apprecio.js";
+export type { ApprecioConfig, ApprecioCountry, IdentifierType } from "./adapters/apprecio.types.js";
+export {
+  APPRECIO_BASE_URLS,
+  ApprecioAuthError,
+  ApprecioConfigError,
+} from "./adapters/apprecio.types.js";
 export { decrypt, encrypt, getMasterKey } from "./crypto.js";
 export type { Repository } from "./repository.js";
 export { createRepository } from "./repository.js";

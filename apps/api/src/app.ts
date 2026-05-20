@@ -9,12 +9,14 @@ import { errorHandler } from "./lib/error-handler.js";
 import { authPlugin } from "./plugins/auth.js";
 import { adminBadgesRoutes } from "./routes/admin/badges.js";
 import { adminCampaignsRoutes } from "./routes/admin/campaigns.js";
+import { adminCoalitionRoutes } from "./routes/admin/coalition.js";
 import { adminCouponsRoutes } from "./routes/admin/coupons.js";
 import { adminNotificationsRoutes } from "./routes/admin/notifications.js";
 import { adminRewardsRoutes } from "./routes/admin/rewards.js";
 import { adminSegmentsRoutes } from "./routes/admin/segments.js";
 import { adminTiersRoutes } from "./routes/admin/tiers.js";
 import { authRoutes } from "./routes/auth.js";
+import { coalitionRoutes } from "./routes/coalition.js";
 import { couponsRoutes } from "./routes/coupons.js";
 import { eventsRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
@@ -88,6 +90,8 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   await app.register(couponsRoutes, { prefix: "/api/v1" });
   await app.register(rewardsRoutes, { prefix: "/api/v1" });
   await app.register(adminRewardsRoutes, { prefix: "/api/v1" });
+  await app.register(coalitionRoutes, { prefix: "/api/v1" });
+  await app.register(adminCoalitionRoutes, { prefix: "/api/v1" });
 
   return app;
 }

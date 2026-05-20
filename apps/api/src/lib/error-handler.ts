@@ -6,6 +6,14 @@ import {
   CampaignUserLimitReachedError,
 } from "@loyaltyos/campaigns";
 import {
+  CoalitionAccountNotLinkedError,
+  CoalitionBusinessError,
+  CoalitionCircuitOpenError,
+  CoalitionConfigNotFoundError,
+  CoalitionTransientError,
+  CoalitionUnsupportedError,
+} from "@loyaltyos/coalition";
+import {
   AlreadyReversedError,
   InsufficientBalanceError,
   TransactionNotFoundError,
@@ -220,6 +228,55 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
     return {
       status: 422,
       body: { error: { code: "REWARD_INSUFFICIENT_POINTS", message: err.message } },
+    };
+  }
+
+  // Coalition domain errors
+  if (err instanceof CoalitionConfigNotFoundError) {
+    return {
+      status: 404,
+      body: { error: { code: "COALITION_CONFIG_NOT_FOUND", message: err.message } },
+    };
+  }
+
+  if (err instanceof CoalitionAccountNotLinkedError) {
+    return {
+      status: 404,
+      body: { error: { code: "COALITION_ACCOUNT_NOT_LINKED", message: err.message } },
+    };
+  }
+
+  if (err instanceof CoalitionBusinessError) {
+    return {
+      status: 422,
+      body: { error: { code: "COALITION_BUSINESS_ERROR", message: err.message } },
+    };
+  }
+
+  if (err instanceof CoalitionTransientError) {
+    return {
+      status: 502,
+      body: {
+        error: { code: "EXTERNAL_SERVICE_ERROR", message: err.message },
+      },
+    };
+  }
+
+  if (err instanceof CoalitionCircuitOpenError) {
+    return {
+      status: 503,
+      body: {
+        error: { code: "CIRCUIT_OPEN", message: err.message },
+      },
+    };
+  }
+
+  if (err instanceof CoalitionUnsupportedError) {
+    return {
+      status: 501,
+      body: {
+        error: { code: "UNSUPPORTED_OPERATION", message: err.message },
+      },
     };
   }
 

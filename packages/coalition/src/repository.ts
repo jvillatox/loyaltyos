@@ -67,6 +67,12 @@ export function createRepository(prisma: PrismaClient) {
     });
   }
 
+  async function getAccountById(id: string): Promise<CoalitionAccountRow | null> {
+    return prisma.coalitionAccount.findUnique({
+      where: { id },
+    });
+  }
+
   async function getAccountByExternalRef(
     provider: string,
     externalId: string,
@@ -167,6 +173,46 @@ export function createRepository(prisma: PrismaClient) {
     });
   }
 
+  async function unlinkAccount(accountId: string): Promise<void> {
+    await prisma.coalitionAccount.delete({
+      where: { id: accountId },
+    });
+  }
+
+  async function listTransactions(input: {
+    programId: string;
+    status?: string;
+    memberId?: string;
+    from?: Date;
+    to?: Date;
+    page?: number;
+    pageSize?: number;
+  }): Promise<CoalitionTransactionRow[]> {
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 20;
+
+    return prisma.coalitionTransaction.findMany({
+      where: {
+        account: { programId: input.programId },
+        ...(input.status
+          ? { status: input.status as "PENDING" | "CONFIRMED" | "FAILED" | "REVERSED" }
+          : {}),
+        ...(input.memberId ? { account: { memberId: input.memberId } } : {}),
+        ...(input.from != null || input.to != null
+          ? {
+              createdAt: {
+                ...(input.from != null ? { gte: input.from } : {}),
+                ...(input.to != null ? { lte: input.to } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+  }
+
   async function updateTxReversed(txId: string, reason: string): Promise<void> {
     await prisma.coalitionTransaction.update({
       where: { id: txId },
@@ -182,8 +228,11 @@ export function createRepository(prisma: PrismaClient) {
     upsertConfig,
     updateCircuitState,
     getAccount,
+    getAccountById,
     getAccountByExternalRef,
     linkAccount,
+    unlinkAccount,
+    listTransactions,
     updateExternalBalance,
     createTx,
     findTxByIdempotencyKey,

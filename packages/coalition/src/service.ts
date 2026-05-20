@@ -7,8 +7,10 @@ import { createRepository } from "./repository.js";
 import type {
   AccumulateInput,
   AdapterCapabilities,
+  CoalitionAccountRow,
   CoalitionAdapter,
   CoalitionOperationResult,
+  CoalitionTransactionRow,
   ConvertInput,
   RedeemInput,
 } from "./types.js";
@@ -253,6 +255,99 @@ export class CoalitionService {
       await this.repo.updateTxFailed(tx.id, error.message, tx.attempts + 1);
       throw error;
     }
+  }
+
+  async getExternalBalance(memberId: string, programId: string): Promise<number> {
+    const adapter = await this.getActiveAdapter(programId);
+    const account = await this.repo.getAccount(memberId, programId);
+    if (!account) throw new CoalitionAccountNotLinkedError(memberId, programId);
+    return adapter.getBalance(account.externalId);
+  }
+
+  async getExternalHistory(
+    memberId: string,
+    programId: string,
+    from: Date,
+    to: Date,
+  ): Promise<unknown[]> {
+    const adapter = await this.getActiveAdapter(programId);
+    if (!adapter.capabilities.historyQuery) return [];
+    const account = await this.repo.getAccount(memberId, programId);
+    if (!account) throw new CoalitionAccountNotLinkedError(memberId, programId);
+    if (!adapter.queryHistory) return [];
+    return adapter.queryHistory(account.externalId, from, to);
+  }
+
+  async linkExternalAccount(input: {
+    memberId: string;
+    programId: string;
+    externalMemberRef: string;
+  }): Promise<CoalitionAccountRow> {
+    const config = await this.repo.getConfig(input.programId);
+    if (!config) throw new CoalitionConfigNotFoundError(input.programId);
+    return this.repo.linkAccount({
+      memberId: input.memberId,
+      programId: input.programId,
+      provider: config.provider,
+      externalId: input.externalMemberRef,
+    });
+  }
+
+  async unlinkExternalAccount(memberId: string, programId: string): Promise<void> {
+    const account = await this.repo.getAccount(memberId, programId);
+    if (!account) throw new CoalitionAccountNotLinkedError(memberId, programId);
+    await this.repo.unlinkAccount(account.id);
+  }
+
+  async getAdapterCapabilities(programId: string): Promise<AdapterCapabilities> {
+    const adapter = await this.getActiveAdapter(programId);
+    return adapter.capabilities;
+  }
+
+  async listTransactions(
+    programId: string,
+    filters: {
+      status?: string;
+      memberId?: string;
+      from?: Date;
+      to?: Date;
+      page?: number;
+      pageSize?: number;
+    },
+  ): Promise<CoalitionTransactionRow[]> {
+    return this.repo.listTransactions({ programId, ...filters });
+  }
+
+  async reverseCoalitionTransaction(txRef: string, reason: string): Promise<void> {
+    const tx = await this.repo.findTxByLocalRef(txRef);
+    if (!tx) {
+      throw new CoalitionBusinessError(`Transaction "${txRef}" not found`);
+    }
+    if (tx.status === "REVERSED") {
+      throw new CoalitionBusinessError(`Transaction "${txRef}" is already reversed`);
+    }
+    if (!tx.externalTxRef) {
+      throw new CoalitionBusinessError(
+        `Transaction "${txRef}" has no external reference to reverse`,
+      );
+    }
+
+    // Get the account to find the programId, then the adapter
+    const account = await this.repo.getAccountById(tx.accountId);
+    if (!account) {
+      throw new CoalitionBusinessError("Account not found for transaction");
+    }
+
+    const adapter = await this.getActiveAdapter(account.programId);
+    if (!adapter.capabilities.reverseTransaction) {
+      throw new CoalitionUnsupportedError("reverseTransaction", adapter.name);
+    }
+    if (!adapter.reverseTransaction) {
+      throw new CoalitionUnsupportedError("reverseTransaction", adapter.name);
+    }
+
+    await adapter.reverseTransaction(tx.externalTxRef, reason);
+    await this.repo.updateTxReversed(tx.id, reason);
   }
 
   // ── Internal ──────────────────────────────────────────────────

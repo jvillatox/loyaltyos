@@ -22,6 +22,7 @@
     "@fastify/swagger-ui": "^3.0.0",
     "@loyaltyos/badges": "workspace:*",
     "@loyaltyos/campaigns": "workspace:*",
+    "@loyaltyos/coalition": "workspace:*",
     "@loyaltyos/core": "workspace:*",
     "@loyaltyos/coupons": "workspace:*",
     "@loyaltyos/notifications": "workspace:*",
