@@ -5,7 +5,25 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2026-05-19
+## [0.4.0] - 2026-05-21
+
+### Added
+
+- **Coalition adapter (`packages/coalition`)** — generic adapter interface with pluggable provider implementations, optional capabilities flags (accumulate, redeem, convert, reverseTransaction, historyQuery), and two-phase commit pattern (PENDING → CONFIRMED/FAILED) for all external operations.
+- **Apprecio adapter** — full implementation against the real Apprecio API with MD5 form-data authentication, multi-country base URLs (MX, CL, PE, CO, AR), email/RUT identifier types, private token sanitization in error messages, and configurable timeouts.
+- **Coalition API endpoints** — member-facing routes for accumulate, redeem, convert, and reverse with Zod validation and idempotency-key support. Admin routes for config management (GET/PUT), healthcheck, link/unlink accounts, list transactions with filters, list linked accounts, and manual reconciliation.
+- **Redis caching** — `getCachedExternalBalance` wrapper with 60s TTL and graceful degradation when Redis is unavailable.
+- **Credential encryption** — AES-256-GCM encryption for coalition provider credentials stored in the database, with KMS_MASTER_KEY support and dev fallback.
+- **Circuit breaker** — opossum-based circuit breaker per adapter: opens after 5 consecutive failures within 10s, half-open after 30s, auto-closes after 3 consecutive successes.
+- **Retry logic** — exponential backoff (1s, 2s, 4s, max 3 attempts) for transient errors; business errors are never retried.
+- **Error classification** — dedicated error types with HTTP status mappings: CoalitionConfigNotFoundError (404), CoalitionAccountNotLinkedError (404), CoalitionBusinessError (422), CoalitionTransientError (502), CoalitionCircuitOpenError (503), CoalitionUnsupportedError (501).
+- **Coalition admin UI** — config page with provider selector, Apprecio-aware form (country dropdown, public/private tokens with reveal toggle, identifier type, timeouts), feature toggles with capability-based disabling, capabilities banner, test connection button, and save. Transactions page with status/type/member filters, paginated table, detail panel with timeline (PENDING → CONFIRMED/FAILED/REVERSED), and force reverse dialog. Linked members page with search, paginated table, and unlink confirmation dialog.
+- **Documentation** — `docs/coalition-apprecio.md` with overview, auth scheme, action mapping, supported flows, configuration, limitations, sandbox checklist, and troubleshooting.
+
+### Changed
+
+- Admin sidebar now includes Coalition link for navigation to coalition configuration, transactions, and linked members pages.
+- API error handler extended with 6 coalition error → HTTP status mappings.
 
 ### Added
 

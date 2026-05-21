@@ -3,8 +3,8 @@
 > Open source customer loyalty platform with native coalition support. MIT licensed.
 
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
-![Phase](https://img.shields.io/badge/phase-3%20Gamification-blue)
+![Version](https://img.shields.io/badge/version-0.4.0-blue)
+![Phase](https://img.shields.io/badge/phase-4%20Coalition-blue)
 
 **LoyaltyOS** is a modular, API-first loyalty platform designed to be simple to deploy but powerful in operation. Connect your sales channels, run campaigns, issue coupons, manage tiers and badges, and integrate with coalition point systems (Puntos Apprecio) — all from a single Dockerized stack.
 
@@ -22,6 +22,7 @@
 - **Notifications** — multi-channel delivery (email, SMS, push, in-app, webhook) with Handlebars templates.
 - **Customer Portal** — mobile-first React PWA with magic-link auth, i18n, rewards catalog, badges gallery.
 - **Loyalty Widget** — embeddable Lit Web Component with mini/full modes, themeable via CSS custom properties.
+- **Coalition Points** — native integration with Apprecio and generic adapters, two-phase commit for safe cross-system earn/redeem/convert, circuit breaker with retry logic, credential encryption at rest.
 - **Privacy-first** — soft-delete on members, GDPR-ready data isolation.
 
 ## Architecture
@@ -174,7 +175,8 @@ loyaltyos/
     ├── SPEC.md              # Full architecture and roadmap
     ├── customer-portal.md   # Customer portal guide
     ├── widget-integration.md # Widget integration guide
-    └── notifications.md     # Notifications setup guide
+    ├── notifications.md     # Notifications setup guide
+    └── coalition-apprecio.md # Apprecio adapter guide
 ```
 
 ## Tech Stack
@@ -209,40 +211,54 @@ loyaltyos/
 
 All endpoints require `X-API-Key` and `X-Program-Id` headers.
 
-| Method  | Endpoint                               | Description                               |
-| ------- | -------------------------------------- | ----------------------------------------- |
-| `GET`   | `/healthz`                             | Health check                              |
-| `GET`   | `/readyz`                              | Readiness probe (DB check)                |
-| `GET`   | `/api/v1/stats/dashboard`              | KPI aggregates                            |
-| `GET`   | `/api/v1/members`                      | List members (paginated)                  |
-| `POST`  | `/api/v1/members`                      | Create a member                           |
-| `GET`   | `/api/v1/members/:id`                  | Get member by ID                          |
-| `GET`   | `/api/v1/members/:id/balance`          | Get member point balance                  |
-| `GET`   | `/api/v1/members/:id/transactions`     | Get member transaction history            |
-| `POST`  | `/api/v1/members/:id/adjust`           | Adjust points (requires Idempotency-Key)  |
-| `POST`  | `/api/v1/events`                       | Ingest an event                           |
-| `GET`   | `/api/v1/admin/campaigns`              | List campaigns (paginated)                |
-| `POST`  | `/api/v1/admin/campaigns`              | Create a campaign                         |
-| `POST`  | `/api/v1/admin/campaigns/estimate`     | Estimate campaign impact                  |
-| `GET`   | `/api/v1/admin/coupons`                | List coupons (paginated)                  |
-| `POST`  | `/api/v1/admin/coupons/generate`       | Bulk generate coupon codes                |
-| `GET`   | `/api/v1/admin/segments`               | List segments (paginated)                 |
-| `POST`  | `/api/v1/admin/segments`               | Create a segment                          |
-| `POST`  | `/api/v1/admin/segments/estimate`      | Estimate segment member count             |
-| `GET`   | `/api/v1/admin/badges`                 | List badges (paginated, with type filter) |
-| `POST`  | `/api/v1/admin/badges`                 | Create a badge                            |
-| `GET`   | `/api/v1/admin/tiers`                  | List tiers (ordered by rank)              |
-| `POST`  | `/api/v1/admin/tiers`                  | Create a tier                             |
-| `PATCH` | `/api/v1/admin/tiers/reorder`          | Reorder tier ranks                        |
-| `GET`   | `/api/v1/rewards`                      | List rewards (paginated, with filters)    |
-| `POST`  | `/api/v1/admin/rewards`                | Create a reward                           |
-| `POST`  | `/api/v1/rewards/:id/redeem`           | Redeem a reward                           |
-| `POST`  | `/api/v1/auth/login`                   | Request magic link                        |
-| `GET`   | `/api/v1/auth/verify`                  | Verify magic-link token                   |
-| `GET`   | `/api/v1/admin/notification-templates` | List templates (paginated)                |
-| `POST`  | `/api/v1/admin/notification-templates` | Create a template                         |
-| `GET`   | `/api/v1/admin/webhooks`               | List webhooks (paginated)                 |
-| `POST`  | `/api/v1/admin/webhooks`               | Create a webhook subscription             |
+| Method   | Endpoint                                 | Description                               |
+| -------- | ---------------------------------------- | ----------------------------------------- |
+| `GET`    | `/healthz`                               | Health check                              |
+| `GET`    | `/readyz`                                | Readiness probe (DB check)                |
+| `GET`    | `/api/v1/stats/dashboard`                | KPI aggregates                            |
+| `GET`    | `/api/v1/members`                        | List members (paginated)                  |
+| `POST`   | `/api/v1/members`                        | Create a member                           |
+| `GET`    | `/api/v1/members/:id`                    | Get member by ID                          |
+| `GET`    | `/api/v1/members/:id/balance`            | Get member point balance                  |
+| `GET`    | `/api/v1/members/:id/transactions`       | Get member transaction history            |
+| `POST`   | `/api/v1/members/:id/adjust`             | Adjust points (requires Idempotency-Key)  |
+| `POST`   | `/api/v1/events`                         | Ingest an event                           |
+| `GET`    | `/api/v1/admin/campaigns`                | List campaigns (paginated)                |
+| `POST`   | `/api/v1/admin/campaigns`                | Create a campaign                         |
+| `POST`   | `/api/v1/admin/campaigns/estimate`       | Estimate campaign impact                  |
+| `GET`    | `/api/v1/admin/coupons`                  | List coupons (paginated)                  |
+| `POST`   | `/api/v1/admin/coupons/generate`         | Bulk generate coupon codes                |
+| `GET`    | `/api/v1/admin/segments`                 | List segments (paginated)                 |
+| `POST`   | `/api/v1/admin/segments`                 | Create a segment                          |
+| `POST`   | `/api/v1/admin/segments/estimate`        | Estimate segment member count             |
+| `GET`    | `/api/v1/admin/badges`                   | List badges (paginated, with type filter) |
+| `POST`   | `/api/v1/admin/badges`                   | Create a badge                            |
+| `GET`    | `/api/v1/admin/tiers`                    | List tiers (ordered by rank)              |
+| `POST`   | `/api/v1/admin/tiers`                    | Create a tier                             |
+| `PATCH`  | `/api/v1/admin/tiers/reorder`            | Reorder tier ranks                        |
+| `GET`    | `/api/v1/rewards`                        | List rewards (paginated, with filters)    |
+| `POST`   | `/api/v1/admin/rewards`                  | Create a reward                           |
+| `POST`   | `/api/v1/rewards/:id/redeem`             | Redeem a reward                           |
+| `POST`   | `/api/v1/auth/login`                     | Request magic link                        |
+| `GET`    | `/api/v1/auth/verify`                    | Verify magic-link token                   |
+| `GET`    | `/api/v1/admin/notification-templates`   | List templates (paginated)                |
+| `POST`   | `/api/v1/admin/notification-templates`   | Create a template                         |
+| `GET`    | `/api/v1/admin/webhooks`                 | List webhooks (paginated)                 |
+| `POST`   | `/api/v1/admin/webhooks`                 | Create a webhook subscription             |
+| `POST`   | `/api/v1/coalition/accumulate`           | Accumulate coalition points               |
+| `POST`   | `/api/v1/coalition/redeem`               | Redeem coalition points                   |
+| `POST`   | `/api/v1/coalition/convert`              | Convert own points to coalition           |
+| `POST`   | `/api/v1/coalition/reverse`              | Reverse a coalition transaction           |
+| `GET`    | `/api/v1/members/:id/coalition/balance`  | Get member's external coalition balance   |
+| `GET`    | `/api/v1/members/:id/coalition/history`  | Get member's external coalition history   |
+| `GET`    | `/api/v1/admin/coalition/config`         | Get coalition configuration               |
+| `PUT`    | `/api/v1/admin/coalition/config`         | Update coalition configuration            |
+| `POST`   | `/api/v1/admin/coalition/healthcheck`    | Test coalition adapter connection         |
+| `POST`   | `/api/v1/admin/coalition/link`           | Link member to external coalition account |
+| `DELETE` | `/api/v1/admin/coalition/link/:memberId` | Unlink member from coalition account      |
+| `GET`    | `/api/v1/admin/coalition/links`          | List linked coalition accounts            |
+| `GET`    | `/api/v1/admin/coalition/transactions`   | List coalition transactions               |
+| `POST`   | `/api/v1/admin/coalition/reconciliation` | Run coalition reconciliation              |
 
 Full OpenAPI spec at `/docs` when the API is running.
 
@@ -262,8 +278,8 @@ Full OpenAPI spec at `/docs` when the API is running.
 | 1     | Core MVP — monorepo, points engine, REST API, Admin UI, Docker | Complete |
 | 2     | Engagement — campaigns, coupons, notifications, segments       | Complete |
 | 3     | Gamification — badges, tiers, rewards, customer portal, widget | Complete |
-| 4     | Coalition — Apprecio adapter, coalition accounts, admin panel  | Planned  |
-| 5     | Production — Helm charts, OTel, Docusaurus, CI/CD, v1.0.0      | Planned  |
+| 4     | Coalition — Apprecio adapter, coalition accounts, admin panel  | Complete |
+| 5     | Production — Helm charts, OTel, Docusaurus, CI/CD, v1.0.0      | Next     |
 
 Full details in [docs/SPEC.md](docs/SPEC.md).
 
