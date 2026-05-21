@@ -1,12 +1,17 @@
 # LoyaltyOS
 
-> Open source customer loyalty platform with native coalition support. MIT licensed.
+> The only open source loyalty platform with **native coalition support** — run your own points program while connecting to external coalition networks like Puntos Apprecio. MIT licensed.
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/badge/version-0.4.0-blue)
 ![Phase](https://img.shields.io/badge/phase-4%20Coalition-blue)
+![Coalition](https://img.shields.io/badge/coalition-Apprecio%20%2B%20generic-blueviolet)
 
-**LoyaltyOS** is a modular, API-first loyalty platform designed to be simple to deploy but powerful in operation. Connect your sales channels, run campaigns, issue coupons, manage tiers and badges, and integrate with coalition point systems (Puntos Apprecio) — all from a single Dockerized stack.
+**LoyaltyOS** is a modular, API-first loyalty platform designed to be simple to deploy but powerful in operation. Connect your sales channels, run campaigns, issue coupons, manage tiers and badges, and integrate with coalition point systems — all from a single Dockerized stack.
+
+### Why LoyaltyOS?
+
+Most loyalty platforms lock you into a single points ecosystem. LoyaltyOS is the first open source platform that lets you run **dual points programs**: your own proprietary points alongside external coalition points (like Puntos Apprecio across Mexico, Chile, Colombia, Peru, and Ecuador). The coalition adapter is pluggable — swap Apprecio for any provider by implementing a single interface.
 
 ## Features
 
@@ -176,6 +181,7 @@ loyaltyos/
     ├── customer-portal.md   # Customer portal guide
     ├── widget-integration.md # Widget integration guide
     ├── notifications.md     # Notifications setup guide
+    ├── coalition.md           # Coalition architecture & adapter guide
     └── coalition-apprecio.md # Apprecio adapter guide
 ```
 
