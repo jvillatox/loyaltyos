@@ -17,12 +17,15 @@ RUN pnpm install --no-frozen-lockfile
 RUN pnpm add -D @types/node
 RUN pnpm build
 
-# Stage 2: Serve with nginx
-FROM nginx:alpine AS runtime
+# Stage 2: Serve with nginx + brotli
+FROM fholzer/nginx-brotli:latest AS runtime
 RUN rm -rf /usr/share/nginx/html/*
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY apps/admin/nginx.conf /etc/nginx/conf.d/default.conf
+
+# curl needed for HEALTHCHECK
+RUN apk add --no-cache curl
 
 RUN addgroup -S app && adduser -S app -G app && \
     chown -R app:app /usr/share/nginx/html && \
@@ -32,6 +35,11 @@ RUN addgroup -S app && adduser -S app -G app && \
     chown -R app:app /var/run/nginx.pid
 
 USER app
+
+LABEL org.opencontainers.image.source="https://github.com/jvillatox/loyaltyos"
+LABEL org.opencontainers.image.description="LoyaltyOS Admin UI — React dashboard (Vite + shadcn/ui)"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.version="0.5.0-dev"
 
 EXPOSE 80
 
