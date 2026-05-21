@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-loyaltyos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-loyaltyos}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loyaltyos} -d ${POSTGRES_DB:-loyaltyos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "${PORT_API:-3002}:3002"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT_API: ${PORT_API:-3002}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-loyaltyos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-loyaltyos}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      API_KEY_SALT: ${API_KEY_SALT}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY:-}
+      APPRECIO_API_BASE: ${APPRECIO_API_BASE:-https://apiv2.dcanje.mx/api}
+      APPRECIO_PUBLIC_TOKEN: ${APPRECIO_PUBLIC_TOKEN:-}
+      APPRECIO_PRIVATE_TOKEN: ${APPRECIO_PRIVATE_TOKEN:-}
+      APPRECIO_IDENTIFIER_TYPE: ${APPRECIO_IDENTIFIER_TYPE:-email}
+      APPRECIO_TIMEOUT_MS: ${APPRECIO_TIMEOUT_MS:-10000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+    ports:
+      - "${PORT_ADMIN:-5173}:80"
+    restart: unless-stopped
+
+  portal:
+    build:
+      context: ../..
+      dockerfile: apps/portal/Dockerfile
+    ports:
+      - "${PORT_PORTAL:-5174}:80"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
