@@ -82,6 +82,30 @@ export function createRepository(prisma: PrismaClient) {
     });
   }
 
+  async function listAccounts(
+    programId: string,
+    opts?: { search?: string; page?: number; pageSize?: number },
+  ): Promise<CoalitionAccountRow[]> {
+    const page = opts?.page ?? 1;
+    const pageSize = opts?.pageSize ?? 20;
+    return prisma.coalitionAccount.findMany({
+      where: {
+        programId,
+        ...(opts?.search
+          ? {
+              OR: [
+                { memberId: { contains: opts.search } },
+                { externalId: { contains: opts.search } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+  }
+
   async function linkAccount(input: {
     memberId: string;
     programId: string;
@@ -230,6 +254,7 @@ export function createRepository(prisma: PrismaClient) {
     getAccount,
     getAccountById,
     getAccountByExternalRef,
+    listAccounts,
     linkAccount,
     unlinkAccount,
     listTransactions,

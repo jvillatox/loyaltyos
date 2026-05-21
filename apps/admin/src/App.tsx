@@ -5,6 +5,9 @@ import { BadgeEditorPage } from "@/pages/badge-editor";
 import { BadgesListPage } from "@/pages/badges-list";
 import { CampaignBuilderPage } from "@/pages/campaign-builder";
 import { CampaignsListPage } from "@/pages/campaigns-list";
+import { CoalitionConfigPage } from "@/pages/coalition/config";
+import { CoalitionLinkedMembersPage } from "@/pages/coalition/linked-members";
+import { CoalitionTransactionsPage } from "@/pages/coalition/transactions";
 import { CouponBulkGeneratePage } from "@/pages/coupon-bulk-generate";
 import { CouponsListPage } from "@/pages/coupons-list";
 import { DashboardPage } from "@/pages/dashboard";
@@ -40,6 +43,9 @@ export function App(): JSX.Element {
         <Route path="/rewards/new" element={<RewardsEditorPage />} />
         <Route path="/rewards/:id/edit" element={<RewardsEditorPage />} />
         <Route path="/rewards/:id/redemptions" element={<RewardsRedemptionsPage />} />
+        <Route path="/coalition" element={<CoalitionConfigPage />} />
+        <Route path="/coalition/transactions" element={<CoalitionTransactionsPage />} />
+        <Route path="/coalition/members" element={<CoalitionLinkedMembersPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

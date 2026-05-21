@@ -9,6 +9,7 @@ import type {
   AdapterCapabilities,
   CoalitionAccountRow,
   CoalitionAdapter,
+  CoalitionConfigRow,
   CoalitionOperationResult,
   CoalitionTransactionRow,
   ConvertInput,
@@ -293,10 +294,42 @@ export class CoalitionService {
     });
   }
 
+  async listLinkedAccounts(
+    programId: string,
+    opts?: { search?: string; page?: number; pageSize?: number },
+  ): Promise<CoalitionAccountRow[]> {
+    return this.repo.listAccounts(programId, opts);
+  }
+
   async unlinkExternalAccount(memberId: string, programId: string): Promise<void> {
     const account = await this.repo.getAccount(memberId, programId);
     if (!account) throw new CoalitionAccountNotLinkedError(memberId, programId);
     await this.repo.unlinkAccount(account.id);
+  }
+
+  async getConfig(programId: string): Promise<CoalitionConfigRow | null> {
+    return this.repo.getConfig(programId);
+  }
+
+  async upsertConfig(input: {
+    programId: string;
+    provider?: string;
+    endpoint: string;
+    encryptedCredentials: string;
+    conversionRate?: number;
+    accumulationEnabled?: boolean;
+    redemptionEnabled?: boolean;
+    conversionEnabled?: boolean;
+    minConversionPoints?: number;
+  }): Promise<CoalitionConfigRow> {
+    return this.repo.upsertConfig(input);
+  }
+
+  async healthcheck(
+    programId: string,
+  ): Promise<{ ok: boolean; latencyMs?: number; details?: unknown }> {
+    const adapter = await this.getActiveAdapter(programId);
+    return adapter.healthcheck();
   }
 
   async getAdapterCapabilities(programId: string): Promise<AdapterCapabilities> {
