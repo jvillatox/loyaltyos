@@ -58,6 +58,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: pnpm --filter @loyaltyos/api exec prisma generate
+
       - name: Run migrations
         run: pnpm --filter @loyaltyos/api exec prisma migrate deploy
         env:
