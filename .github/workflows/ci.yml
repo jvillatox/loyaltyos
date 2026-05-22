@@ -108,7 +108,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
-      - run: pnpm test -- --coverage
+      - run: pnpm test -- -- --coverage
 
       - uses: codecov/codecov-action@v4
         with:
