@@ -6,9 +6,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
+import { adaptPointsMetrics, getBusinessMetrics } from "../lib/business-metrics.js";
 import { notificationsService } from "../lib/notifications-setup.js";
 
-const points = new PointsService(prisma);
+const pointsMetrics = adaptPointsMetrics(getBusinessMetrics());
+const points = new PointsService(prisma, pointsMetrics);
 const campaigns = new CampaignsService(prisma, points);
 const badges = new BadgesService(prisma);
 const tiers = new TiersService(prisma);
@@ -91,6 +93,16 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
       // If the event is for a member and represents points-earning activity,
       // process it through the points engine
       if (body.memberId) {
+        // Update lastActiveAt (fire-and-forget — don't block the event)
+        void prisma.member
+          .update({
+            where: { id: body.memberId },
+            data: { lastActiveAt: new Date() },
+          })
+          .catch(() => {
+            /* best-effort */
+          });
+
         try {
           // For "purchase" events, earn points
           if (body.type === "purchase") {

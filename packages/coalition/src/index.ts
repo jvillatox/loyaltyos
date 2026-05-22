@@ -8,6 +8,7 @@ export {
 export { decrypt, encrypt, getMasterKey } from "./crypto.js";
 export type { Repository } from "./repository.js";
 export { createRepository } from "./repository.js";
+export type { CoalitionServiceMetrics } from "./service.js";
 export { CoalitionService } from "./service.js";
 export type {
   AccumulateInput,

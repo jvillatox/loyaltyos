@@ -65,17 +65,24 @@ const BREAKER_OPTIONS: CircuitBreaker.Options = {
   rollingCountTimeout: 10000,
 };
 
+export interface CoalitionServiceMetrics {
+  recordOperation(provider: string, operation: string, status: string, idempotent: boolean): void;
+  setCircuitBreakerState(adapter: string, state: number): void;
+}
+
 export class CoalitionService {
   private repo: Repository;
   private pointsService: PointsService;
   private adapters: Map<string, CoalitionAdapter>;
   private breakers: Map<string, CircuitBreaker>;
+  private metrics?: CoalitionServiceMetrics;
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, metrics?: CoalitionServiceMetrics) {
     this.repo = createRepository(prisma);
     this.pointsService = new PointsService(prisma);
     this.adapters = new Map();
     this.breakers = new Map();
+    this.metrics = metrics;
   }
 
   // ── Adapter Management ────────────────────────────────────────
@@ -92,12 +99,15 @@ export class CoalitionService {
       );
       breaker.on("open", () => {
         console.warn(`[Coalition] Circuit breaker OPEN for adapter "${adapter.name}"`);
+        this.metrics?.setCircuitBreakerState(adapter.name, 2);
       });
       breaker.on("halfOpen", () => {
         console.info(`[Coalition] Circuit breaker HALF-OPEN for adapter "${adapter.name}"`);
+        this.metrics?.setCircuitBreakerState(adapter.name, 1);
       });
       breaker.on("close", () => {
         console.info(`[Coalition] Circuit breaker CLOSED for adapter "${adapter.name}"`);
+        this.metrics?.setCircuitBreakerState(adapter.name, 0);
       });
       this.breakers.set(adapter.name, breaker);
     }
@@ -149,6 +159,7 @@ export class CoalitionService {
     // 2. Idempotency check
     const existing = await this.repo.findTxByLocalRef(txRef);
     if (existing) {
+      this.metrics?.recordOperation(config.provider, "CONVERT", existing.status, true);
       return {
         txId: existing.id,
         externalTxId: existing.externalTxRef ?? undefined,
@@ -244,6 +255,8 @@ export class CoalitionService {
         );
       }
 
+      this.metrics?.recordOperation(config.provider, "CONVERT", "CONFIRMED", false);
+
       return {
         txId: tx.id,
         externalTxId: adapterResult.externalTxId,
@@ -254,6 +267,7 @@ export class CoalitionService {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       await this.repo.updateTxFailed(tx.id, error.message, tx.attempts + 1);
+      this.metrics?.recordOperation(config.provider, "CONVERT", "FAILED", false);
       throw error;
     }
   }
@@ -404,6 +418,7 @@ export class CoalitionService {
     // 2. Idempotency check
     const existing = await this.repo.findTxByLocalRef(txRef);
     if (existing) {
+      this.metrics?.recordOperation(config.provider, txType, existing.status, true);
       return {
         txId: existing.id,
         externalTxId: existing.externalTxRef ?? undefined,
@@ -462,6 +477,8 @@ export class CoalitionService {
         adapterResult.balanceAfter ?? account.externalBalance,
       );
 
+      this.metrics?.recordOperation(config.provider, txType, "CONFIRMED", false);
+
       return {
         txId: tx.id,
         externalTxId: adapterResult.externalTxId,
@@ -472,6 +489,7 @@ export class CoalitionService {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       await this.repo.updateTxFailed(tx.id, error.message, tx.attempts + 1);
+      this.metrics?.recordOperation(config.provider, txType, "FAILED", false);
       throw error;
     }
   }

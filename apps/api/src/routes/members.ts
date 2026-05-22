@@ -5,9 +5,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
+import { adaptPointsMetrics, getBusinessMetrics } from "../lib/business-metrics.js";
 import { notificationsService } from "../lib/notifications-setup.js";
 
-const points = new PointsService(prisma);
+const points = new PointsService(prisma, adaptPointsMetrics(getBusinessMetrics()));
 const badges = new BadgesService(prisma);
 const tiers = new TiersService(prisma);
 

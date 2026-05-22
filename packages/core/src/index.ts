@@ -3,6 +3,7 @@ export { applyTxToBalance, verifyConsistency } from "./ledger.js";
 export type { Repository } from "./repository.js";
 export { createRepository } from "./repository.js";
 export { calculateEffectiveAmount, evaluateRules } from "./rules.js";
+export type { PointsServiceMetrics } from "./service.js";
 export { PointsService } from "./service.js";
 export type {
   AdjustInput,

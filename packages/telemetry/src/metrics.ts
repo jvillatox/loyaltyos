@@ -70,6 +70,136 @@ export function createBullMQMetrics(registry: Registry) {
   return { bullmqQueueDepth, bullmqJobDuration, bullmqJobCounter };
 }
 
+export interface BusinessMetrics {
+  // Points
+  pointsEarnedTotal: Counter;
+  pointsRedeemedTotal: Counter;
+  pointsReversedTotal: Counter;
+  pointsAdjustedTotal: Counter;
+  pointsExpiredTotal: Counter;
+  pointsBalance: Gauge;
+  insufficientBalanceTotal: Counter;
+  // Coupons
+  couponsRedeemedTotal: Counter;
+  couponsCreatedTotal: Counter;
+  couponsDiscountAmount: Histogram;
+  // Coalition
+  coalitionOperationsTotal: Counter;
+  coalitionCircuitBreakerState: Gauge;
+  // Members
+  activeMembersTotal: Gauge;
+}
+
+export function createBusinessMetrics(registry: Registry): BusinessMetrics {
+  const pointsEarnedTotal = new Counter({
+    name: "loyaltyos_points_earned_total",
+    help: "Total number of points earned",
+    labelNames: ["program_id", "idempotent"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const pointsRedeemedTotal = new Counter({
+    name: "loyaltyos_points_redeemed_total",
+    help: "Total number of points redeemed",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const pointsReversedTotal = new Counter({
+    name: "loyaltyos_points_reversed_total",
+    help: "Total number of point reversals",
+    labelNames: ["program_id", "original_type"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const pointsAdjustedTotal = new Counter({
+    name: "loyaltyos_points_adjusted_total",
+    help: "Total number of admin point adjustments",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const pointsExpiredTotal = new Counter({
+    name: "loyaltyos_points_expired_total",
+    help: "Total number of expired point transactions",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const pointsBalance = new Gauge({
+    name: "loyaltyos_points_balance",
+    help: "Current points balance per program",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const insufficientBalanceTotal = new Counter({
+    name: "loyaltyos_insufficient_balance_total",
+    help: "Number of failed redeem attempts due to insufficient balance",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const couponsRedeemedTotal = new Counter({
+    name: "loyaltyos_coupons_redeemed_total",
+    help: "Total number of coupon redemptions",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const couponsCreatedTotal = new Counter({
+    name: "loyaltyos_coupons_created_total",
+    help: "Total number of coupons created",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const couponsDiscountAmount = new Histogram({
+    name: "loyaltyos_coupons_discount_amount",
+    help: "Distribution of coupon discount amounts",
+    labelNames: ["program_id"] as unknown as string[],
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500],
+    registers: [registry],
+  });
+
+  const coalitionOperationsTotal = new Counter({
+    name: "loyaltyos_coalition_operations_total",
+    help: "Total number of coalition operations",
+    labelNames: ["provider", "operation", "status"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const coalitionCircuitBreakerState = new Gauge({
+    name: "loyaltyos_coalition_circuit_breaker_state",
+    help: "Circuit breaker state per coalition adapter (0=closed, 1=half-open, 2=open)",
+    labelNames: ["adapter"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const activeMembersTotal = new Gauge({
+    name: "loyaltyos_active_members_total",
+    help: "Number of active members per program",
+    labelNames: ["program_id"] as unknown as string[],
+    registers: [registry],
+  });
+
+  return {
+    pointsEarnedTotal,
+    pointsRedeemedTotal,
+    pointsReversedTotal,
+    pointsAdjustedTotal,
+    pointsExpiredTotal,
+    pointsBalance,
+    insufficientBalanceTotal,
+    couponsRedeemedTotal,
+    couponsCreatedTotal,
+    couponsDiscountAmount,
+    coalitionOperationsTotal,
+    coalitionCircuitBreakerState,
+    activeMembersTotal,
+  };
+}
+
 export function setupDefaultMetrics(registry: Registry, serviceName: string): Registry {
   registry.setDefaultLabels({ service_name: serviceName });
   collectDefaultMetrics({ register: registry, prefix: "nodejs_" });

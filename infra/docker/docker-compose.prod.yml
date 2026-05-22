@@ -82,6 +82,23 @@ services:
 
   # ── Monitoring (start with: docker compose --profile monitoring up) ──────
 
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -116,3 +133,4 @@ volumes:
   pgdata:
   redisdata:
   prometheus_data:
+  grafana_data:

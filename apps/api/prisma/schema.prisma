@@ -52,6 +52,7 @@ model Member {
   metadata    Json?    @default("{}")
   tags        String[] @default([])
   joinedAt    DateTime @default(now())
+  lastActiveAt DateTime?
   deletedAt   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

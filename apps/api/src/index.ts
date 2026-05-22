@@ -4,6 +4,7 @@ import { initTracing } from "@loyaltyos/telemetry";
 await initTracing("loyaltyos-api");
 
 import { buildApp, getBullMQMetrics, prisma } from "./app.js";
+import { getBusinessMetrics } from "./lib/business-metrics.js";
 import { createQueue } from "./lib/queue.js";
 import { startNotificationsWorker } from "./workers/notifications.js";
 
@@ -49,6 +50,27 @@ try {
       void collectQueueMetrics();
     }, 15_000);
     void collectQueueMetrics();
+
+    // Active members hourly gauge
+    setInterval(
+      () => {
+        void (async () => {
+          try {
+            const programs = await prisma.program.findMany({ select: { id: true } });
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            for (const { id } of programs) {
+              const count = await prisma.member.count({
+                where: { programId: id, lastActiveAt: { gt: oneHourAgo } },
+              });
+              getBusinessMetrics().activeMembersTotal.set({ program_id: id }, count);
+            }
+          } catch (err) {
+            app.log.error({ err }, "active members scheduler failed");
+          }
+        })();
+      },
+      60 * 60 * 1000,
+    ); // hourly
   }
 } catch (err) {
   app.log.error(err);

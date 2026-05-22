@@ -5,8 +5,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../db.js";
+import { adaptPointsMetrics, getBusinessMetrics } from "../../lib/business-metrics.js";
 
-const points = new PointsService(prisma);
+const pointsMetrics = adaptPointsMetrics(getBusinessMetrics());
+const points = new PointsService(prisma, pointsMetrics);
 const campaigns = new CampaignsService(prisma, points);
 
 const createSchema = z.object({

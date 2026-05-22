@@ -30,11 +30,18 @@ function generateCode(prefix: string, length: number): string {
   return code;
 }
 
+export interface CouponsServiceMetrics {
+  recordRedeem(programId: string, discountAmount: number): void;
+  recordCreate(programId: string): void;
+}
+
 export class CouponsService {
   private repo: ReturnType<typeof createRepository>;
+  private metrics?: CouponsServiceMetrics;
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, metrics?: CouponsServiceMetrics) {
     this.repo = createRepository(prisma);
+    this.metrics = metrics;
   }
 
   async create(input: CouponCreateInput) {
@@ -43,7 +50,9 @@ export class CouponsService {
     if (exists) {
       throw new CouponCodeDuplicateError(parsed.code);
     }
-    return this.repo.create(parsed);
+    const coupon = await this.repo.create(parsed);
+    this.metrics?.recordCreate(parsed.programId);
+    return coupon;
   }
 
   async update(id: string, input: CouponUpdateInput) {
@@ -185,6 +194,8 @@ export class CouponsService {
     const redemptionId = await this.repo.recordRedemption(validation.coupon.id, context.memberId);
 
     await this.repo.incrementUsedCount(validation.coupon.id);
+
+    this.metrics?.recordRedeem(validation.coupon.programId, validation.discountAmount ?? 0);
 
     return {
       redemptionId,

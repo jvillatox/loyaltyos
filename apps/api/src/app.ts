@@ -8,11 +8,13 @@ import {
   createFastifyMetricsPlugin,
   createHttpMetrics,
   createMetricsRegistry,
+  Registry,
   setupDefaultMetrics,
 } from "@loyaltyos/telemetry";
 import Fastify from "fastify";
 
 import { prisma } from "./db.js";
+import { getBusinessMetricsRegistry } from "./lib/business-metrics.js";
 import { errorHandler } from "./lib/error-handler.js";
 import { authPlugin } from "./plugins/auth.js";
 import { adminAuthRoutes } from "./routes/admin/auth.js";
@@ -57,6 +59,9 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   const httpMetrics = createHttpMetrics(metricsRegistry);
   const bullmqMetrics = createBullMQMetrics(metricsRegistry);
   metricsExports = bullmqMetrics;
+
+  // Merge HTTP + business registries for the /metrics endpoint
+  const mergedRegistry = Registry.merge([metricsRegistry, getBusinessMetricsRegistry()]);
 
   // Security headers (helmet)
   await app.register(helmet, {
@@ -140,7 +145,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
 
   // Telemetry — exposes /metrics and records HTTP stats
   await app.register(createFastifyMetricsPlugin, {
-    registry: { registry: metricsRegistry, ...httpMetrics, ...bullmqMetrics },
+    registry: { registry: mergedRegistry, ...httpMetrics, ...bullmqMetrics },
   });
 
   // Public routes (before auth plugin)

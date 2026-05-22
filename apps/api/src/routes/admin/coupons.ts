@@ -3,8 +3,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../db.js";
+import { adaptCouponsMetrics, getBusinessMetrics } from "../../lib/business-metrics.js";
 
-const coupons = new CouponsService(prisma);
+const coupons = new CouponsService(prisma, adaptCouponsMetrics(getBusinessMetrics()));
 
 const createSchema = z.object({
   code: z

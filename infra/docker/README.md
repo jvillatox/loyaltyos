@@ -25,6 +25,14 @@ curl -f http://localhost:3002/healthz
 | admin    | 5173           | Admin Dashboard (React SPA via nginx) |
 | portal   | 5174           | Customer Portal (React PWA via nginx) |
 
+### Monitoring (--profile monitoring)
+
+| Service        | Port | Description                        |
+| -------------- | ---- | ---------------------------------- |
+| grafana        | 3000 | Dashboards (admin / admin)         |
+| prometheus     | 9090 | Metrics scraper and time-series DB |
+| otel-collector | 4317 | OTLP gRPC and HTTP trace ingestion |
+
 ## Volumes
 
 - `pgdata` — PostgreSQL data directory
@@ -84,3 +92,25 @@ All services include Docker healthchecks:
 
 - **API:** `curl /healthz` — checks the Fastify health endpoint
 - **Admin / Portal:** `curl /` — checks nginx is serving the SPA
+
+## How to Enable Monitoring Locally
+
+Start the full stack including Prometheus, Grafana, and the OTel Collector with the `monitoring` Compose profile:
+
+```bash
+docker compose -f infra/docker/docker-compose.prod.yml --profile monitoring up -d
+```
+
+Then open:
+
+- **Grafana:** http://localhost:3000 (credentials: `admin` / `admin`)
+- **Prometheus:** http://localhost:9090
+- **API Metrics:** http://localhost:3002/metrics
+
+Three Grafana dashboards are auto-provisioned:
+
+1. **API Overview** — HTTP request rates, latency percentiles, error rate, BullMQ queue depth
+2. **BullMQ Queues** — Per-queue job throughput and failure rate
+3. **Business Metrics** — Points earned/redeemed/adjusted/reversed/expired, coupon redemptions, coalition operations, circuit breaker state, active members
+
+For details on the observability stack, see `docs/observability.md`.

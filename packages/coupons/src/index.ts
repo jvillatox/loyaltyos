@@ -6,6 +6,7 @@ export {
   couponValidateSchema,
   generateCodesSchema,
 } from "./schemas.js";
+export type { CouponsServiceMetrics } from "./service.js";
 export { CouponsService } from "./service.js";
 export type {
   CouponCreateInput,

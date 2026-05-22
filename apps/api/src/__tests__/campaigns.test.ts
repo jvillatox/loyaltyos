@@ -15,6 +15,7 @@ const mockPrisma = vi.hoisted(() => ({
   },
   member: {
     count: vi.fn(),
+    update: vi.fn(),
   },
   event: {
     findUnique: vi.fn(),
@@ -62,6 +63,7 @@ mockPrisma.apiKey.findUnique.mockResolvedValue({
 });
 mockPrisma.apiKey.update.mockResolvedValue({});
 mockPrisma.pointRule.findMany.mockResolvedValue([]);
+mockPrisma.member.update.mockResolvedValue({});
 mockPrisma.$transaction.mockImplementation((fn: never) => fn(mockPrisma));
 
 import type { FastifyInstance } from "fastify";

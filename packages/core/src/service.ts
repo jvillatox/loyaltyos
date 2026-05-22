@@ -20,17 +20,31 @@ import {
   TransactionNotFoundError,
 } from "./types.js";
 
+export interface PointsServiceMetrics {
+  recordEarn(programId: string, amount: number, idempotent: boolean): void;
+  recordRedeem(programId: string, amount: number): void;
+  recordAdjust(programId: string, amount: number): void;
+  recordReverse(programId: string, originalType: string): void;
+  recordExpire(programId: string): void;
+  recordInsufficientBalance(programId: string): void;
+  setProgramBalance(programId: string, balance: number): void;
+  setActiveMembers(programId: string, count: number): void;
+}
+
 export class PointsService {
   private repo: ReturnType<typeof createRepository>;
+  private metrics?: PointsServiceMetrics;
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, metrics?: PointsServiceMetrics) {
     this.repo = createRepository(prisma);
+    this.metrics = metrics;
   }
 
   async earn(input: EarnInput): Promise<EarnResult> {
     // Idempotency check
     const existing = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
     if (existing) {
+      this.metrics?.recordEarn(input.programId, existing.amount, true);
       return {
         transactionId: existing.id,
         amount: existing.amount,
@@ -66,6 +80,9 @@ export class PointsService {
     // Update account balance
     await this.repo.updateBalance(account.id, balanceAfter, pendingAfter);
 
+    this.metrics?.recordEarn(input.programId, effective.total, false);
+    this.metrics?.setProgramBalance(input.programId, balanceAfter);
+
     return {
       transactionId: tx.id,
       amount: effective.total,
@@ -90,6 +107,7 @@ export class PointsService {
     const account = await this.repo.findOrCreateAccount(input.memberId, input.programId);
 
     if (account.balance < input.amount) {
+      this.metrics?.recordInsufficientBalance(input.programId);
       throw new InsufficientBalanceError(account.balance, input.amount);
     }
 
@@ -106,6 +124,9 @@ export class PointsService {
     });
 
     await this.repo.updateBalance(account.id, balanceAfter);
+
+    this.metrics?.recordRedeem(input.programId, input.amount);
+    this.metrics?.setProgramBalance(input.programId, balanceAfter);
 
     return {
       transactionId: tx.id,
@@ -140,6 +161,9 @@ export class PointsService {
     });
 
     await this.repo.updateBalance(account.id, balanceAfter);
+
+    this.metrics?.recordAdjust(input.programId, input.amount);
+    this.metrics?.setProgramBalance(input.programId, balanceAfter);
 
     return {
       transactionId: tx.id,
@@ -198,6 +222,8 @@ export class PointsService {
 
     await this.repo.updateBalance(originalTx.accountId, balanceAfter);
 
+    this.metrics?.recordReverse(account.programId, originalTx.type);
+
     // Link the reversal via a raw update since we removed the relation
     return {
       reversalId: reversalTx.id,
@@ -227,6 +253,7 @@ export class PointsService {
       });
 
       await this.repo.updateBalance(account.id, balanceAfter);
+      this.metrics?.recordExpire(programId);
       expiredCount++;
     }
 
