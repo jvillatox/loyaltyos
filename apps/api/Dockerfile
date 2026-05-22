@@ -1,12 +1,12 @@
 # Stage 1: Prune monorepo to the minimal workspace for @loyaltyos/api
-FROM node:20-alpine AS pruner
+FROM node:26-alpine AS pruner
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 COPY . .
 RUN pnpm dlx turbo@2 prune --scope=@loyaltyos/api --docker
 
 # Stage 2: Install dependencies and build
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
@@ -84,7 +84,7 @@ RUN find node_modules -name '*.d.ts' -not -path '*@prisma/client*' -delete && \
     find node_modules -type d \( -name 'docs' -o -name 'examples' -o -name 'example' \) -exec rm -rf {} + 2>/dev/null || true
 
 # Stage 3: Runtime
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 RUN apk add --no-cache curl && \
     addgroup -S loyaltyos && adduser -S loyaltyos -G loyaltyos
 
