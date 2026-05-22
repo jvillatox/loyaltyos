@@ -1,5 +1,5 @@
 # Stage 1: Build static assets
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
