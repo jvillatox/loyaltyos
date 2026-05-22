@@ -56,13 +56,16 @@ jobs:
       - run: pnpm lint
 
   test:
-    name: Tests
+    name: Tests (PG ${{ matrix.postgres }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      matrix:
+        postgres: [14, 15, 16]
 
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:${{ matrix.postgres }}-alpine
         env:
           POSTGRES_USER: loyaltyos
           POSTGRES_PASSWORD: loyaltyos
@@ -111,4 +114,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
-      - run: pnpm test
+      - run: pnpm test -- --coverage
+
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: .
+          fail_ci_if_error: false
