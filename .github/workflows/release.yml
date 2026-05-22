@@ -1,0 +1,177 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: loyaltyos
+          POSTGRES_PASSWORD: loyaltyos
+          POSTGRES_DB: loyaltyos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-for-ci-at-least-32-chars
+      API_KEY_SALT: test-salt-for-ci
+      KMS_MASTER_KEY: 0000000000000000000000000000000000000000000000000000000000000001
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run migrations
+        run: pnpm --filter @loyaltyos/api exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+
+      - run: pnpm test
+
+  docker:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: test
+    strategy:
+      matrix:
+        image:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: admin
+            dockerfile: apps/admin/Dockerfile
+          - name: portal
+            dockerfile: apps/portal/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/loyaltyos-${{ matrix.image.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3
+
+      - name: Add Bitnami repo
+        run: helm repo add bitnami https://charts.bitnami.com/bitnami
+
+      - name: Update dependencies
+        run: helm dependency update infra/k8s/helm/loyaltyos
+
+      - name: Lint chart
+        run: helm lint infra/k8s/helm/loyaltyos --strict
+
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [docker, helm-lint]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          git log $(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD \
+            --pretty=format:"* %s (%h)" --no-merges > /tmp/changelog.txt
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat /tmp/changelog.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ## Changes
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Docker Images
+
+            - `ghcr.io/${{ github.repository_owner }}/loyaltyos-api:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/loyaltyos-admin:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/loyaltyos-portal:${{ github.ref_name }}`
+
+            ## Deploy
+
+            ```bash
+            helm repo add loyaltyos https://jvillatox.github.io/loyaltyos
+            helm upgrade --install loyaltyos loyaltyos/loyaltyos --version ${{ github.ref_name }}
+            ```
+          generate_release_notes: true

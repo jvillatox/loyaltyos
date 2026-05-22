@@ -1,0 +1,62 @@
+name: E2E Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - apps/**
+      - packages/**
+      - infra/docker/**
+      - .github/workflows/e2e.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Docker Compose Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env.production
+        run: |
+          cp infra/docker/.env.production.example infra/docker/.env.production
+          echo "JWT_SECRET=$(openssl rand -hex 64)" >> infra/docker/.env.production
+          echo "API_KEY_SALT=$(openssl rand -hex 32)" >> infra/docker/.env.production
+          echo "KMS_MASTER_KEY=$(openssl rand -hex 32)" >> infra/docker/.env.production
+
+      - name: Start services
+        run: |
+          docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.production up -d --build
+          # Wait for healthy containers
+          for i in $(seq 1 30); do
+            if docker compose -f infra/docker/docker-compose.prod.yml ps | grep -q "healthy"; then
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Smoke test — API health
+        run: |
+          curl -fsS --retry 10 --retry-delay 3 --retry-connrefused http://localhost:3002/healthz
+
+      - name: Smoke test — API metrics
+        run: |
+          curl -fsS http://localhost:3002/metrics | grep -q "loyaltyos_"
+
+      - name: Smoke test — Admin serves SPA
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 http://localhost:5173/ | grep -q "<title"
+
+      - name: Smoke test — Portal serves PWA
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 http://localhost:5174/ | grep -q "<title"
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose -f infra/docker/docker-compose.prod.yml logs --tail=200

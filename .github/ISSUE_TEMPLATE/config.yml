@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/jvillatox/loyaltyos/discussions
+    about: Ask questions and share ideas in Discussions
+  - name: Security Policy
+    url: https://github.com/jvillatox/loyaltyos/security/policy
+    about: Report a security vulnerability
