@@ -102,6 +102,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -112,6 +113,33 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  publish-widget:
+    name: Publish widget to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @loyaltyos/widget build
+
+      - run: pnpm --filter @loyaltyos/widget publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   helm-lint:
     name: Helm Lint
@@ -134,6 +162,35 @@ jobs:
 
       - name: Lint chart
         run: helm lint infra/k8s/helm/loyaltyos --strict
+
+  helm-publish:
+    name: Publish Helm Chart to gh-pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: helm-lint
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - uses: helm/chart-releaser-action@v1.6.0
+        with:
+          charts_dir: infra/k8s/helm
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   github-release:
     name: Create GitHub Release
