@@ -1,0 +1,17 @@
+[allowlist]
+  description = "Test fixtures and CI environment variables (not real secrets)"
+
+  paths = [
+    # All test files use placeholder/mock values
+    "packages/*/src/__tests__/",
+    "packages/*/dist/__tests__/",
+    "apps/*/src/__tests__/",
+    # CI workflow — test-only JWT secret
+    ".github/workflows/ci.yml",
+    # Built output from test files
+    "packages/*/dist/",
+    # Seed data with placeholder demo values
+    ".env.example",
+    "apps/api/.env.example",
+    "infra/docker/.env.production.example",
+  ]

@@ -61,10 +61,22 @@ export class WebhookProvider implements NotificationProvider {
   }
 
   /**
-   * Verify a webhook signature. Useful for the receiving end to validate
-   * that a webhook was sent by LoyaltyOS.
+   * Verify a webhook signature with time-bounded tolerance.
+   * Rejects webhooks with a timestamp older than 5 minutes to prevent replay attacks.
    */
-  static verify(payload: string, signature: string, timestamp: string, secret: string): boolean {
+  static verify(
+    payload: string,
+    signature: string,
+    timestamp: string,
+    secret: string,
+    opts?: { maxAgeMs?: number },
+  ): boolean {
+    const maxAge = opts?.maxAgeMs ?? 5 * 60 * 1000; // default 5 minutes
+    const ts = Number(timestamp);
+    if (Number.isNaN(ts) || Math.abs(Date.now() - ts * 1000) > maxAge) {
+      return false;
+    }
+
     const hmac = createHmac("sha256", secret);
     hmac.update(`${timestamp}.${payload}`);
     const expected = `sha256=${hmac.digest("hex")}`;

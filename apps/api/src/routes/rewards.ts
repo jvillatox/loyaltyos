@@ -22,13 +22,17 @@ export function rewardsRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     return reply.send({ data: result });
   });
 
-  // POST /rewards/:id/redeem — redeem a reward
-  app.post("/rewards/:id/redeem", async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const body = redeemSchema.parse(request.body);
-    const result = await rewards.redeem(body.rewardId || id, body.memberId, body.idempotencyKey);
-    return reply.status(201).send({ data: result });
-  });
+  // POST /rewards/:id/redeem — redeem a reward (rate-limited)
+  app.post(
+    "/rewards/:id/redeem",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = redeemSchema.parse(request.body);
+      const result = await rewards.redeem(body.rewardId || id, body.memberId, body.idempotencyKey);
+      return reply.status(201).send({ data: result });
+    },
+  );
 
   done();
 }

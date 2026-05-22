@@ -1,0 +1,17 @@
+{{- if and .Values.api.enabled .Values.api.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-api
+  labels:
+    {{- include "loyaltyos.api.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.api.pdb.minAvailable }}
+  minAvailable: {{ .Values.api.pdb.minAvailable }}
+  {{- else if .Values.api.pdb.maxUnavailable }}
+  maxUnavailable: {{ .Values.api.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "loyaltyos.api.selectorLabels" . | nindent 6 }}
+{{- end }}

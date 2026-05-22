@@ -3,32 +3,60 @@
 > The only open source loyalty platform with **native coalition support** — run your own points program while connecting to external coalition networks like Puntos Apprecio. MIT licensed.
 
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-0.4.0-blue)
-![Phase](https://img.shields.io/badge/phase-4%20Coalition-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Status](https://img.shields.io/badge/status-production-green)
 ![Coalition](https://img.shields.io/badge/coalition-Apprecio%20%2B%20generic-blueviolet)
 
-**LoyaltyOS** is a modular, API-first loyalty platform designed to be simple to deploy but powerful in operation. Connect your sales channels, run campaigns, issue coupons, manage tiers and badges, and integrate with coalition point systems — all from a single Dockerized stack.
+**LoyaltyOS** is a modular, API-first loyalty platform built for teams that want full control over their points program. Run campaigns, issue coupons, manage tiers and badges, and integrate with coalition point systems — all from a single Dockerized stack.
 
-### Why LoyaltyOS?
+## Why LoyaltyOS?
 
 Most loyalty platforms lock you into a single points ecosystem. LoyaltyOS is the first open source platform that lets you run **dual points programs**: your own proprietary points alongside external coalition points (like Puntos Apprecio across Mexico, Chile, Colombia, Peru, and Ecuador). The coalition adapter is pluggable — swap Apprecio for any provider by implementing a single interface.
 
+- **100% open source** — MIT licensed, no enterprise tier paywalls.
+- **Coalition-native** — dual points engine: proprietary + external coalition (Apprecio included).
+- **Self-hosted** — runs on your own infrastructure with Docker or Kubernetes.
+- **Privacy-first** — magic-link auth, no passwords stored, soft-delete, GDPR-ready isolation.
+
 ## Features
 
-- **Points Engine** — immutable ledger with earn, redeem, expire, and adjust operations. Idempotency-key support for safe retries.
-- **Multi-tenant** — multiple programs under a single installation, scoped via API key + program ID headers.
-- **Admin Dashboard** — React UI with KPI cards, member management, point balance, and transaction history.
-- **REST API** — Fastify-based with Zod validation, Swagger docs, rate limiting, and CORS.
-- **Tiers & Badges** — 5 badge types with condition DSL, rank tiers with progress tracking and pyramid visualization.
-- **Rewards Catalog** — 6 categories, eligibility checks, stock management, and idempotent redemption.
-- **Campaigns** — 8 types with budget capping, stacking rules, A/B testing, and impact estimation.
-- **Coupons** — 6 discount types, 3 modes, bulk generation, usage tracking.
-- **Segments** — dynamic rule builder with AND/OR conditions (eq, gt, contains, between) and static lists.
-- **Notifications** — multi-channel delivery (email, SMS, push, in-app, webhook) with Handlebars templates.
-- **Customer Portal** — mobile-first React PWA with magic-link auth, i18n, rewards catalog, badges gallery.
-- **Loyalty Widget** — embeddable Lit Web Component with mini/full modes, themeable via CSS custom properties.
-- **Coalition Points** — native integration with Apprecio and generic adapters, two-phase commit for safe cross-system earn/redeem/convert, circuit breaker with retry logic, credential encryption at rest.
-- **Privacy-first** — soft-delete on members, GDPR-ready data isolation.
+### Core Platform
+
+- **Points Engine** — immutable ledger with accumulate, redeem, expire, adjust, and reverse operations. Idempotency-key support for safe retries. Rule-based multipliers and pending/confirmed balance tracking.
+- **Multi-tenant** — multiple programs under a single installation, scoped via `X-API-Key` + `X-Program-Id` headers.
+- **REST API** — Fastify 4 with Zod validation, Swagger docs at `/docs`, rate limiting, CORS, and Helmet security headers.
+- **Admin Dashboard** — React 18 + Vite + shadcn/ui + TanStack Query. KPI cards, member management, campaign builder (6-step wizard), segment builder, coupon generator, badges/tiers editor, rewards catalog, and coalition configuration.
+- **Magic-Link Auth** — passwordless login via email. No passwords stored or transmitted. Session cookies with httpOnly, secure, sameSite strict.
+
+### Engagement
+
+- **Campaigns** — 8 types (Bonus Points, Spend & Get, Frequency, Milestone, Referral, Birthday, Anniversary, Flash Sale, Tier Upgrade Bonus). Budget capping, stacking rules, A/B testing, impact estimation.
+- **Coupons** — 6 discount types, 3 modes (Shared, Individual, Limited), bulk generation, usage tracking.
+- **Segments** — dynamic rule DSL with AND/OR groups, visual builder, real-time member count estimation.
+- **Notifications** — multi-channel (Email, SMS, Push, In-App, Webhook) with Handlebars templates, provider abstraction, and opt-out preferences.
+
+### Gamification
+
+- **Badges** — 5 types (Achievement, Status, Temporal, Collectible, Social) with condition DSL, progress tracking, event-driven auto-evaluation.
+- **Tiers** — configurable rank hierarchy with threshold-based upgrades, inactivity downgrades, pyramid visualization.
+- **Rewards** — 6 categories (Discount, Physical Product, Gift Card, Experience, Charity, Coalition Transfer), eligibility checks, stock management, idempotent redemption.
+- **Customer Portal** — React PWA with magic-link auth, i18n (en/es), rewards catalog with wishlist, badges gallery, transaction history, notification preferences.
+- **Loyalty Widget** — embeddable Lit Web Component with mini/full modes, themeable via CSS custom properties, ~45 KB gzipped.
+
+### Coalition
+
+- **Generic Adapter Interface** — pluggable provider implementations with capability flags.
+- **Apprecio Adapter** — full implementation against real API, multi-country support (MX, CL, PE, CO, EC).
+- **Two-Phase Commit** — PENDING → CONFIRMED/FAILED for all external operations. Compensation reversal on core failure.
+- **Circuit Breaker + Retry** — opossum-based breaker with exponential backoff, transient error retries.
+- **Credential Encryption** — AES-256-GCM at rest for coalition provider credentials.
+
+### Production
+
+- **Helm Chart** — 33 K8s resources with Bitnami PostgreSQL/Redis sub-charts, HPA v2, ingress with cert-manager, migrations Job, ServiceMonitor for Prometheus, PDB, NetworkPolicy, External Secrets Operator support.
+- **Observability** — OpenTelemetry tracing, Prometheus metrics, Grafana dashboards (API Overview, BullMQ Queues).
+- **Standalone Worker** — BullMQ worker entry point for independent K8s scaling.
+- **CI/CD** — GitHub Actions: CI (typecheck, lint, test), Docker (build + push to GHCR), Docs (Docusaurus deploy to GitHub Pages).
 
 ## Architecture
 
@@ -73,20 +101,13 @@ graph TB
     Core --> Redis
 ```
 
-## Differentiators vs OpenLoyalty.io
-
-| Feature                   | OpenLoyalty     | LoyaltyOS                |
-| ------------------------- | --------------- | ------------------------ |
-| Open Source               | Yes (limited)   | MIT (full)               |
-| Native Coalition          | No              | Yes (Apprecio + generic) |
-| Setup                     | Complex         | Docker one-liner         |
-| Embeddable Widget         | No              | Yes (Web Component)      |
-| A/B Testing for Campaigns | No              | Yes                      |
-| Customer Portal (PWA)     | No              | Yes                      |
-| Multi-tenant              | Enterprise only | Included                 |
-| Visual Segment Builder    | Basic           | Advanced                 |
-
 ## Quick Start
+
+```bash
+git clone https://github.com/jvillatox/loyaltyos.git && cd loyaltyos && pnpm install && docker compose up -d && pnpm dev
+```
+
+One command. Five services. Zero configuration. See the [documentation site](https://jvillatox.github.io/loyaltyos/) for detailed setup guides.
 
 ### Prerequisites
 
@@ -94,33 +115,23 @@ graph TB
 - **pnpm** >= 9
 - **Docker** + Docker Compose
 
-### 1. Clone and install
+### Step-by-step
 
 ```bash
-git clone https://github.com/jaimevillatoro/loyaltyos.git
+# 1. Clone and install
+git clone https://github.com/jvillatox/loyaltyos.git
 cd loyaltyos
 pnpm install
-```
 
-### 2. Start infrastructure
-
-```bash
+# 2. Start infrastructure (PostgreSQL 15, Redis 7, MailHog, Adminer)
 docker compose up -d
-```
 
-Starts PostgreSQL 15, Redis 7, MailHog (SMTP testing), and Adminer (DB browser at :8080).
+# 3. Set up the database
+cp apps/api/.env.example apps/api/.env
+pnpm --filter @loyaltyos/api db:reset
+pnpm --filter @loyaltyos/api db:seed
 
-### 3. Set up the database
-
-```bash
-cp apps/api/.env.example apps/api/.env    # edit if needed
-pnpm --filter @loyaltyos/api db:reset     # run migrations
-pnpm --filter @loyaltyos/api db:seed      # seed demo data
-```
-
-### 4. Start the apps
-
-```bash
+# 4. Start the apps
 pnpm dev
 ```
 
@@ -141,64 +152,122 @@ The seed script creates a demo program with:
 - **Program ID:** `prog_dev`
 - **Admin User:** `admin@loyaltyos.dev`
 
-### Test the API
-
 ```bash
-# Dashboard stats
+# Test the API
 curl http://localhost:3002/api/v1/stats/dashboard \
   -H "X-API-Key: dev-key" \
   -H "X-Program-Id: prog_dev"
-
-# Paginated member list
-curl "http://localhost:3002/api/v1/members?page=1&pageSize=5" \
-  -H "X-API-Key: dev-key" \
-  -H "X-Program-Id: prog_dev"
 ```
+
+## Deploy to Production
+
+### Docker
+
+Production Docker Compose stack with API, Admin, Portal, PostgreSQL, Redis, BullMQ worker, Prometheus, and OTEL Collector:
+
+```bash
+cp infra/docker/.env.production.example infra/docker/.env.production
+# Edit with your production values
+docker compose -f infra/docker/docker-compose.prod.yml up -d
+```
+
+### Kubernetes (Helm)
+
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm dependency build infra/k8s/helm/loyaltyos
+helm install loyaltyos infra/k8s/helm/loyaltyos \
+  --set api.image.tag=v1.0.0 \
+  --set admin.image.tag=v1.0.0 \
+  --set portal.image.tag=v1.0.0
+```
+
+Includes: PostgreSQL 16 (Bitnami), Redis 7 (Bitnami), HPA v2 (CPU + memory), ingress with nginx + cert-manager, migrations Job, ServiceMonitor for Prometheus, PDB, NetworkPolicy, and External Secrets Operator support.
+
+## Coalition Spotlight: Puntos Apprecio
+
+LoyaltyOS ships with a production-ready adapter for **Puntos Apprecio**, the largest coalition loyalty network in Latin America.
+
+| Country  | Supported |
+| -------- | --------- |
+| Mexico   | Yes       |
+| Chile    | Yes       |
+| Peru     | Yes       |
+| Colombia | Yes       |
+| Ecuador  | Yes       |
+
+**How it works:**
+
+1. A customer shops at your store (LoyaltyOS program) and earns your proprietary points **plus** Puntos Apprecio.
+2. A customer redeems Puntos Apprecio at your store — LoyaltyOS validates the balance via the Apprecio API, processes the discount, and confirms the debit.
+3. A customer converts your proprietary points into Puntos Apprecio — LoyaltyOS debits your ledger and credits Apprecio via API.
+
+All cross-system operations use **two-phase commit** (PENDING → CONFIRMED/FAILED) with a circuit breaker and exponential backoff. Credentials are encrypted with AES-256-GCM at rest. See the [Coalition docs](docs/coalition.md) for details.
+
+## Differentiators vs OpenLoyalty.io
+
+| Feature                   | OpenLoyalty     | LoyaltyOS                |
+| ------------------------- | --------------- | ------------------------ |
+| Open Source               | Yes (limited)   | MIT (full)               |
+| Native Coalition          | No              | Yes (Apprecio + generic) |
+| Setup                     | Complex         | Docker one-liner         |
+| Embeddable Widget         | No              | Yes (Lit Web Component)  |
+| A/B Testing for Campaigns | No              | Yes                      |
+| Customer Portal (PWA)     | No              | Yes                      |
+| Multi-tenant              | Enterprise only | Included                 |
+| Visual Segment Builder    | Basic           | Advanced                 |
+| Magic-Link Auth           | No              | Yes (passwordless)       |
+| Helm Chart                | No              | Yes (33 K8s resources)   |
+| OpenTelemetry Tracing     | No              | Yes                      |
+| Circuit Breaker           | No              | Yes (built-in)           |
 
 ## Project Structure
 
 ```
 loyaltyos/
 ├── apps/
-│   ├── api/                 # REST API (Fastify + Prisma + Zod)
-│   ├── admin/               # Admin UI (React + Vite + shadcn/ui)
-│   ├── portal/              # Customer Portal (React PWA + i18n)
-│   └── widget/              # Embeddable loyalty widget (Lit Web Components)
+│   ├── api/                 # REST API (Fastify 4 + Prisma + Zod)
+│   ├── admin/               # Admin Dashboard (React 18 + Vite + shadcn/ui)
+│   ├── portal/              # Customer Portal (React PWA + i18next)
+│   └── widget/              # Loyalty Widget (Lit Web Components)
 ├── packages/
-│   ├── core/                # Points engine — accumulate, redeem, expire, adjust
-│   ├── campaigns/           # Campaign rules engine (8 types, budgets, A/B testing)
-│   ├── coupons/             # Coupon system (6 discount types, 3 modes, bulk ops)
+│   ├── core/                # Points engine — immutable ledger, accumulate, redeem, adjust
+│   ├── campaigns/           # Campaign rules engine (8 types, A/B testing)
+│   ├── coupons/             # Coupon system (6 discount types, bulk generation)
 │   ├── segments/            # Dynamic segments DSL with rule evaluator
-│   ├── notifications/       # Multi-channel notifications with Handlebars templates
-│   ├── badges/              # Badges engine + tiers (5 types, condition DSL, progress tracking)
-│   ├── rewards/             # Reward catalog with eligibility, stock, and redemption
-│   ├── coalition/           # Coalition adapter (Apprecio + generic)
-│   └── config-eslint/       # Shared ESLint configuration
-├── docker-compose.yml       # Local dev infrastructure
-├── turbo.json               # Turborepo pipeline
-└── docs/
-    ├── SPEC.md              # Full architecture and roadmap
-    ├── customer-portal.md   # Customer portal guide
-    ├── widget-integration.md # Widget integration guide
-    ├── notifications.md     # Notifications setup guide
-    ├── coalition.md           # Coalition architecture & adapter guide
-    └── coalition-apprecio.md # Apprecio adapter guide
+│   ├── badges/              # Badges engine + tiers (5 types, condition DSL)
+│   ├── rewards/             # Rewards catalog with eligibility, stock, redemption
+│   ├── notifications/       # Multi-channel notifications (Email, SMS, Push, In-App, Webhook)
+│   ├── coalition/           # Coalition adapter (Apprecio + generic interface)
+│   ├── telemetry/           # OpenTelemetry tracing + Prometheus metrics
+│   ├── config-eslint/       # Shared ESLint configuration
+│   └── config-prettier/     # Shared Prettier configuration
+├── infra/
+│   ├── docker/              # Production Docker Compose + monitoring
+│   ├── k8s/                 # Helm chart (33 resources, PostgreSQL, Redis, HPA)
+│   └── grafana/             # Grafana dashboards (API Overview, BullMQ Queues)
+├── docs/                    # Architecture, guides, data model reference
+├── docs-site/               # Docusaurus documentation site
+├── docker-compose.yml       # Local dev infrastructure (PG, Redis, MailHog, Adminer)
+└── turbo.json               # Turborepo pipeline
 ```
 
 ## Tech Stack
 
-| Layer     | Technology                                          |
-| --------- | --------------------------------------------------- |
-| API       | Node.js 20, Fastify 4, TypeScript strict            |
-| Database  | PostgreSQL 15, Prisma ORM                           |
-| Cache     | Redis 7                                             |
-| Admin UI  | React 18, Vite, Tailwind, shadcn/ui, TanStack Query |
-| Portal    | React 18, Vite, Tailwind, i18next, PWA              |
-| Widget    | Lit 3, Web Components, ~45 KB bundle                |
-| Charts    | Recharts                                            |
-| Dev Tools | Turborepo, ESLint, Prettier, Husky, commitlint      |
-| Testing   | Vitest, Supertest                                   |
-| Infra     | Docker Compose (Postgres, Redis, MailHog, Adminer)  |
+| Layer         | Technology                                          |
+| ------------- | --------------------------------------------------- |
+| API           | Node.js 20, Fastify 4, TypeScript strict            |
+| Database      | PostgreSQL 15, Prisma ORM                           |
+| Cache / Queue | Redis 7, BullMQ                                     |
+| Admin UI      | React 18, Vite, Tailwind, shadcn/ui, TanStack Query |
+| Portal        | React 18, Vite, Tailwind, i18next, PWA              |
+| Widget        | Lit 3, Web Components, ~45 KB bundle                |
+| Auth          | Lucia Auth, magic-link (passwordless)               |
+| Email         | Resend (default) + pluggable adapters               |
+| Observability | OpenTelemetry, Prometheus, Grafana                  |
+| Testing       | Vitest, Supertest                                   |
+| CI/CD         | GitHub Actions                                      |
+| Docs          | Docusaurus 3                                        |
 
 ## Commands
 
@@ -215,7 +284,7 @@ loyaltyos/
 
 ## API Overview
 
-All endpoints require `X-API-Key` and `X-Program-Id` headers.
+All endpoints require `X-API-Key` and `X-Program-Id` headers (except auth routes, which use session cookies).
 
 | Method   | Endpoint                                 | Description                               |
 | -------- | ---------------------------------------- | ----------------------------------------- |
@@ -224,11 +293,20 @@ All endpoints require `X-API-Key` and `X-Program-Id` headers.
 | `GET`    | `/api/v1/stats/dashboard`                | KPI aggregates                            |
 | `GET`    | `/api/v1/members`                        | List members (paginated)                  |
 | `POST`   | `/api/v1/members`                        | Create a member                           |
+| `GET`    | `/api/v1/members/me`                     | Authenticated member profile              |
+| `GET`    | `/api/v1/members/me/balance`             | Authenticated member balance              |
+| `GET`    | `/api/v1/members/me/transactions`        | Authenticated member transaction history  |
+| `GET`    | `/api/v1/members/me/badges`              | Authenticated member badges               |
+| `GET`    | `/api/v1/members/me/tier`                | Authenticated member tier progress        |
 | `GET`    | `/api/v1/members/:id`                    | Get member by ID                          |
 | `GET`    | `/api/v1/members/:id/balance`            | Get member point balance                  |
 | `GET`    | `/api/v1/members/:id/transactions`       | Get member transaction history            |
 | `POST`   | `/api/v1/members/:id/adjust`             | Adjust points (requires Idempotency-Key)  |
 | `POST`   | `/api/v1/events`                         | Ingest an event                           |
+| `POST`   | `/api/v1/auth/magic-link`                | Request magic link                        |
+| `POST`   | `/api/v1/auth/verify-magic-link`         | Verify magic-link token, create session   |
+| `POST`   | `/api/v1/auth/logout`                    | Invalidate session                        |
+| `GET`    | `/api/v1/auth/me`                        | Get authenticated member                  |
 | `GET`    | `/api/v1/admin/campaigns`                | List campaigns (paginated)                |
 | `POST`   | `/api/v1/admin/campaigns`                | Create a campaign                         |
 | `POST`   | `/api/v1/admin/campaigns/estimate`       | Estimate campaign impact                  |
@@ -242,21 +320,21 @@ All endpoints require `X-API-Key` and `X-Program-Id` headers.
 | `GET`    | `/api/v1/admin/tiers`                    | List tiers (ordered by rank)              |
 | `POST`   | `/api/v1/admin/tiers`                    | Create a tier                             |
 | `PATCH`  | `/api/v1/admin/tiers/reorder`            | Reorder tier ranks                        |
-| `GET`    | `/api/v1/rewards`                        | List rewards (paginated, with filters)    |
+| `GET`    | `/api/v1/admin/rewards`                  | List rewards (admin)                      |
 | `POST`   | `/api/v1/admin/rewards`                  | Create a reward                           |
+| `GET`    | `/api/v1/rewards`                        | List rewards (public catalog)             |
 | `POST`   | `/api/v1/rewards/:id/redeem`             | Redeem a reward                           |
-| `POST`   | `/api/v1/auth/login`                     | Request magic link                        |
-| `GET`    | `/api/v1/auth/verify`                    | Verify magic-link token                   |
 | `GET`    | `/api/v1/admin/notification-templates`   | List templates (paginated)                |
 | `POST`   | `/api/v1/admin/notification-templates`   | Create a template                         |
+| `POST`   | `/api/v1/admin/notifications/test-send`  | Test-send a notification                  |
 | `GET`    | `/api/v1/admin/webhooks`                 | List webhooks (paginated)                 |
 | `POST`   | `/api/v1/admin/webhooks`                 | Create a webhook subscription             |
 | `POST`   | `/api/v1/coalition/accumulate`           | Accumulate coalition points               |
 | `POST`   | `/api/v1/coalition/redeem`               | Redeem coalition points                   |
 | `POST`   | `/api/v1/coalition/convert`              | Convert own points to coalition           |
 | `POST`   | `/api/v1/coalition/reverse`              | Reverse a coalition transaction           |
-| `GET`    | `/api/v1/members/:id/coalition/balance`  | Get member's external coalition balance   |
-| `GET`    | `/api/v1/members/:id/coalition/history`  | Get member's external coalition history   |
+| `GET`    | `/api/v1/coalition/:memberId/balance`    | Get member's external coalition balance   |
+| `GET`    | `/api/v1/coalition/:memberId/history`    | Get member's external coalition history   |
 | `GET`    | `/api/v1/admin/coalition/config`         | Get coalition configuration               |
 | `PUT`    | `/api/v1/admin/coalition/config`         | Update coalition configuration            |
 | `POST`   | `/api/v1/admin/coalition/healthcheck`    | Test coalition adapter connection         |
@@ -285,9 +363,29 @@ Full OpenAPI spec at `/docs` when the API is running.
 | 2     | Engagement — campaigns, coupons, notifications, segments       | Complete |
 | 3     | Gamification — badges, tiers, rewards, customer portal, widget | Complete |
 | 4     | Coalition — Apprecio adapter, coalition accounts, admin panel  | Complete |
-| 5     | Production — Helm charts, OTel, Docusaurus, CI/CD, v1.0.0      | Next     |
+| 5     | Production — Helm charts, OTel, Docusaurus, CI/CD, v1.0.0      | Complete |
+
+### Post-v1.0 Extensions
+
+- **GraphQL API** — full GraphQL layer alongside the REST API.
+- **SDK Clients** — official client libraries for Node.js, Python, and PHP.
+- **Plugin Marketplace** — community plugins for CRM sync (HubSpot, Salesforce), payment gateways, and analytics integrations.
+- **Multi-language Admin** — i18n support for the admin dashboard.
+- **Advanced Analytics** — cohort retention, LTV prediction, churn alerts.
 
 Full details in [docs/SPEC.md](docs/SPEC.md).
+
+## Documentation
+
+Comprehensive docs at **[jvillatox.github.io/loyaltyos](https://jvillatox.github.io/loyaltyos/)** covering:
+
+- Getting Started (intro, quick start, development setup, Docker)
+- Core Concepts (architecture, data model, points engine, multi-tenancy)
+- Packages (core, campaigns, coupons, segments, badges, rewards, notifications, coalition, telemetry)
+- Deployment (Docker Compose, Kubernetes Helm, environment variables)
+- API Reference (full REST API)
+- Integrations (coalition/Apprecio, customer portal, loyalty widget)
+- Community (changelog, contributing)
 
 ## Contributing
 
@@ -300,7 +398,15 @@ Contributions are welcome. This project uses:
 
 Before submitting a PR, make sure `pnpm typecheck` and `pnpm lint` pass cleanly.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and [CHANGELOG.md](CHANGELOG.md) for release history.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and [SECURITY.md](SECURITY.md) for the security policy.
+
+## Contributors
+
+LoyaltyOS is maintained by [@jvillatox](https://github.com/jvillatox). Contributors are recognized in the [GitHub contributors graph](https://github.com/jvillatox/loyaltyos/graphs/contributors).
+
+## Backers
+
+If LoyaltyOS helps your business, consider [sponsoring the project](https://github.com/sponsors/jvillatox) to support ongoing development.
 
 ## License
 

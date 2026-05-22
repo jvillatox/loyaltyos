@@ -1,0 +1,100 @@
+{{- if .Values.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-api
+  labels:
+    {{- include "loyaltyos.api.labels" . | nindent 4 }}
+  {{- with .Values.api.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "loyaltyos.api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "loyaltyos.api.selectorLabels" . | nindent 8 }}
+        {{- with .Values.api.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.api.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "loyaltyos.fullname" . }}-api
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: api
+          image: {{ include "loyaltyos.image" (dict "imageRoot" .Values.api.image "Values" .Values "Chart" .Chart) }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["node", "apps/api/dist/index.js"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "loyaltyos.fullname" . }}-api-config
+            - secretRef:
+                name: {{ include "loyaltyos.fullname" . }}-api-secret
+          {{- if .Values.api.coalition.providers }}
+          env:
+            {{- range $i, $p := .Values.api.coalition.providers }}
+            - name: APPRECIO_API_BASE
+              value: {{ $p.endpoint | quote }}
+            - name: APPRECIO_PUBLIC_TOKEN
+              value: {{ $p.publicToken | quote }}
+            - name: APPRECIO_PRIVATE_TOKEN
+              value: {{ $p.privateToken | quote }}
+            - name: APPRECIO_IDENTIFIER_TYPE
+              value: {{ $p.identifierType | default "email" | quote }}
+            - name: APPRECIO_TIMEOUT_MS
+              value: {{ $p.timeoutMs | default 10000 | quote }}
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.api.healthcheck.livenessPath }}
+              port: {{ .Values.api.healthcheck.livenessPort }}
+            initialDelaySeconds: {{ .Values.api.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.healthcheck.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.healthcheck.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.healthcheck.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.api.healthcheck.readinessPath }}
+              port: {{ .Values.api.healthcheck.readinessPort }}
+            initialDelaySeconds: {{ .Values.api.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.healthcheck.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.healthcheck.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.healthcheck.failureThreshold }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,72 @@
+{{- if .Values.portal.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-portal
+  labels:
+    {{- include "loyaltyos.portal.labels" . | nindent 4 }}
+  {{- with .Values.portal.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.portal.replicaCount }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "loyaltyos.portal.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "loyaltyos.portal.selectorLabels" . | nindent 8 }}
+        {{- with .Values.portal.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.portal.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: portal
+          image: {{ include "loyaltyos.image" (dict "imageRoot" .Values.portal.image "Values" .Values "Chart" .Chart) }}
+          imagePullPolicy: {{ .Values.portal.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.portal.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.portal.healthcheck.path }}
+              port: {{ .Values.portal.healthcheck.port }}
+            initialDelaySeconds: {{ .Values.portal.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.portal.healthcheck.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.portal.healthcheck.path }}
+              port: {{ .Values.portal.healthcheck.port }}
+            initialDelaySeconds: {{ .Values.portal.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.portal.healthcheck.periodSeconds }}
+          resources:
+            {{- toYaml .Values.portal.resources | nindent 12 }}
+      {{- with .Values.portal.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.portal.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.portal.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

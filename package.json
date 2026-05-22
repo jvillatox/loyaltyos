@@ -35,5 +35,10 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-uri": ">=3.1.1"
+    }
   }
 }

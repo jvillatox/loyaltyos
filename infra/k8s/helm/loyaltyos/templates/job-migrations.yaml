@@ -1,0 +1,64 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-migrations
+  labels:
+    {{- include "loyaltyos.migrations.labels" . | nindent 4 }}
+  {{- with .Values.migrations.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "loyaltyos.migrations.selectorLabels" . | nindent 8 }}
+      {{- with .Values.migrations.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: migrations
+          image: {{ include "loyaltyos.image" (dict "imageRoot" .Values.migrations.image "Values" .Values "Chart" .Chart) }}
+          imagePullPolicy: {{ .Values.migrations.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "==> Running Prisma migrations..."
+              npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
+              echo "==> Migrations complete."
+          envFrom:
+            - configMapRef:
+                name: {{ include "loyaltyos.fullname" . }}-api-config
+            - secretRef:
+                name: {{ include "loyaltyos.fullname" . }}-api-secret
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+      {{- with .Values.migrations.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

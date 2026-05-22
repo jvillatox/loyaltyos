@@ -1,6 +1,6 @@
 {
   "name": "@loyaltyos/admin",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.6.0",

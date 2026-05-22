@@ -1,0 +1,72 @@
+{{- if .Values.admin.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-admin
+  labels:
+    {{- include "loyaltyos.admin.labels" . | nindent 4 }}
+  {{- with .Values.admin.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.admin.replicaCount }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "loyaltyos.admin.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "loyaltyos.admin.selectorLabels" . | nindent 8 }}
+        {{- with .Values.admin.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.admin.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: admin
+          image: {{ include "loyaltyos.image" (dict "imageRoot" .Values.admin.image "Values" .Values "Chart" .Chart) }}
+          imagePullPolicy: {{ .Values.admin.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.admin.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.admin.healthcheck.path }}
+              port: {{ .Values.admin.healthcheck.port }}
+            initialDelaySeconds: {{ .Values.admin.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.admin.healthcheck.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.admin.healthcheck.path }}
+              port: {{ .Values.admin.healthcheck.port }}
+            initialDelaySeconds: {{ .Values.admin.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.admin.healthcheck.periodSeconds }}
+          resources:
+            {{- toYaml .Values.admin.resources | nindent 12 }}
+      {{- with .Values.admin.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.admin.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.admin.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

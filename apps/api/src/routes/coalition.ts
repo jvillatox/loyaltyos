@@ -38,77 +38,89 @@ const reverseSchema = z.object({
 export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   // ═══ Accumulate ═══
 
-  app.post("/coalition/accumulate", async (request, reply) => {
-    const idempotencyKey = request.headers["idempotency-key"] as string;
-    if (!idempotencyKey) {
-      return reply.status(400).send({
-        error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+  app.post(
+    "/coalition/accumulate",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const idempotencyKey = request.headers["idempotency-key"] as string;
+      if (!idempotencyKey) {
+        return reply.status(400).send({
+          error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+        });
+      }
+
+      const body = accumulateSchema.parse(request.body);
+      const programId = request.programId || (request.headers["x-program-id"] as string);
+
+      const result = await coalitionService.accumulate({
+        programId,
+        memberId: body.memberId,
+        externalMemberRef: body.externalMemberRef,
+        points: body.points,
+        txRef: body.txRef,
+        metadata: body.metadata,
       });
-    }
 
-    const body = accumulateSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
-
-    const result = await coalitionService.accumulate({
-      programId,
-      memberId: body.memberId,
-      externalMemberRef: body.externalMemberRef,
-      points: body.points,
-      txRef: body.txRef,
-      metadata: body.metadata,
-    });
-
-    return reply.status(result.idempotent ? 200 : 201).send({ data: result });
-  });
+      return reply.status(result.idempotent ? 200 : 201).send({ data: result });
+    },
+  );
 
   // ═══ Redeem ═══
 
-  app.post("/coalition/redeem", async (request, reply) => {
-    const idempotencyKey = request.headers["idempotency-key"] as string;
-    if (!idempotencyKey) {
-      return reply.status(400).send({
-        error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+  app.post(
+    "/coalition/redeem",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const idempotencyKey = request.headers["idempotency-key"] as string;
+      if (!idempotencyKey) {
+        return reply.status(400).send({
+          error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+        });
+      }
+
+      const body = redeemSchema.parse(request.body);
+      const programId = request.programId || (request.headers["x-program-id"] as string);
+
+      const result = await coalitionService.redeem({
+        programId,
+        memberId: body.memberId,
+        externalMemberRef: body.externalMemberRef,
+        points: body.points,
+        txRef: body.txRef,
+        metadata: body.metadata,
       });
-    }
 
-    const body = redeemSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
-
-    const result = await coalitionService.redeem({
-      programId,
-      memberId: body.memberId,
-      externalMemberRef: body.externalMemberRef,
-      points: body.points,
-      txRef: body.txRef,
-      metadata: body.metadata,
-    });
-
-    return reply.status(result.idempotent ? 200 : 201).send({ data: result });
-  });
+      return reply.status(result.idempotent ? 200 : 201).send({ data: result });
+    },
+  );
 
   // ═══ Convert ═══
 
-  app.post("/coalition/convert", async (request, reply) => {
-    const idempotencyKey = request.headers["idempotency-key"] as string;
-    if (!idempotencyKey) {
-      return reply.status(400).send({
-        error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+  app.post(
+    "/coalition/convert",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const idempotencyKey = request.headers["idempotency-key"] as string;
+      if (!idempotencyKey) {
+        return reply.status(400).send({
+          error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+        });
+      }
+
+      const body = convertSchema.parse(request.body);
+      const programId = request.programId || (request.headers["x-program-id"] as string);
+
+      const result = await coalitionService.convert({
+        programId,
+        memberId: body.memberId,
+        externalMemberRef: body.externalMemberRef,
+        ownPoints: body.ownPoints,
+        txRef: body.txRef,
       });
-    }
 
-    const body = convertSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
-
-    const result = await coalitionService.convert({
-      programId,
-      memberId: body.memberId,
-      externalMemberRef: body.externalMemberRef,
-      ownPoints: body.ownPoints,
-      txRef: body.txRef,
-    });
-
-    return reply.status(result.idempotent ? 200 : 201).send({ data: result });
-  });
+      return reply.status(result.idempotent ? 200 : 201).send({ data: result });
+    },
+  );
 
   // ═══ Reverse ═══
 

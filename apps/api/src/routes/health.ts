@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
 import { prisma } from "../db.js";
+import { getRedisConnection } from "../lib/queue.js";
 
 export function healthRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.get("/healthz", async (_req, reply) => {
@@ -8,11 +9,30 @@ export function healthRoutes(app: FastifyInstance, _opts: unknown, done: () => v
   });
 
   app.get("/readyz", async (_req, reply) => {
+    let dbOk = false;
+    let redisOk = false;
+
     try {
       await prisma.$queryRaw`SELECT 1`;
+      dbOk = true;
     } catch {
-      return reply.status(503).send({ status: "not ready", db: false, redis: false });
+      // DB unreachable
     }
+
+    try {
+      const redis = getRedisConnection();
+      if (redis) {
+        await redis.ping();
+        redisOk = true;
+      }
+    } catch {
+      // Redis unreachable
+    }
+
+    if (!dbOk || !redisOk) {
+      return reply.status(503).send({ status: "not ready", db: dbOk, redis: redisOk });
+    }
+
     return reply.send({ status: "ready", db: true, redis: true });
   });
 

@@ -64,38 +64,42 @@ function resolvePortalUrl(_programId: string): string {
 
 export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   /** POST /auth/magic-link — request a sign-in link (always 200 OK) */
-  app.post("/auth/magic-link", async (request, reply) => {
-    const { email, locale: _locale } = magicLinkSchema.parse(request.body);
+  app.post(
+    "/auth/magic-link",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { email, locale: _locale } = magicLinkSchema.parse(request.body);
 
-    const member = await prisma.member.findFirst({
-      where: { email, deletedAt: null },
-    });
-
-    if (member) {
-      const rawToken = generateToken();
-      const tokenHash = hashToken(rawToken);
-
-      await prisma.magicLinkToken.create({
-        data: {
-          memberId: member.id,
-          tokenHash,
-          expiresAt: new Date(Date.now() + TOKEN_MINUTES * 60_000),
-        },
+      const member = await prisma.member.findFirst({
+        where: { email, deletedAt: null },
       });
 
-      const baseUrl = resolvePortalUrl(member.programId);
-      const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
+      if (member) {
+        const rawToken = generateToken();
+        const tokenHash = hashToken(rawToken);
 
-      // Fire and forget
-      void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl);
-    } else {
-      // No-op for non-existent emails: prevent enumeration
-      // Log for observability
-      request.log.info({ email }, "Magic link requested for unknown email");
-    }
+        await prisma.magicLinkToken.create({
+          data: {
+            memberId: member.id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + TOKEN_MINUTES * 60_000),
+          },
+        });
 
-    return reply.status(200).send({ ok: true });
-  });
+        const baseUrl = resolvePortalUrl(member.programId);
+        const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
+
+        // Fire and forget
+        void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl);
+      } else {
+        // No-op for non-existent emails: prevent enumeration
+        // Log for observability
+        request.log.info({ email }, "Magic link requested for unknown email");
+      }
+
+      return reply.status(200).send({ ok: true });
+    },
+  );
 
   /** POST /auth/verify-magic-link — validate token, create session */
   app.post("/auth/verify-magic-link", async (request, reply) => {

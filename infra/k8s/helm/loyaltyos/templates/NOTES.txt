@@ -1,0 +1,64 @@
+{{- $fullName := include "loyaltyos.fullname" . -}}
+
+LoyaltyOS {{ .Chart.AppVersion }} has been installed!
+
+{{- if .Values.api.enabled }}
+
+API Server:
+  Internal URL:  http://{{ $fullName }}-api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.api.service.port }}
+{{- end }}
+
+{{- if .Values.admin.enabled }}
+Admin Dashboard:
+  Internal URL:  http://{{ $fullName }}-admin.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.admin.service.port }}
+{{- end }}
+
+{{- if .Values.portal.enabled }}
+Customer Portal:
+  Internal URL:  http://{{ $fullName }}-portal.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.portal.service.port }}
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+API Ingress:
+  https://{{ .host }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.adminIngress.enabled }}
+{{- range .Values.adminIngress.hosts }}
+Admin Ingress:
+  https://{{ .host }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.portalIngress.enabled }}
+{{- range .Values.portalIngress.hosts }}
+Portal Ingress:
+  https://{{ .host }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.postgresql.enabled }}
+PostgreSQL is running as a sub-chart. Connect internally at:
+  {{ $fullName }}-postgresql.{{ .Release.Namespace }}.svc.cluster.local:5432
+{{- end }}
+
+{{- if .Values.redis.enabled }}
+Redis is running as a sub-chart. Connect internally at:
+  {{ $fullName }}-redis-master.{{ .Release.Namespace }}.svc.cluster.local:6379
+{{- end }}
+
+{{- if .Values.monitoring.enabled }}
+Metrics are exposed at /metrics on the API server.
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+A Prometheus ServiceMonitor has been created. Ensure the Prometheus Operator is installed.
+{{- end }}
+{{- end }}
+
+To get the status of the release:
+  helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+To check the API health:
+  kubectl port-forward svc/{{ $fullName }}-api {{ .Values.api.service.port }}:{{ .Values.api.service.port }} -n {{ .Release.Namespace }}
+  curl http://localhost:{{ .Values.api.service.port }}/healthz

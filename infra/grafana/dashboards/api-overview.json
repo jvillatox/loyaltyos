@@ -1,0 +1,378 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "datasource", "uid": "grafana" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 10,
+      "panels": [],
+      "title": "HTTP Requests",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(http_requests_total{service_name=\"$service\"}[$__rate_interval])) by (method, route)",
+          "legendFormat": "{{method}} {{route}}"
+        }
+      ],
+      "title": "Request Rate (RPS)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(http_requests_total{service_name=\"$service\",status_code=~\"5..\"}[$__rate_interval])) / sum(rate(http_requests_total{service_name=\"$service\"}[$__rate_interval]))",
+          "legendFormat": "5xx Error Rate"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(http_requests_total{service_name=\"$service\",status_code=~\"4..\"}[$__rate_interval])) / sum(rate(http_requests_total{service_name=\"$service\"}[$__rate_interval]))",
+          "legendFormat": "4xx Error Rate"
+        }
+      ],
+      "title": "Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 9 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service_name=\"$service\"}[$__rate_interval])) by (le, route))",
+          "legendFormat": "P50 {{route}}"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service_name=\"$service\"}[$__rate_interval])) by (le, route))",
+          "legendFormat": "P95 {{route}}"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service_name=\"$service\"}[$__rate_interval])) by (le, route))",
+          "legendFormat": "P99 {{route}}"
+        }
+      ],
+      "title": "Request Latency (P50 / P95 / P99)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "id": 20,
+      "panels": [],
+      "title": "BullMQ Queues",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1,
+            "stacking": { "mode": "normal" }
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "id": 21,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "bullmq_queue_depth{service_name=\"$service\"}",
+          "legendFormat": "{{queue}}"
+        }
+      ],
+      "title": "Queue Depth",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "id": 22,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum(rate(bullmq_job_duration_seconds_bucket{service_name=\"$service\"}[$__rate_interval])) by (le, queue))",
+          "legendFormat": "P50 {{queue}}"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(bullmq_job_duration_seconds_bucket{service_name=\"$service\"}[$__rate_interval])) by (le, queue))",
+          "legendFormat": "P95 {{queue}}"
+        }
+      ],
+      "title": "Job Duration (P50 / P95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "unit": "ops"
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "id": 23,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(bullmq_jobs_total{service_name=\"$service\",status=\"completed\"}[$__rate_interval])) by (queue)",
+          "legendFormat": "{{queue}} completed"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(bullmq_jobs_total{service_name=\"$service\",status=\"failed\"}[$__rate_interval])) by (queue)",
+          "legendFormat": "{{queue}} failed"
+        }
+      ],
+      "title": "Job Throughput (completed vs failed / s)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "id": 30,
+      "panels": [],
+      "title": "Node.js Runtime",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 30,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "unit": "bytes"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+      "id": 31,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "nodejs_heap_size_used_bytes{service_name=\"$service\"}",
+          "legendFormat": "Heap Used"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "nodejs_heap_size_total_bytes{service_name=\"$service\"}",
+          "legendFormat": "Heap Total"
+        }
+      ],
+      "title": "Heap Memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+      "id": 32,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "nodejs_eventloop_lag_seconds{service_name=\"$service\"}",
+          "legendFormat": "Event Loop Lag"
+        }
+      ],
+      "title": "Event Loop Lag",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["loyaltyos", "api"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "label": "Datasource",
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      },
+      {
+        "current": { "text": "loyaltyos-api", "value": "loyaltyos-api" },
+        "hide": 0,
+        "label": "Service",
+        "name": "service",
+        "query": "label_values(http_requests_total, service_name)",
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "LoyaltyOS — API Overview",
+  "uid": "loyaltyos-api-overview",
+  "version": 1
+}

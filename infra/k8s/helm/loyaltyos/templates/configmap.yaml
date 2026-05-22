@@ -1,0 +1,23 @@
+{{- if .Values.api.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-api-config
+  labels:
+    {{- include "loyaltyos.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.api.env.NODE_ENV | default "production" | quote }}
+  HOST: {{ .Values.api.env.HOST | default "0.0.0.0" | quote }}
+  PORT_API: {{ .Values.api.env.PORT_API | default "3002" | quote }}
+  LOG_LEVEL: {{ .Values.api.env.LOG_LEVEL | default "info" | quote }}
+  CORS_ORIGIN: {{ .Values.api.env.CORS_ORIGIN | quote }}
+  {{- if .Values.api.env.TWILIO_PHONE_NUMBER }}
+  TWILIO_PHONE_NUMBER: {{ .Values.api.env.TWILIO_PHONE_NUMBER | quote }}
+  {{- end }}
+  {{- if .Values.externalDatabase.enabled }}
+  DATABASE_URL: {{ include "loyaltyos.databaseUrl" . | quote }}
+  {{- else }}
+  DATABASE_URL: {{ include "loyaltyos.databaseUrl" . | quote }}
+  {{- end }}
+  REDIS_URL: {{ include "loyaltyos.redisUrl" . | quote }}
+{{- end }}

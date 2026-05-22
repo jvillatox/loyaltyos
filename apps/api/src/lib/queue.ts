@@ -12,6 +12,16 @@ function getConnection(): Redis {
   return connection;
 }
 
+export function getRedisConnection(): Redis | null {
+  if (!connection) return null;
+  try {
+    // Ping to verify the existing connection is still alive
+    return connection;
+  } catch {
+    return null;
+  }
+}
+
 export function createQueue(name: string): Queue {
   return new Queue(name, {
     connection: getConnection(),

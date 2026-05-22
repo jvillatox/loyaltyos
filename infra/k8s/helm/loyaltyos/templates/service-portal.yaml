@@ -1,0 +1,21 @@
+{{- if .Values.portal.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-portal
+  labels:
+    {{- include "loyaltyos.portal.labels" . | nindent 4 }}
+  {{- with .Values.portal.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.portal.service.type }}
+  ports:
+    - port: {{ .Values.portal.service.port }}
+      targetPort: {{ .Values.portal.service.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "loyaltyos.portal.selectorLabels" . | nindent 4 }}
+{{- end }}

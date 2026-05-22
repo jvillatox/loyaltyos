@@ -195,26 +195,30 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     return reply.send({ data: result });
   });
 
-  app.post("/members/:id/adjust", async (request, reply) => {
-    const { id } = z.object({ id: z.string() }).parse(request.params);
-    const body = adjustSchema.parse(request.body);
-    const idempotencyKey = request.headers["idempotency-key"] as string;
-    if (!idempotencyKey) {
-      return reply.status(400).send({
-        error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
-      });
-    }
+  app.post(
+    "/members/:id/adjust",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = adjustSchema.parse(request.body);
+      const idempotencyKey = request.headers["idempotency-key"] as string;
+      if (!idempotencyKey) {
+        return reply.status(400).send({
+          error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+        });
+      }
 
-    const result = await points.adjust({
-      memberId: id,
-      programId: request.programId,
-      amount: body.amount,
-      reason: body.reason,
-      adminUserId: "admin", // Will be replaced by real auth in Prompt 6
-      idempotencyKey,
-    });
-    return reply.status(201).send({ data: result });
-  });
+      const result = await points.adjust({
+        memberId: id,
+        programId: request.programId,
+        amount: body.amount,
+        reason: body.reason,
+        adminUserId: "admin", // Will be replaced by real auth in Prompt 6
+        idempotencyKey,
+      });
+      return reply.status(201).send({ data: result });
+    },
+  );
 
   // GET /members/:id/badges — Get member badges with progress
   app.get("/members/:id/badges", async (request, reply) => {

@@ -1,0 +1,107 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-api
+  labels:
+    {{- include "loyaltyos.api.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "loyaltyos.fullname" $ }}-api
+                port:
+                  number: {{ .port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+---
+{{- if .Values.adminIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-admin
+  labels:
+    {{- include "loyaltyos.admin.labels" . | nindent 4 }}
+  {{- with .Values.adminIngress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.adminIngress.className }}
+  ingressClassName: {{ .Values.adminIngress.className }}
+  {{- end }}
+  {{- if .Values.adminIngress.tls }}
+  tls:
+    {{- toYaml .Values.adminIngress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.adminIngress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "loyaltyos.fullname" $ }}-admin
+                port:
+                  number: {{ .port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+---
+{{- if .Values.portalIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-portal
+  labels:
+    {{- include "loyaltyos.portal.labels" . | nindent 4 }}
+  {{- with .Values.portalIngress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.portalIngress.className }}
+  ingressClassName: {{ .Values.portalIngress.className }}
+  {{- end }}
+  {{- if .Values.portalIngress.tls }}
+  tls:
+    {{- toYaml .Values.portalIngress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.portalIngress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "loyaltyos.fullname" $ }}-portal
+                port:
+                  number: {{ .port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

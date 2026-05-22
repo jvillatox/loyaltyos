@@ -1,6 +1,6 @@
 {
   "name": "@loyaltyos/api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
+    "@fastify/helmet": "^11.1.1",
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/swagger": "^8.14.0",
     "@fastify/swagger-ui": "^3.0.0",
@@ -28,6 +29,7 @@
     "@loyaltyos/notifications": "workspace:*",
     "@loyaltyos/rewards": "workspace:*",
     "@loyaltyos/segments": "workspace:*",
+    "@loyaltyos/telemetry": "workspace:*",
     "@lucia-auth/adapter-prisma": "^4.0.1",
     "@prisma/client": "^5.15.0",
     "bullmq": "^5.76.9",

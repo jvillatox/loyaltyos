@@ -1,7 +1,15 @@
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import {
+  createBullMQMetrics,
+  createFastifyMetricsPlugin,
+  createHttpMetrics,
+  createMetricsRegistry,
+  setupDefaultMetrics,
+} from "@loyaltyos/telemetry";
 import Fastify from "fastify";
 
 import { prisma } from "./db.js";
@@ -24,18 +32,77 @@ import { membersRoutes } from "./routes/members.js";
 import { rewardsRoutes } from "./routes/rewards.js";
 import { statsRoutes } from "./routes/stats.js";
 
+interface BullMQMetricsExport {
+  bullmqQueueDepth: { set: (labels: Record<string, string>, val: number) => void };
+  bullmqJobDuration: { observe: (labels: Record<string, string>, val: number) => void };
+  bullmqJobCounter: { inc: (labels: Record<string, string>) => void };
+}
+
+let metricsExports: BullMQMetricsExport | null = null;
+
+export function getBullMQMetrics(): BullMQMetricsExport | null {
+  return metricsExports;
+}
+
 export async function buildApp(opts: { logger?: boolean } = {}) {
   const app = Fastify({
     logger: opts.logger ?? process.env.LOG_LEVEL !== "silent",
     genReqId: () => crypto.randomUUID(),
   });
 
-  // Plugins
-  await app.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? true,
-    credentials: true,
+  // Metrics (before plugins to capture all traffic)
+  const metricsRegistry = createMetricsRegistry();
+  setupDefaultMetrics(metricsRegistry, "loyaltyos-api");
+  const httpMetrics = createHttpMetrics(metricsRegistry);
+  const bullmqMetrics = createBullMQMetrics(metricsRegistry);
+  metricsExports = bullmqMetrics;
+
+  // Security headers (helmet)
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'none'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+        fontSrc: ["'self'"],
+        connectSrc: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: { action: "deny" },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   });
 
+  // CORS — whitelist from env var, default to restrictive
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim())
+    : process.env.CORS_ORIGIN
+      ? [process.env.CORS_ORIGIN]
+      : null;
+
+  await app.register(cors, {
+    origin: corsOrigins ?? (process.env.NODE_ENV === "production" ? false : true),
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-API-Key",
+      "X-Program-Id",
+      "Idempotency-Key",
+    ],
+    maxAge: 86400,
+  });
+
+  // Rate limiting — global default
   await app.register(rateLimit, {
     max: 1000,
     timeWindow: "1 minute",
@@ -69,6 +136,11 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
 
   // Error handling (must be set before routes to apply globally)
   app.setErrorHandler(errorHandler);
+
+  // Telemetry — exposes /metrics and records HTTP stats
+  await app.register(createFastifyMetricsPlugin, {
+    registry: { registry: metricsRegistry, ...httpMetrics, ...bullmqMetrics },
+  });
 
   // Public routes (before auth plugin)
   await app.register(authRoutes, { prefix: "/api/v1" });

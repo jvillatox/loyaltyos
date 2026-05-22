@@ -892,9 +892,8 @@ describe("WebhookProvider.verify", () => {
 
   it("verifies a valid signature", () => {
     const payload = JSON.stringify({ event: "points.earned", points: 500 });
-    const timestamp = "1715900000";
+    const timestamp = String(Math.floor(Date.now() / 1000));
 
-    // Generate a valid signature
     const provider = new WebhookProvider({ url: "https://example.com/webhook", secret });
     const signature = provider.sign(payload, timestamp);
 
@@ -904,7 +903,7 @@ describe("WebhookProvider.verify", () => {
 
   it("rejects an invalid signature", () => {
     const payload = JSON.stringify({ event: "points.earned", points: 500 });
-    const timestamp = "1715900000";
+    const timestamp = String(Math.floor(Date.now() / 1000));
 
     const valid = WebhookProvider.verify(payload, "sha256_" + "a".repeat(64), timestamp, secret);
     expect(valid).toBe(false);
@@ -912,13 +911,13 @@ describe("WebhookProvider.verify", () => {
 
   it("rejects tampered payload", () => {
     const payload = JSON.stringify({ event: "points.earned" });
-    const timestamp = "1715900000";
+    const timestamp = String(Math.floor(Date.now() / 1000));
 
     const provider = new WebhookProvider({ url: "https://example.com/webhook", secret });
     const signature = provider.sign(payload, timestamp);
 
     const valid = WebhookProvider.verify(
-      JSON.stringify({ event: "points.spent" }), // tampered
+      JSON.stringify({ event: "points.spent" }),
       signature,
       timestamp,
       secret,

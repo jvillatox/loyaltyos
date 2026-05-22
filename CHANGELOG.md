@@ -5,6 +5,58 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-05-21 — Initial Public Release
+
+### Core Platform
+
+- **Points Engine** — immutable ledger with accumulate, redeem, expire, adjust, and reverse operations. Idempotency-key support for safe retries. Rule-based multipliers, pending/confirmed balance tracking, configurable expiry.
+- **Multi-Tenant** — program-scoped data isolation enforced at the API layer via `X-API-Key` + `X-Program-Id` headers.
+- **REST API** — Fastify 4 + Zod validation + Swagger docs. Rate limiting, CORS, Helmet security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy). 50+ endpoints across stats, members, campaigns, coupons, segments, badges, tiers, rewards, auth, notifications, and coalition.
+- **Admin Dashboard** — React 18 + Vite + shadcn/ui + TanStack Query. KPI cards, member management, campaign builder (6-step wizard), segment builder (visual rule editor), coupon generator, badges/tiers editor, rewards catalog, and coalition configuration.
+- **Magic-Link Auth** — passwordless login via email (Resend). No passwords stored or transmitted. Session cookies with httpOnly, secure, sameSite strict.
+- **Security** — Zod validation on every boundary, per-endpoint rate limiting (auth: 5/min, accumulate: 30/min, redeem: 20/min), CORS whitelist, Helmet defaults, HMAC-SHA256 webhook signing with 5-min timestamp tolerance, Handlebars sandbox with prototype stripping, AES-256-GCM credential encryption.
+
+### Engagement
+
+- **Campaigns** — 8 types (Bonus Points, Spend & Get, Frequency, Milestone, Referral, Birthday, Anniversary, Flash Sale, Tier Upgrade Bonus). Budget capping, stacking rules, A/B testing via CampaignVariant records, impact estimation.
+- **Coupons** — 6 discount types (Percentage, Fixed, Free Product, Free Shipping, Extra Points, Experience), 3 modes (Shared, Individual, Limited), bulk generation, usage tracking.
+- **Segments** — dynamic rule DSL with AND/OR groups and operators (eq, neq, gt, gte, lt, lte, between, contains, in), static lists, visual builder, real-time member count estimation.
+- **Notifications** — multi-channel (Email, SMS, Push, In-App, Webhook), Handlebars templates with sandboxed rendering, provider abstraction (Resend, Twilio, OneSignal), opt-out per channel per member, webhook signing.
+
+### Gamification
+
+- **Badges** — 5 types (Achievement, Status, Temporal, Collectible, Social) with condition DSL, temporal operators (`count_in_window`, `within`, `since`), progress tracking (0-100%), event-driven auto-evaluation.
+- **Tiers** — configurable rank hierarchy with threshold-based upgrades, inactivity downgrade job, progress-to-next-tier tracking, tier benefits, pyramid visualization.
+- **Rewards** — 6 categories (Discount, Physical Product, Gift Card, Experience, Charity, Coalition Transfer), eligibility checks, stock management, idempotent redemption.
+- **Customer Portal** — React PWA with magic-link auth, i18n (en/es), rewards catalog with wishlist, badges gallery with progress, transaction history, notification preferences.
+- **Loyalty Widget** — embeddable Lit Web Component, mini/full modes, themeable via CSS custom properties, standalone sub-components, ~45 KB gzipped.
+
+### Coalition
+
+- **Generic Adapter Interface** — pluggable provider implementations with capability flags (accumulate, redeem, convert, reverseTransaction, historyQuery).
+- **Apprecio Adapter** — full implementation against real API. MD5 form-data authentication, multi-country (MX, CL, PE, CO, EC), email/RUT identifier types, private token sanitization.
+- **Two-Phase Commit** — PENDING → CONFIRMED/FAILED for all external operations. Compensation reversal on core failure.
+- **Circuit Breaker** — opossum-based, opens after 5 consecutive failures within 10s, half-open after 30s, auto-closes after 3 successes.
+- **Retry Logic** — exponential backoff (1s, 2s, 4s, max 3 attempts) for transient errors. Business errors never retried.
+- **Credential Encryption** — AES-256-GCM at rest with KMS_MASTER_KEY support.
+- **Admin Panel** — config page, transactions with detail timeline, linked members management, manual reconciliation.
+
+### Production
+
+- **Helm Chart** — 33 K8s resources with sub-charts (Bitnami PostgreSQL 16, Redis 7), HPA v2 (CPU + memory), Ingress (nginx + cert-manager), migrations Job (Helm hook), ServiceMonitor for Prometheus, PDB, NetworkPolicy, External Secrets Operator support.
+- **Observability** — OpenTelemetry tracing (HTTP, PostgreSQL, Redis auto-instrumentation), Prometheus metrics (HTTP RPS/latency/errors, BullMQ queue depth/duration/throughput, Node.js defaults), Grafana dashboards (API Overview, BullMQ Queues).
+- **Standalone Worker** — BullMQ worker entry point for independent K8s scaling.
+- **Docker Compose** — production stack with Prometheus + OTEL Collector via monitoring profile.
+- **CI/CD** — GitHub Actions: CI (typecheck, lint, test with PostgreSQL + Redis services), Docker (build + push to GHCR on tags), Docs (Docusaurus deploy to GitHub Pages).
+- **Documentation** — 27-page Docusaurus site across 7 sections. Custom logo and branding.
+
+### Changed
+
+- All package versions bumped from 0.1.0 to 1.0.0.
+- README updated with deployment options, coalition spotlight, future roadmap, contributors/backers sections.
+- Roadmap marked complete for all 5 phases.
+- Security pass: dependency audit, security headers, rate limits, CORS lockdown, webhook timestamp validation, SECURITY.md.
+
 ## [0.4.0] - 2026-05-21
 
 ### Added

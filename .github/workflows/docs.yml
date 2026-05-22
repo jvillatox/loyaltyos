@@ -1,0 +1,49 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs-site/**
+      - docs/**
+      - CHANGELOG.md
+      - .github/workflows/docs.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter loyaltyos-docs build
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/build
+
+      - uses: actions/deploy-pages@v4

@@ -1,0 +1,458 @@
+# LoyaltyOS Helm Chart — Default Values
+#
+# Install:
+#   helm repo add bitnami https://charts.bitnami.com/bitnami
+#   helm dependency update
+#   helm install loyaltyos . --values my-values.yaml
+
+# -- Global settings applied across all components
+global:
+  # -- Container image registry (prefix for all images)
+  imageRegistry: ghcr.io/jvillatox
+  # -- Image pull secrets for private registries
+  imagePullSecrets: []
+  # -- Default storage class for persistent volumes
+  storageClass: ""
+  # -- Allow non-Bitnami container images in sub-charts (required when global.imageRegistry is set)
+  security:
+    allowInsecureImages: true
+
+# -- Override the full name of the release
+nameOverride: ""
+# -- Override the full name of the chart + release
+fullnameOverride: ""
+
+# =============================================================================
+# API Server
+# =============================================================================
+api:
+  # -- Deploy the API server
+  enabled: true
+  # -- Number of API replicas
+  replicaCount: 2
+
+  image:
+    # -- Image repository (without registry prefix)
+    repository: loyaltyos-api
+    # -- Image tag (defaults to Chart.appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+    # -- Custom registry (overrides global.imageRegistry for this component)
+    registry: ""
+
+  # -- Horizontal Pod Autoscaling
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  # -- Pod Disruption Budget
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+  # -- Resource requests and limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  # -- Environment variables for the API server
+  env:
+    NODE_ENV: production
+    HOST: "0.0.0.0"
+    PORT_API: "3002"
+    LOG_LEVEL: info
+    CORS_ORIGIN: ""
+    # Secrets — set via values or ExternalSecrets
+    JWT_SECRET: ""
+    API_KEY_SALT: ""
+    KMS_MASTER_KEY: ""
+    # Email (Resend)
+    RESEND_API_KEY: ""
+    # SMS (Twilio)
+    TWILIO_ACCOUNT_SID: ""
+    TWILIO_AUTH_TOKEN: ""
+    TWILIO_PHONE_NUMBER: ""
+    # Push (OneSignal)
+    ONESIGNAL_APP_ID: ""
+    ONESIGNAL_API_KEY: ""
+
+  # -- Coalition provider configurations (one entry per program)
+  coalition:
+    providers: []
+    # - programId: "prog_abc123"
+    #   provider: APPRECIO
+    #   endpoint: https://apiv2.dcanje.mx/api
+    #   publicToken: ""
+    #   privateToken: ""
+    #   identifierType: email
+    #   timeoutMs: 10000
+    #   accumulationEnabled: true
+    #   redemptionEnabled: true
+    #   conversionEnabled: true
+
+  # -- Kubernetes Service configuration
+  service:
+    type: ClusterIP
+    port: 3002
+    annotations: {}
+
+  # -- Health check configuration
+  healthcheck:
+    livenessPath: /healthz
+    readinessPath: /healthz
+    livenessPort: 3002
+    readinessPort: 3002
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Pod scheduling
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # -- Extra pod annotations
+  podAnnotations: {}
+  # -- Extra pod labels
+  podLabels: {}
+
+# =============================================================================
+# Admin Dashboard
+# =============================================================================
+admin:
+  # -- Deploy the Admin dashboard
+  enabled: true
+  # -- Number of Admin replicas
+  replicaCount: 1
+
+  image:
+    repository: loyaltyos-admin
+    tag: ""
+    pullPolicy: IfNotPresent
+    registry: ""
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+
+  healthcheck:
+    path: /
+    port: 80
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+
+# =============================================================================
+# Customer Portal
+# =============================================================================
+portal:
+  # -- Deploy the Customer Portal
+  enabled: true
+  # -- Number of Portal replicas
+  replicaCount: 1
+
+  image:
+    repository: loyaltyos-portal
+    tag: ""
+    pullPolicy: IfNotPresent
+    registry: ""
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+
+  healthcheck:
+    path: /
+    port: 80
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+
+# =============================================================================
+# BullMQ Worker
+# =============================================================================
+bullmqWorker:
+  # -- Deploy the BullMQ worker (scales independently from API)
+  enabled: true
+  # -- Number of worker replicas
+  replicaCount: 2
+
+  image:
+    repository: loyaltyos-api
+    tag: ""
+    pullPolicy: IfNotPresent
+    registry: ""
+
+  # -- Override the container command (defaults to worker entrypoint)
+  command: ["node", "apps/api/dist/worker.js"]
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+
+# =============================================================================
+# Database Migrations Job
+# =============================================================================
+migrations:
+  # -- Run Prisma migrations as an init Job before API pods start
+  enabled: true
+
+  image:
+    repository: loyaltyos-api
+    tag: ""
+    pullPolicy: IfNotPresent
+    registry: ""
+
+  # -- Job backoff limit
+  backoffLimit: 3
+  # -- TTL for completed Job pods (seconds)
+  ttlSecondsAfterFinished: 300
+
+  # -- Annotations for the Job (e.g., "helm.sh/hook": post-install,pre-upgrade)
+  annotations:
+    "helm.sh/hook": post-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# =============================================================================
+# Ingress
+# =============================================================================
+
+# -- API Ingress configuration
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: api.loyaltyos.local
+      paths:
+        - path: /
+          pathType: Prefix
+          port: 3002
+  tls: []
+  # - secretName: loyaltyos-api-tls
+  #   hosts:
+  #     - api.loyaltyos.example.com
+
+# -- Admin Ingress configuration (separate from API)
+adminIngress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: admin.loyaltyos.local
+      paths:
+        - path: /
+          pathType: Prefix
+          port: 80
+  tls: []
+
+# -- Portal Ingress configuration (separate from Admin)
+portalIngress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: portal.loyaltyos.local
+      paths:
+        - path: /
+          pathType: Prefix
+          port: 80
+  tls: []
+
+# =============================================================================
+# Network Policies
+# =============================================================================
+networkPolicy:
+  enabled: true
+  # -- Additional ingress rules (e.g., from monitoring namespace)
+  extraIngressRules: []
+  # - from:
+  #     - namespaceSelector:
+  #         matchLabels:
+  #           kubernetes.io/metadata.name: monitoring
+
+# =============================================================================
+# Service Account & RBAC
+# =============================================================================
+serviceAccount:
+  # -- Create a dedicated ServiceAccount for the API
+  create: true
+  annotations: {}
+  name: ""
+
+rbac:
+  # -- Create RBAC rules for the ServiceAccount
+  create: true
+  # -- Extra RBAC rules (e.g., for reading external secrets)
+  extraRules: []
+  # - apiGroups: ["external-secrets.io"]
+  #   resources: ["externalsecrets"]
+  #   verbs: ["get", "list"]
+
+# =============================================================================
+# Monitoring
+# =============================================================================
+monitoring:
+  enabled: true
+
+  serviceMonitor:
+    # -- Create a Prometheus ServiceMonitor for the API
+    enabled: true
+    # -- Scrape interval
+    interval: 30s
+    # -- Scrape timeout
+    scrapeTimeout: 10s
+    # -- Metric relabeling configs
+    metricRelabelings: []
+    # -- Additional labels for the ServiceMonitor
+    labels: {}
+
+# =============================================================================
+# PostgreSQL (Bitnami sub-chart)
+# =============================================================================
+postgresql:
+  # -- Deploy PostgreSQL via Bitnami sub-chart
+  enabled: true
+  auth:
+    username: loyaltyos
+    password: ""  # Auto-generated if empty
+    database: loyaltyos
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+# =============================================================================
+# Redis (Bitnami sub-chart)
+# =============================================================================
+redis:
+  # -- Deploy Redis via Bitnami sub-chart
+  enabled: true
+  architecture: standalone
+  auth:
+    password: ""  # Auto-generated if empty
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+# =============================================================================
+# External Services (override when postgresql.enabled=false)
+# =============================================================================
+externalDatabase:
+  enabled: false
+  host: ""
+  port: 5432
+  user: ""
+  password: ""
+  database: loyaltyos
+  ssl: true
+
+externalRedis:
+  enabled: false
+  host: ""
+  port: 6379
+  password: ""
+
+# =============================================================================
+# External Secrets Operator integration
+# =============================================================================
+externalSecrets:
+  # -- Use External Secrets Operator instead of inline secrets
+  enabled: false
+  # -- SecretStore reference
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: ""
+  # -- Keys to sync from the external secrets manager
+  keys: []
+  # - secretKey: JWT_SECRET
+  #   remoteRef:
+  #     key: /loyaltyos/production/jwt-secret
+  # - secretKey: API_KEY_SALT
+  #   remoteRef:
+  #     key: /loyaltyos/production/api-key-salt
+  # - secretKey: KMS_MASTER_KEY
+  #   remoteRef:
+  #     key: /loyaltyos/production/kms-master-key

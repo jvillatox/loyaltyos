@@ -80,6 +80,39 @@ services:
       - "${PORT_PORTAL:-5174}:80"
     restart: unless-stopped
 
+  # ── Monitoring (start with: docker compose --profile monitoring up) ──────
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter (collector's own metrics)
+    volumes:
+      - ./otel-collector-config.yml:/etc/otelcol/config.yml:ro
+    command: ["--config=/etc/otelcol/config.yml"]
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:
+  prometheus_data:

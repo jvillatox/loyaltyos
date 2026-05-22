@@ -54,183 +54,187 @@ const eventSchema = z.object({
 });
 
 export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
-  app.post("/events", async (request, reply) => {
-    const idempotencyKey = request.headers["idempotency-key"] as string;
-    if (!idempotencyKey) {
-      return reply.status(400).send({
-        error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+  app.post(
+    "/events",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const idempotencyKey = request.headers["idempotency-key"] as string;
+      if (!idempotencyKey) {
+        return reply.status(400).send({
+          error: { code: "MISSING_HEADER", message: "Idempotency-Key header is required" },
+        });
+      }
+
+      const body = eventSchema.parse(request.body);
+
+      // Deduplicate the event
+      const existing = await prisma.event.findUnique({
+        where: { idempotencyKey },
       });
-    }
+      if (existing) {
+        return reply.send({ data: existing, idempotent: true });
+      }
 
-    const body = eventSchema.parse(request.body);
+      // Create event
+      const programId = request.programId || (request.headers["x-program-id"] as string);
+      const event = await prisma.event.create({
+        data: {
+          programId,
+          type: body.type,
+          memberId: body.memberId,
+          payload: body.payload as Prisma.InputJsonValue,
+          idempotencyKey,
+          processed: false,
+        },
+      });
 
-    // Deduplicate the event
-    const existing = await prisma.event.findUnique({
-      where: { idempotencyKey },
-    });
-    if (existing) {
-      return reply.send({ data: existing, idempotent: true });
-    }
+      // If the event is for a member and represents points-earning activity,
+      // process it through the points engine
+      if (body.memberId) {
+        try {
+          // For "purchase" events, earn points
+          if (body.type === "purchase") {
+            const amount =
+              body.payload && typeof body.payload === "object" && "amount" in body.payload
+                ? Number((body.payload as Record<string, number>).amount)
+                : 0;
 
-    // Create event
-    const programId = request.programId || (request.headers["x-program-id"] as string);
-    const event = await prisma.event.create({
-      data: {
-        programId,
-        type: body.type,
-        memberId: body.memberId,
-        payload: body.payload as Prisma.InputJsonValue,
-        idempotencyKey,
-        processed: false,
-      },
-    });
+            if (amount > 0) {
+              const result = await points.earn({
+                memberId: body.memberId,
+                programId: programId,
+                amount,
+                source: `event:${body.type}`,
+                idempotencyKey: `${idempotencyKey}-earn`,
+                metadata: body.payload,
+              });
 
-    // If the event is for a member and represents points-earning activity,
-    // process it through the points engine
-    if (body.memberId) {
-      try {
-        // For "purchase" events, earn points
-        if (body.type === "purchase") {
-          const amount =
-            body.payload && typeof body.payload === "object" && "amount" in body.payload
-              ? Number((body.payload as Record<string, number>).amount)
-              : 0;
+              // Evaluate and apply eligible campaigns
+              const evaluation = await campaigns.evaluateForEvent({
+                type: body.type,
+                memberId: body.memberId,
+                programId: programId,
+                amount,
+                payload: body.payload,
+              });
 
-          if (amount > 0) {
+              const appliedCampaigns: unknown[] = [];
+              for (const campaign of evaluation.applicable) {
+                try {
+                  const appResult = await campaigns.applyCampaign(
+                    campaign.id,
+                    {
+                      type: body.type,
+                      memberId: body.memberId,
+                      programId: programId,
+                      amount,
+                      payload: body.payload,
+                    },
+                    `${idempotencyKey}-campaign-${campaign.id}`,
+                  );
+                  appliedCampaigns.push(appResult);
+                } catch (err) {
+                  request.log.warn({ err, campaignId: campaign.id }, "Failed to apply campaign");
+                }
+              }
+
+              await prisma.event.update({
+                where: { id: event.id },
+                data: {
+                  processed: true,
+                  processedAt: new Date(),
+                },
+              });
+
+              // Fire notification trigger (fire-and-forget)
+              void triggerNotification("points.earned", body.memberId, programId, {
+                points: result.amount,
+                balance: result.balanceAfter,
+                amount,
+                transactionId: result.transactionId,
+              });
+
+              // Evaluate tier changes (fire-and-forget)
+              void (async () => {
+                try {
+                  const tierResult = await tiers.evaluateMember(body.memberId!, programId);
+                  if (tierResult.changed && tierResult.direction === "upgrade") {
+                    void triggerNotification("tier.changed", body.memberId!, programId, {
+                      previousTier: tierResult.previousTier?.name,
+                      currentTier: tierResult.currentTier?.name,
+                      direction: "upgrade",
+                    });
+                  }
+                } catch (err) {
+                  console.error("[Tiers] Evaluation failed:", err);
+                }
+              })();
+
+              // Evaluate badges for this event (fire-and-forget)
+              void (async () => {
+                try {
+                  const badgeResult = await badges.evaluateOnEvent({
+                    type: body.type,
+                    memberId: body.memberId!,
+                    programId,
+                    amount,
+                    payload: body.payload,
+                  });
+                  for (const unlocked of badgeResult.unlocked) {
+                    void triggerNotification("badge.unlocked", body.memberId!, programId, {
+                      badgeId: unlocked.id,
+                      badgeName: unlocked.name,
+                      badgeType: unlocked.type,
+                    });
+                  }
+                } catch (err) {
+                  console.error("[Badges] Evaluation failed:", err);
+                }
+              })();
+
+              return reply.status(201).send({
+                data: { event, earnResult: result, appliedCampaigns },
+              });
+            }
+          }
+
+          // For "registration" events, grant sign-up bonus
+          if (body.type === "registration") {
+            const bonus = 500; // Default signup bonus
             const result = await points.earn({
               memberId: body.memberId,
               programId: programId,
-              amount,
-              source: `event:${body.type}`,
-              idempotencyKey: `${idempotencyKey}-earn`,
-              metadata: body.payload,
+              amount: bonus,
+              source: "signup_bonus",
+              idempotencyKey: `${idempotencyKey}-bonus`,
             });
-
-            // Evaluate and apply eligible campaigns
-            const evaluation = await campaigns.evaluateForEvent({
-              type: body.type,
-              memberId: body.memberId,
-              programId: programId,
-              amount,
-              payload: body.payload,
-            });
-
-            const appliedCampaigns: unknown[] = [];
-            for (const campaign of evaluation.applicable) {
-              try {
-                const appResult = await campaigns.applyCampaign(
-                  campaign.id,
-                  {
-                    type: body.type,
-                    memberId: body.memberId,
-                    programId: programId,
-                    amount,
-                    payload: body.payload,
-                  },
-                  `${idempotencyKey}-campaign-${campaign.id}`,
-                );
-                appliedCampaigns.push(appResult);
-              } catch (err) {
-                request.log.warn({ err, campaignId: campaign.id }, "Failed to apply campaign");
-              }
-            }
 
             await prisma.event.update({
               where: { id: event.id },
-              data: {
-                processed: true,
-                processedAt: new Date(),
-              },
+              data: { processed: true, processedAt: new Date() },
             });
 
             // Fire notification trigger (fire-and-forget)
-            void triggerNotification("points.earned", body.memberId, programId, {
+            void triggerNotification("registration", body.memberId, programId, {
+              bonus,
               points: result.amount,
               balance: result.balanceAfter,
-              amount,
-              transactionId: result.transactionId,
             });
 
-            // Evaluate tier changes (fire-and-forget)
-            void (async () => {
-              try {
-                const tierResult = await tiers.evaluateMember(body.memberId!, programId);
-                if (tierResult.changed && tierResult.direction === "upgrade") {
-                  void triggerNotification("tier.changed", body.memberId!, programId, {
-                    previousTier: tierResult.previousTier?.name,
-                    currentTier: tierResult.currentTier?.name,
-                    direction: "upgrade",
-                  });
-                }
-              } catch (err) {
-                console.error("[Tiers] Evaluation failed:", err);
-              }
-            })();
-
-            // Evaluate badges for this event (fire-and-forget)
-            void (async () => {
-              try {
-                const badgeResult = await badges.evaluateOnEvent({
-                  type: body.type,
-                  memberId: body.memberId!,
-                  programId,
-                  amount,
-                  payload: body.payload,
-                });
-                for (const unlocked of badgeResult.unlocked) {
-                  void triggerNotification("badge.unlocked", body.memberId!, programId, {
-                    badgeId: unlocked.id,
-                    badgeName: unlocked.name,
-                    badgeType: unlocked.type,
-                  });
-                }
-              } catch (err) {
-                console.error("[Badges] Evaluation failed:", err);
-              }
-            })();
-
-            return reply.status(201).send({
-              data: { event, earnResult: result, appliedCampaigns },
-            });
+            return reply.status(201).send({ data: { event, earnResult: result } });
           }
-        }
-
-        // For "registration" events, grant sign-up bonus
-        if (body.type === "registration") {
-          const bonus = 500; // Default signup bonus
-          const result = await points.earn({
-            memberId: body.memberId,
-            programId: programId,
-            amount: bonus,
-            source: "signup_bonus",
-            idempotencyKey: `${idempotencyKey}-bonus`,
-          });
-
+        } catch (err) {
           await prisma.event.update({
             where: { id: event.id },
-            data: { processed: true, processedAt: new Date() },
+            data: { error: String(err) },
           });
-
-          // Fire notification trigger (fire-and-forget)
-          void triggerNotification("registration", body.memberId, programId, {
-            bonus,
-            points: result.amount,
-            balance: result.balanceAfter,
-          });
-
-          return reply.status(201).send({ data: { event, earnResult: result } });
+          throw err;
         }
-      } catch (err) {
-        await prisma.event.update({
-          where: { id: event.id },
-          data: { error: String(err) },
-        });
-        throw err;
       }
-    }
 
-    return reply.status(201).send({ data: event });
-  });
+      return reply.status(201).send({ data: event });
+    },
+  );
 
   done();
 }

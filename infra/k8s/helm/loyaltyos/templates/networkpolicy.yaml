@@ -1,0 +1,53 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-api
+  labels:
+    {{- include "loyaltyos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "loyaltyos.api.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "loyaltyos.admin.selectorLabels" . | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "loyaltyos.portal.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.service.port }}
+    # Allow ingress from ingress controller
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.service.port }}
+    {{- with .Values.networkPolicy.extraIngressRules }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow external API calls (coalition, email, SMS, push)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+{{- end }}

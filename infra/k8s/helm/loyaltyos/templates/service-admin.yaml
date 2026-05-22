@@ -1,0 +1,21 @@
+{{- if .Values.admin.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "loyaltyos.fullname" . }}-admin
+  labels:
+    {{- include "loyaltyos.admin.labels" . | nindent 4 }}
+  {{- with .Values.admin.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.admin.service.type }}
+  ports:
+    - port: {{ .Values.admin.service.port }}
+      targetPort: {{ .Values.admin.service.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "loyaltyos.admin.selectorLabels" . | nindent 4 }}
+{{- end }}
