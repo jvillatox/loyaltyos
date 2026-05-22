@@ -41,13 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Credential Encryption** — AES-256-GCM at rest with KMS_MASTER_KEY support.
 - **Admin Panel** — config page, transactions with detail timeline, linked members management, manual reconciliation.
 
+### Security
+
+- **Admin Auth (argon2id)** — Admin login replaced Lucia with direct argon2id password hashing (memory 19456 KiB, time 2, parallelism 1). Session tokens are opaque random values with expiry, stored in a dedicated `AdminSession` table.
+- **Login Timing Equalization** — Invalid-email and wrong-password paths run the same argon2 verification (against a dummy hash when the email doesn't exist), preventing email enumeration via response latency.
+- **Dependency Audit** — Full `pnpm audit --prod` reviewed. Fastify 4.x vulnerabilities documented with compensating controls (Zod validation, no sendWebStream usage). Docusaurus build-time issues tracked upstream.
+
 ### Production
 
-- **Helm Chart** — 33 K8s resources with sub-charts (Bitnami PostgreSQL 16, Redis 7), HPA v2 (CPU + memory), Ingress (nginx + cert-manager), migrations Job (Helm hook), ServiceMonitor for Prometheus, PDB, NetworkPolicy, External Secrets Operator support.
-- **Observability** — OpenTelemetry tracing (HTTP, PostgreSQL, Redis auto-instrumentation), Prometheus metrics (HTTP RPS/latency/errors, BullMQ queue depth/duration/throughput, Node.js defaults), Grafana dashboards (API Overview, BullMQ Queues).
+- **Helm Chart** — 33 K8s resources with sub-charts (Bitnami PostgreSQL 16, Redis 7), HPA v2 (CPU + memory), Ingress (nginx + cert-manager), migrations Job (Helm hook), ServiceMonitor for Prometheus, PDB, NetworkPolicy, External Secrets Operator support. Auto-published to GitHub Pages via `chart-releaser-action`.
+- **Observability** — OpenTelemetry tracing (HTTP, PostgreSQL, Redis auto-instrumentation), Prometheus metrics (HTTP RPS/latency/errors, BullMQ queue depth/duration/throughput, Node.js defaults), Grafana dashboards (API Overview, BullMQ Queues, Business Metrics).
+- **Business KPIs** — 13 `loyaltyos_*` Prometheus metrics: points earned/redeemed/reversed/adjusted/expired, balance gauge, insufficient balance counter, coupons redeemed/created/discount histogram, coalition operations (by provider), circuit breaker state, and active members gauge. Wired via adapter pattern into PointsService, CouponsService, and CoalitionService.
+- **Active Members Job** — Hourly scheduled job queries `lastActiveAt` (new column on Member) to set `loyaltyos_active_members_total` per program.
 - **Standalone Worker** — BullMQ worker entry point for independent K8s scaling.
-- **Docker Compose** — production stack with Prometheus + OTEL Collector via monitoring profile.
-- **CI/CD** — GitHub Actions: CI (typecheck, lint, test with PostgreSQL + Redis services), Docker (build + push to GHCR on tags), Docs (Docusaurus deploy to GitHub Pages).
+- **Docker Compose** — production stack with Prometheus + Grafana + OTEL Collector via `--profile monitoring`.
+- **npm Package** — `@loyaltyos/widget` published to npm on every `v*` release. Lit Web Component with IIFE + ESM outputs (~45 KB gzipped).
+- **CI/CD** — GitHub Actions: CI (build, typecheck, lint, test with PostgreSQL 14/15/16 matrix + Redis, Codecov upload), Docker (build + push to GHCR with `latest` tag for stable releases), Docs (Docusaurus deploy to GitHub Pages), Release (Helm publish to gh-pages, npm widget publish, GitHub Release with changelog), CodeQL (weekly + on PR), Smoke Test (Docker Compose health checks), Dependabot (npm weekly, Docker monthly, Actions weekly), CODEOWNERS, issue templates (bug/feature), PR template.
 - **Documentation** — 27-page Docusaurus site across 7 sections. Custom logo and branding.
 
 ### Changed

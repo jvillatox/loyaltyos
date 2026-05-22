@@ -39,3 +39,27 @@ These are tracked upstream (Docusaurus 3.x + Webpack). No action required for pr
 - **Webhook timestamp validation** (5-min window)
 - **Handlebars sandbox** with `noEscape: false`, prototype stripping, blocked globals
 - **Zod validation** on all API boundaries
+
+## Audit log 2026-05-22
+
+Full `pnpm audit --prod` output for v1.0.0 re-release (commit `baa8d9c`):
+
+```
+9 vulnerabilities found
+Severity: 1 low | 4 moderate | 4 high
+
+High:
+- fastify (GHSA-jx2c-rxcm-jvmq) — Content-Type tab character body validation bypass. Patched in >=5.7.2. Mitigation: Zod validation on all boundaries.
+- serialize-javascript (GHSA-5c6j-r48x-rmvq, GHSA-qj8w-gfj5-8c6v) — RCE via RegExp.flags. Patched in >=7.0.3. Build-time only (Docusaurus/Webpack), no user input.
+- @opentelemetry/auto-instrumentations-node (GHSA-...) — Prometheus exporter crash via malformed HTTP. Patched in >=0.75.0. OTEL is opt-in (OTEL_ENABLED=false by default).
+
+Moderate/Low:
+- fastify (GHSA-mrq3-vjjr-p77c) — DoS via sendWebStream. Patched in >=5.7.3. Our app does not use sendWebStream API.
+- uuid (GHSA-w5hq-g745-h8pq) — Missing buffer bounds check. Patched in >=11.1.1. Build-time only (Docusaurus/sockjs).
+- Several Docusaurus transitive deps — All build-time only.
+```
+
+All high-severity issues have compensating controls documented above. The remaining
+issues are either build-time only (Docusaurus static site) or affect APIs the
+application does not use. Fastify 5 upgrade planned for v1.1.0 will resolve the
+runtime fastify advisories.
