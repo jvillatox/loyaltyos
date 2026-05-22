@@ -1,8 +1,17 @@
 {
   "name": "@loyaltyos/widget",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
+  "main": "dist/loyalty-widget.iife.js",
+  "module": "dist/loyalty-widget.es.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
