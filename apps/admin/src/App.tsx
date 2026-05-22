@@ -11,6 +11,7 @@ import { CoalitionTransactionsPage } from "@/pages/coalition/transactions";
 import { CouponBulkGeneratePage } from "@/pages/coupon-bulk-generate";
 import { CouponsListPage } from "@/pages/coupons-list";
 import { DashboardPage } from "@/pages/dashboard";
+import { LoginPage } from "@/pages/login";
 import { MemberDetailPage } from "@/pages/member-detail";
 import { MembersListPage } from "@/pages/members-list";
 import { RewardsEditorPage } from "@/pages/rewards/rewards-editor";
@@ -23,6 +24,7 @@ import { TiersListPage } from "@/pages/tiers-list";
 export function App(): JSX.Element {
   return (
     <Routes>
+      <Route path="/login" element={<LoginPage />} />
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="/members" element={<MembersListPage />} />

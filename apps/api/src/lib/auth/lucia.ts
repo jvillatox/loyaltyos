@@ -28,9 +28,13 @@ declare module "lucia" {
   interface Register {
     Lucia: typeof lucia;
     DatabaseUserAttributes: {
+      // Member fields
       email: string | null;
       firstName: string | null;
       lastName: string | null;
+      // AdminUser fields
+      name: string | null;
+      role: string | null;
       programId: string;
     };
   }

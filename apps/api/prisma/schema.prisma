@@ -563,8 +563,9 @@ model AdminUser {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  program   Program    @relation(fields: [programId], references: [id], onDelete: Restrict)
-  auditLogs AuditLog[]
+  program      Program        @relation(fields: [programId], references: [id], onDelete: Restrict)
+  auditLogs    AuditLog[]
+  sessions     AdminSession[]
 
   @@index([programId])
   @@index([email])
@@ -577,6 +578,17 @@ model Session {
   createdAt DateTime @default(now())
 
   user Member @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AdminSession {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  adminUser AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

@@ -11,7 +11,7 @@ interface FastifyMetricsPluginOptions {
 }
 
 export const createFastifyMetricsPlugin = fp<FastifyMetricsPluginOptions>(
-  (app: FastifyInstance, opts: FastifyMetricsPluginOptions) => {
+  (app: FastifyInstance, opts: FastifyMetricsPluginOptions, done: (err?: Error) => void) => {
     const { registry } = opts;
 
     app.get(METRICS_ROUTE, async (_req: FastifyRequest, reply: FastifyReply) => {
@@ -40,6 +40,8 @@ export const createFastifyMetricsPlugin = fp<FastifyMetricsPluginOptions>(
 
       done();
     });
+
+    done();
   },
   {
     name: "fastify-metrics",

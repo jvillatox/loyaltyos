@@ -15,6 +15,7 @@ import Fastify from "fastify";
 import { prisma } from "./db.js";
 import { errorHandler } from "./lib/error-handler.js";
 import { authPlugin } from "./plugins/auth.js";
+import { adminAuthRoutes } from "./routes/admin/auth.js";
 import { adminBadgesRoutes } from "./routes/admin/badges.js";
 import { adminCampaignsRoutes } from "./routes/admin/campaigns.js";
 import { adminCoalitionRoutes } from "./routes/admin/coalition.js";
@@ -144,6 +145,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
 
   // Public routes (before auth plugin)
   await app.register(authRoutes, { prefix: "/api/v1" });
+  await app.register(adminAuthRoutes, { prefix: "/api/v1" });
 
   // Custom plugins
   await app.register(authPlugin);

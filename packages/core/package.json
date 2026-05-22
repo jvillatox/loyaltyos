@@ -12,7 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/client": "^5.15.0"
+    "@prisma/client": "^5.15.0",
+    "argon2": "^0.44.0"
   },
   "devDependencies": {
     "@loyaltyos/config-eslint": "workspace:*",

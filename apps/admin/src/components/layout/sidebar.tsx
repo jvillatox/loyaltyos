@@ -4,6 +4,7 @@ import {
   Gift,
   LayoutDashboard,
   Link2,
+  LogOut,
   Megaphone,
   PieChart,
   Ticket,
@@ -12,6 +13,7 @@ import {
 import { NavLink } from "react-router-dom";
 
 import { Separator } from "@/components/ui/separator";
+import { adminLogout, isAdminAuthenticated } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -28,11 +30,11 @@ const links = [
 
 export function Sidebar(): JSX.Element {
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r bg-background">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r bg-background">
       <div className="flex h-14 items-center border-b px-6">
         <span className="text-lg font-semibold">LoyaltyOS</span>
       </div>
-      <nav className="space-y-1 p-4">
+      <nav className="flex-1 space-y-1 p-4">
         {links.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -52,6 +54,19 @@ export function Sidebar(): JSX.Element {
           </NavLink>
         ))}
       </nav>
+      {isAdminAuthenticated() && (
+        <div className="border-t p-4">
+          <button
+            onClick={() => {
+              void adminLogout();
+            }}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
+      )}
       <Separator />
     </aside>
   );

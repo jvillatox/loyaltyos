@@ -32,6 +32,7 @@
     "@loyaltyos/telemetry": "workspace:*",
     "@lucia-auth/adapter-prisma": "^4.0.1",
     "@prisma/client": "^5.15.0",
+    "argon2": "^0.44.0",
     "bullmq": "^5.76.9",
     "fastify": "^4.28.0",
     "fastify-plugin": "^5.1.0",

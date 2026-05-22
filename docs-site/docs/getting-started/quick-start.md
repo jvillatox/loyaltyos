@@ -58,7 +58,16 @@ The seed script creates a demo program with:
 
 - **API Key:** `dev-key`
 - **Program ID:** `prog_dev`
-- **Admin User:** `admin@loyaltyos.dev`
+- **Admin Email:** `admin@loyaltyos.dev`
+- **Admin Password:** `demo1234`
+
+## Sign in to the Admin UI
+
+1. Open [http://localhost:5174](http://localhost:5174) in your browser
+2. Enter the demo credentials above
+3. You're redirected to the dashboard — all admin endpoints use an httpOnly session cookie (argon2id hashed)
+
+To sign out, click **Sign out** at the bottom of the sidebar.
 
 ## Test the API
 

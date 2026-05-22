@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unnecessary-condition */
 
+import { hashPassword } from "@loyaltyos/core";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient({
@@ -61,16 +62,19 @@ async function main(): Promise<void> {
   console.log(`Created API key: ${apiKey.key}`);
 
   // === Admin User ===
+  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD ?? "admin123";
+  const hashedPassword = await hashPassword(adminPassword);
   const admin = await prisma.adminUser.create({
     data: {
       email: "admin@loyaltyos.dev",
       name: "Admin Demo",
       role: "SUPER_ADMIN",
-      passwordHash: "demo-hash-not-for-production",
+      passwordHash: hashedPassword,
       programId: program.id,
     },
   });
   console.log(`Created admin user: ${admin.email}`);
+  console.log(`Admin password:      ${adminPassword} (change in production!)`);
 
   // === Tiers ===
   const tiers = await Promise.all([
