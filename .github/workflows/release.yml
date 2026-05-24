@@ -66,6 +66,8 @@ jobs:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
       - run: pnpm test
+        env:
+          DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
   docker:
     name: Build & Push Docker Images

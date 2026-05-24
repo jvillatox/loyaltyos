@@ -114,12 +114,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
-      - name: Debug env
-        run: |
-          echo "DATABASE_URL is set: $([ -n \"$DATABASE_URL\" ] && echo yes || echo no)"
-          echo "DATABASE_URL length: ${#DATABASE_URL}"
-
       - run: pnpm test -- -- --coverage
+        env:
+          DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
       - uses: codecov/codecov-action@v4
         with:
