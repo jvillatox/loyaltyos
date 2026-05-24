@@ -208,6 +208,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Delete stale chart-releaser tag
+        run: |
+          CHART_TAG="loyaltyos-$(grep '^version:' infra/k8s/helm/loyaltyos/Chart.yaml | awk '{print $2}')"
+          if git ls-remote --exit-code --tags origin "$CHART_TAG" 2>/dev/null; then
+            echo "Deleting stale tag $CHART_TAG"
+            git push origin ":refs/tags/$CHART_TAG"
+          else
+            echo "No stale chart tag found"
+          fi
+
       - name: Ensure gh-pages branch exists
         run: |
           git fetch origin gh-pages 2>/dev/null || true
