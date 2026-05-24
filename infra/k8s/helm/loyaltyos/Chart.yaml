@@ -4,6 +4,7 @@ description: LoyaltyOS — Open source customer loyalty platform with native coa
 type: application
 version: 1.0.0
 appVersion: "1.0.0"
+kubeVersion: ">=1.27.0-0"
 icon: https://raw.githubusercontent.com/jvillatox/loyaltyos/main/docs-site/static/img/logo.svg
 home: https://github.com/jvillatox/loyaltyos
 sources:
