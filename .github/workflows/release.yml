@@ -203,6 +203,11 @@ jobs:
       - name: Update dependencies
         run: helm dependency update infra/k8s/helm/loyaltyos
 
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Ensure gh-pages branch exists
         run: |
           if ! git ls-remote --exit-code --heads origin gh-pages; then
@@ -214,11 +219,6 @@ jobs:
             git push origin gh-pages
             git checkout -
           fi
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - uses: helm/chart-releaser-action@v1.6.0
         with:
