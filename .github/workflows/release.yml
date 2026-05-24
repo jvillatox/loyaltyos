@@ -203,6 +203,18 @@ jobs:
       - name: Update dependencies
         run: helm dependency update infra/k8s/helm/loyaltyos
 
+      - name: Ensure gh-pages branch exists
+        run: |
+          if ! git ls-remote --exit-code --heads origin gh-pages; then
+            git checkout --orphan gh-pages
+            git reset --hard
+            echo "# Helm Charts" > README.md
+            git add README.md
+            git commit -m "chore: initialize gh-pages branch for Helm charts"
+            git push origin gh-pages
+            git checkout -
+          fi
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
