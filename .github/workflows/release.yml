@@ -67,10 +67,9 @@ jobs:
 
       - name: Write .env for vitest
         run: |
-          cat > apps/api/.env << 'DOTENV'
-          DATABASE_URL=postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
-          REDIS_URL=redis://localhost:6379
-          DOTENV
+          echo "DATABASE_URL=$DATABASE_URL" > apps/api/.env
+          echo "REDIS_URL=$REDIS_URL" >> apps/api/.env
+          echo "--- apps/api/.env written ($(wc -c < apps/api/.env) bytes) ---"
 
       - run: pnpm test
 
