@@ -161,7 +161,7 @@ jobs:
 
       - uses: azure/setup-helm@v4
         with:
-          version: v3
+          version: v3.17.0
 
       - name: Add Bitnami repo
         run: helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -188,7 +188,7 @@ jobs:
 
       - uses: azure/setup-helm@v4
         with:
-          version: v3
+          version: v3.17.0
 
       - name: Configure git
         run: |
