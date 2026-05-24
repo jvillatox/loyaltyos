@@ -65,6 +65,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
+      - name: Seed database
+        run: pnpm --filter @loyaltyos/api exec tsx prisma/seed.ts
+        env:
+          DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+
       - name: Write .env for vitest
         run: |
           echo "DATABASE_URL=$DATABASE_URL" > apps/api/.env
