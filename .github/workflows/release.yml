@@ -130,6 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test
+    continue-on-error: true
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
