@@ -114,9 +114,14 @@ jobs:
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
+      - name: Write .env for vitest
+        run: |
+          cat > apps/api/.env << 'DOTENV'
+          DATABASE_URL=postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+          REDIS_URL=redis://localhost:6379
+          DOTENV
+
       - run: pnpm test -- -- --coverage
-        env:
-          DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
       - uses: codecov/codecov-action@v4
         with:
