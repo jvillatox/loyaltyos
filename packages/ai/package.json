@@ -1,0 +1,6 @@
+{
+  "name": "@loyaltyos/ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI layer for LoyaltyOS — Cowork skill and shared utilities"
+}
