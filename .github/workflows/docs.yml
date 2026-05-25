@@ -8,6 +8,7 @@ on:
       - docs/**
       - CHANGELOG.md
       - .github/workflows/docs.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,6 +38,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm --filter loyaltyos-docs build
+
+      - name: Fetch Helm chart index
+        run: |
+          mkdir -p docs-site/build/helm
+          curl -fsSL \
+            https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/index.yaml \
+            -o docs-site/build/helm/index.yaml
+          echo "Helm index fetched ($(wc -c < docs-site/build/helm/index.yaml) bytes)"
 
       - uses: actions/configure-pages@v4
 

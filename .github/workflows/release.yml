@@ -266,7 +266,7 @@ jobs:
             echo "## Deploy"
             echo
             echo '```bash'
-            echo "helm repo add loyaltyos https://jvillatox.github.io/loyaltyos"
+            echo "helm repo add loyaltyos https://jvillatox.github.io/loyaltyos/helm"
             echo "helm upgrade --install loyaltyos loyaltyos/loyaltyos --version ${{ github.ref_name }}"
             echo '```'
           } > /tmp/release-body.md
@@ -275,3 +275,15 @@ jobs:
         with:
           body_path: /tmp/release-body.md
           generate_release_notes: true
+
+  trigger-docs:
+    name: Trigger Docs Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [helm-publish, github-release]
+    steps:
+      - name: Trigger docs workflow
+        run: |
+          gh workflow run docs.yml --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
