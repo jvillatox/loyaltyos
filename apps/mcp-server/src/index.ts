@@ -5,6 +5,7 @@ import http from "node:http";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { LoyaltyOSClient } from "./client.js";
+import { defaultRateLimiter } from "./rate-limiter.js";
 import { createMcpServer } from "./server.js";
 
 const LOYALTYOS_API_URL = process.env.LOYALTYOS_API_URL ?? "http://localhost:3002";
@@ -49,6 +50,7 @@ async function startSSE(): Promise<void> {
 
       if (req.method === "POST" && req.url === "/mcp") {
         try {
+          defaultRateLimiter.check("sse");
           const server = createMcpServer(client);
           const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: undefined,

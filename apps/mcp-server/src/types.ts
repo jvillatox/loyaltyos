@@ -120,3 +120,53 @@ export interface LoyaltyOSError {
   message: string;
   code?: string;
 }
+
+export interface CoalitionBalance {
+  memberId: string;
+  coalitionBalance: number;
+  provider: string;
+}
+
+export interface CoalitionTxResult {
+  txId: string;
+  coalitionRef: string;
+  newBalance: number;
+}
+
+export interface CoalitionConvertResult {
+  deductedOwnPoints: number;
+  creditedCoalitionPoints: number;
+  conversionRate: number;
+  newOwnBalance: number;
+  newCoalitionBalance: number;
+}
+
+export interface Tier {
+  name: string;
+  minPoints: number;
+  benefits: string[];
+}
+
+export interface ProgramConfig {
+  name: string;
+  currency: string;
+  tiers: Tier[];
+  pointExpiryDays: number | null;
+  coalitionEnabled: boolean;
+  coalitionProvider: string | null;
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  createdAt: string;
+}
+
+export interface RedemptionStats {
+  totalRedemptions: number;
+  totalPointsBurned: number;
+  uniqueMembers: number;
+  topRewards?: { id: string; name: string; redemptions: number; pointsBurned: number }[];
+}

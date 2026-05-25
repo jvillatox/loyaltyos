@@ -22,13 +22,14 @@ cd apps/mcp-server && pnpm dev:sse
 
 ## Environment Variables
 
-| Variable            | Default                 | Description                                  |
-| ------------------- | ----------------------- | -------------------------------------------- |
-| `MCP_TRANSPORT`     | `stdio`                 | Transport mode: `stdio` or `sse`             |
-| `MCP_SERVER_PORT`   | `3010`                  | HTTP port when running in SSE mode           |
-| `MCP_API_KEY`       | —                       | API key that MCP clients use to authenticate |
-| `LOYALTYOS_API_URL` | `http://localhost:3002` | Internal URL to the LoyaltyOS REST API       |
-| `LOYALTYOS_API_KEY` | —                       | API key to call the LoyaltyOS API            |
+| Variable             | Default                 | Description                                  |
+| -------------------- | ----------------------- | -------------------------------------------- |
+| `MCP_TRANSPORT`      | `stdio`                 | Transport mode: `stdio` or `sse`             |
+| `MCP_SERVER_PORT`    | `3010`                  | HTTP port when running in SSE mode           |
+| `MCP_API_KEY`        | —                       | API key that MCP clients use to authenticate |
+| `MCP_RATE_LIMIT_RPM` | `100`                   | Max tool calls per minute                    |
+| `LOYALTYOS_API_URL`  | `http://localhost:3002` | Internal URL to the LoyaltyOS REST API       |
+| `LOYALTYOS_API_KEY`  | —                       | API key to call the LoyaltyOS API            |
 
 ## Claude Code Integration
 
@@ -104,6 +105,41 @@ Connect remote agents to `http://localhost:3010/mcp`.
 | --------------- | ------------------------------------------ |
 | `coupon_create` | Create a coupon or batch of unique coupons |
 
+### Rewards
+
+| Tool                      | Description                                              |
+| ------------------------- | -------------------------------------------------------- |
+| `rewards_catalog`         | Browse the loyalty rewards catalog with optional filters |
+| `reward_create`           | Add a new item to the rewards catalog                    |
+| `reward_redemption_stats` | Get redemption statistics for a reward or all rewards    |
+
+### Coalition
+
+| Tool                   | Description                                                             |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `coalition_balance`    | Get a member's balance in the external coalition system (e.g. Apprecio) |
+| `coalition_accumulate` | Send points to the coalition system on behalf of a member               |
+| `coalition_convert`    | Convert a member's LoyaltyOS points into coalition points               |
+
+### Program
+
+| Tool                 | Description                                                                |
+| -------------------- | -------------------------------------------------------------------------- |
+| `program_config_get` | Get the current loyalty program configuration (tiers, rules, integrations) |
+| `webhooks_list`      | List configured webhooks for the loyalty program                           |
+
+## MCP Resources
+
+The server exposes read-only resources that agents can browse as reference data:
+
+| Resource URI                   | Description                                           |
+| ------------------------------ | ----------------------------------------------------- |
+| `loyaltyos://program/overview` | Program summary: KPIs, active members, tier structure |
+| `loyaltyos://campaigns/active` | All currently running campaigns with rules and stats  |
+| `loyaltyos://tiers/config`     | Tier names, thresholds, and benefits in table format  |
+
+Resources return formatted markdown for easy reading by AI agents.
+
 ## Tool Input/Output Examples
 
 ### member_get
@@ -141,6 +177,34 @@ Input:  { "period": "30d" }
 Output: { "activeMembers": 50000, "pointsIssued": 250000, "redemptionRate": 0.35, "topCampaigns": [...], "period": "30d" }
 ```
 
+### coalition_convert
+
+```
+Input:  { "memberId": "mem_1", "ownPoints": 1000 }
+Output: { "deductedOwnPoints": 1000, "creditedCoalitionPoints": 1000, "conversionRate": 1.0, "newOwnBalance": 500, "newCoalitionBalance": 2500 }
+```
+
+## Error Codes
+
+All tools return structured errors via `McpToolError`:
+
+| Code             | HTTP Mapping | Description                              |
+| ---------------- | ------------ | ---------------------------------------- |
+| `NOT_FOUND`      | 404          | Resource does not exist                  |
+| `VALIDATION`     | 400          | Invalid input or business rule violation |
+| `UNAUTHORIZED`   | 401/403      | Missing or invalid API key               |
+| `UPSTREAM_ERROR` | 500/502      | LoyaltyOS API or external system error   |
+
+## Rate Limiting
+
+In SSE mode, the server enforces rate limiting via an in-memory sliding window:
+
+- **Default:** 100 tool calls per minute
+- **Configurable:** Set `MCP_RATE_LIMIT_RPM` env var
+- **Error:** Returns a `UPSTREAM_ERROR` with `retryAfterSec` hint when exceeded
+
+Stdio mode (single client) does not apply rate limiting.
+
 ## Security
 
 - **API Key Authentication**: All MCP client connections must include a valid `MCP_API_KEY`
@@ -160,6 +224,7 @@ MCP Client (Claude / OpenAI / Custom Agent)
 apps/mcp-server (this app)
     │  Zod validation on all tool inputs
     │  McpToolError → structured error codes
+    │  Rate limiting (SSE mode)
     │
     ▼
 apps/api (LoyaltyOS REST API on port 3002)

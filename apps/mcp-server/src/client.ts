@@ -6,11 +6,17 @@ import type {
   BadgeProgress,
   Campaign,
   CampaignAnalytics,
+  CoalitionBalance,
+  CoalitionConvertResult,
+  CoalitionTxResult,
   Coupon,
   Member,
   PointTransaction,
+  ProgramConfig,
+  RedemptionStats,
   Reward,
   Segment,
+  Webhook,
 } from "./types.js";
 
 export class LoyaltyOSClient {
@@ -296,6 +302,62 @@ export class LoyaltyOSClient {
       "/api/admin/rewards",
       payload,
     );
+    return data;
+  }
+
+  async getRedemptionStats(
+    rewardId?: string,
+    period?: "7d" | "30d" | "90d" | "365d",
+  ): Promise<RedemptionStats> {
+    const { data } = await this.http.get<RedemptionStats>("/api/admin/rewards/redemption-stats", {
+      params: { rewardId, period },
+    });
+    return data;
+  }
+
+  // ── Coalition ──
+
+  async getCoalitionBalance(memberId: string): Promise<CoalitionBalance> {
+    const { data } = await this.http.get<CoalitionBalance>(
+      `/api/coalition/members/${memberId}/balance`,
+    );
+    return data;
+  }
+
+  async accumulateCoalition(
+    memberId: string,
+    points: number,
+    transactionRef: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<CoalitionTxResult> {
+    const config: AxiosRequestConfig = {
+      headers: { "Idempotency-Key": transactionRef },
+    };
+    const { data } = await this.http.post<CoalitionTxResult>(
+      "/api/coalition/accumulate",
+      { memberId, points, metadata },
+      config,
+    );
+    return data;
+  }
+
+  async convertCoalition(memberId: string, ownPoints: number): Promise<CoalitionConvertResult> {
+    const { data } = await this.http.post<CoalitionConvertResult>("/api/coalition/convert", {
+      memberId,
+      ownPoints,
+    });
+    return data;
+  }
+
+  // ── Program ──
+
+  async getProgramConfig(): Promise<ProgramConfig> {
+    const { data } = await this.http.get<ProgramConfig>("/api/admin/program/config");
+    return data;
+  }
+
+  async listWebhooks(): Promise<{ webhooks: Webhook[] }> {
+    const { data } = await this.http.get<{ webhooks: Webhook[] }>("/api/admin/webhooks");
     return data;
   }
 }
