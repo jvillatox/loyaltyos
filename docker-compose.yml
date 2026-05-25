@@ -43,6 +43,22 @@ services:
       postgres:
         condition: service_healthy
 
+  mcp-server:
+    build:
+      context: .
+      dockerfile: apps/mcp-server/Dockerfile
+    ports:
+      - "3010:3010"
+    environment:
+      MCP_TRANSPORT: sse
+      MCP_SERVER_PORT: "3010"
+      MCP_API_KEY: ${MCP_API_KEY:-dev-mcp-api-key}
+      LOYALTYOS_API_URL: http://api:3002
+      LOYALTYOS_API_KEY: ${LOYALTYOS_API_KEY:-dev-internal-api-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:
   redisdata:
