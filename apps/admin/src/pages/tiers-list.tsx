@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ interface TierItem {
 }
 
 export function TiersListPage(): JSX.Element {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTier, setNewTier] = useState(false);
@@ -109,7 +111,7 @@ export function TiersListPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Tiers</h1>
+        <h1 className="text-3xl font-bold">{t("tiers.title")}</h1>
         <Button
           onClick={() => {
             setNewTier(true);
@@ -122,7 +124,6 @@ export function TiersListPage(): JSX.Element {
         </Button>
       </div>
 
-      {/* Tier pyramid visualization */}
       {!isLoading && tiers && tiers.length > 0 && (
         <Card>
           <CardHeader>
@@ -144,7 +145,7 @@ export function TiersListPage(): JSX.Element {
                 >
                   {tier.name}
                   <span className="ml-2 text-xs text-muted-foreground">
-                    (&#8805; {tier.minPoints.toLocaleString()} pts)
+                    ({">"} {tier.minPoints.toLocaleString()} pts)
                   </span>
                 </div>
               ))}
@@ -153,7 +154,6 @@ export function TiersListPage(): JSX.Element {
         </Card>
       )}
 
-      {/* Tiers table */}
       <Card>
         <CardHeader>
           <CardTitle>All Tiers</CardTitle>
@@ -172,7 +172,7 @@ export function TiersListPage(): JSX.Element {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12">Rank</TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead>{t("common.name")}</TableHead>
                   <TableHead>Min Points</TableHead>
                   <TableHead>Color</TableHead>
                   <TableHead className="w-32" />
@@ -218,7 +218,7 @@ export function TiersListPage(): JSX.Element {
                         }}
                       >
                         <Save className="mr-1 h-3 w-3" />
-                        Save
+                        {t("common.save")}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -279,7 +279,7 @@ export function TiersListPage(): JSX.Element {
                                 openEditor(tier);
                               }}
                             >
-                              <span className="text-xs">Edit</span>
+                              <span className="text-xs">{t("common.edit")}</span>
                             </Button>
                             <Button
                               size="icon"
@@ -319,7 +319,7 @@ export function TiersListPage(): JSX.Element {
                 {tiers?.length === 0 && !newTier && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground">
-                      No tiers configured. Create your first tier.
+                      {t("common.noResults")}
                     </TableCell>
                   </TableRow>
                 )}

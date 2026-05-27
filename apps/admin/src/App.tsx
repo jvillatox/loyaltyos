@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/app-layout";
@@ -55,13 +56,14 @@ export function App(): JSX.Element {
 }
 
 function NotFound(): JSX.Element {
+  const { t } = useTranslation();
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="text-center">
         <h1 className="text-4xl font-bold">404</h1>
-        <p className="mt-2 text-muted-foreground">Page not found</p>
+        <p className="mt-2 text-muted-foreground">{t("errors.pageNotFound")}</p>
         <a href="/" className="mt-4 inline-block text-primary underline">
-          Back to Dashboard
+          {t("errors.backToDashboard")}
         </a>
       </div>
     </div>

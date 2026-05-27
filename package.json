@@ -8,6 +8,8 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
+    "i18n:check": "pnpm --filter @loyaltyos/i18n check-parity",
+    "i18n:gen-types": "pnpm --filter @loyaltyos/i18n gen-types",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "prepare": "husky"

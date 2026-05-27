@@ -1,0 +1,158 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "loading": "Cargando…",
+    "error": "Error",
+    "success": "Éxito",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "export": "Exportar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "confirm": "Confirmar",
+    "close": "Cerrar",
+    "noResults": "Sin resultados",
+    "noData": "Sin datos",
+    "actions": "Acciones",
+    "status": "Estado",
+    "name": "Nombre",
+    "email": "Correo electrónico",
+    "description": "Descripción",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "optional": "Opcional",
+    "required": "Requerido",
+    "selectAll": "Seleccionar todo",
+    "deselectAll": "Deseleccionar todo",
+    "pageInfo": "Página {{page}} de {{totalPages}} ({{total}} total)",
+    "previous": "Anterior",
+    "previousPage": "Anterior",
+    "nextPage": "Siguiente"
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "logout": "Cerrar sesión",
+    "signIn": "Iniciar sesión",
+    "signOut": "Cerrar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "invalidCredentials": "Credenciales inválidas",
+    "signingIn": "Iniciando sesión…",
+    "loginTitle": "LoyaltyOS",
+    "loginDescription": "Inicia sesión en el panel de administración",
+    "networkError": "Error de red. ¿Está corriendo la API?"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "activeMembers": "Miembros Activos",
+    "pointsIssued": "Puntos Emitidos",
+    "pointsRedeemed": "Puntos Canjeados",
+    "redemptionRatio": "Tasa de Canje",
+    "pointsOverview": "Resumen de Puntos",
+    "failedToLoad": "No se pudieron cargar los datos del dashboard"
+  },
+  "members": {
+    "title": "Miembros",
+    "addMember": "Agregar miembro",
+    "tier": "Nivel",
+    "balance": "Saldo",
+    "joinedAt": "Inscripción",
+    "lastActivity": "Última actividad",
+    "searchPlaceholder": "Buscar por nombre, email o ID externo…",
+    "failedToLoad": "No se pudieron cargar los miembros",
+    "noMembersFound": "No se encontraron miembros",
+    "externalId": "ID Externo",
+    "points": "pts",
+    "na": "N/A",
+    "backToList": "Volver a Miembros",
+    "tiers": {
+      "bronze": "Bronce",
+      "silver": "Plata",
+      "gold": "Oro",
+      "platinum": "Platino"
+    }
+  },
+  "campaigns": {
+    "title": "Campañas",
+    "createCampaign": "Crear campaña",
+    "type": "Tipo",
+    "status": {
+      "draft": "Borrador",
+      "active": "Activa",
+      "paused": "Pausada",
+      "ended": "Finalizada"
+    },
+    "typeLabels": {
+      "BONUS_POINTS": "Puntos Bonus",
+      "SPEND_AND_GET": "Gasta y Gana",
+      "FREQUENCY": "Frecuencia",
+      "MILESTONE": "Hito",
+      "REFERRAL": "Referido",
+      "BIRTHDAY": "Cumpleaños",
+      "ANNIVERSARY": "Aniversario",
+      "FLASH_SALE": "Venta Flash",
+      "TIER_UPGRADE_BONUS": "Mejora de Nivel"
+    }
+  },
+  "segments": {
+    "title": "Segmentos",
+    "createSegment": "Crear segmento"
+  },
+  "coupons": {
+    "title": "Cupones",
+    "createCoupon": "Crear cupón",
+    "generateCoupon": "Generar cupones"
+  },
+  "rewards": {
+    "title": "Premios",
+    "createReward": "Crear premio"
+  },
+  "badges": {
+    "title": "Insignias",
+    "createBadge": "Crear insignia"
+  },
+  "tiers": {
+    "title": "Niveles"
+  },
+  "coalition": {
+    "title": "Coalición"
+  },
+  "analytics": {
+    "title": "Analítica"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "language": "Idioma"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "members": "Miembros",
+    "campaigns": "Campañas",
+    "coupons": "Cupones",
+    "segments": "Segmentos",
+    "badges": "Insignias",
+    "tiers": "Niveles",
+    "rewards": "Premios",
+    "coalition": "Coalición",
+    "signOut": "Cerrar sesión"
+  },
+  "errors": {
+    "INVALID_INPUT": "Datos inválidos",
+    "UNAUTHORIZED": "No autorizado",
+    "FORBIDDEN": "Acceso denegado",
+    "NOT_FOUND": "No encontrado",
+    "CONFLICT": "Conflicto: el recurso ya existe",
+    "RATE_LIMITED": "Demasiadas solicitudes",
+    "INTERNAL_ERROR": "Error interno",
+    "INSUFFICIENT_BALANCE": "Saldo insuficiente",
+    "pageNotFound": "Página no encontrada",
+    "backToDashboard": "Volver al Dashboard"
+  }
+}

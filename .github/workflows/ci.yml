@@ -53,6 +53,8 @@ jobs:
 
       - run: pnpm typecheck
 
+      - run: pnpm --filter @loyaltyos/i18n check-parity
+
       - run: pnpm lint
 
   test:

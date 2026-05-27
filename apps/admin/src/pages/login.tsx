@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { adminLogin, isAdminAuthenticated } from "@/lib/api-client";
 
 export function LoginPage(): JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,10 +30,10 @@ export function LoginPage(): JSX.Element {
       if (result.ok) {
         navigate("/", { replace: true });
       } else {
-        setError(result.error ?? "Invalid credentials");
+        setError(result.error ?? t("auth.invalidCredentials"));
       }
     } catch {
-      setError("Network error. Is the API running?");
+      setError(t("auth.networkError"));
     } finally {
       setLoading(false);
     }
@@ -41,8 +43,8 @@ export function LoginPage(): JSX.Element {
     <div className="flex h-screen items-center justify-center bg-muted">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">LoyaltyOS</CardTitle>
-          <CardDescription>Sign in to the admin dashboard</CardDescription>
+          <CardTitle className="text-2xl">{t("auth.loginTitle")}</CardTitle>
+          <CardDescription>{t("auth.loginDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -52,7 +54,7 @@ export function LoginPage(): JSX.Element {
             className="space-y-4"
           >
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("auth.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -65,7 +67,7 @@ export function LoginPage(): JSX.Element {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("auth.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -78,7 +80,7 @@ export function LoginPage(): JSX.Element {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? t("auth.signingIn") : t("auth.signIn")}
             </Button>
           </form>
         </CardContent>

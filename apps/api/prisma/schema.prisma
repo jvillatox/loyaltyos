@@ -15,6 +15,8 @@ model Program {
   pointsUnit  String    @default("PTS")
   logoUrl     String?
   isActive    Boolean   @default(true)
+  defaultLocale String  @default("es-MX")
+  supportedLocales String[] @default(["es-MX", "en-US"])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -54,6 +56,7 @@ model Member {
   joinedAt    DateTime @default(now())
   lastActiveAt DateTime?
   deletedAt   DateTime?
+  locale      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -560,6 +563,7 @@ model AdminUser {
   name         String
   role         AdminRole @default(OPERATOR)
   isActive     Boolean   @default(true)
+  locale       String    @default("es-MX")
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Award, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { Badge as UIBadge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ interface BadgeType {
 }
 
 export function BadgesListPage(): JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -71,14 +73,14 @@ export function BadgesListPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Badges</h1>
+        <h1 className="text-3xl font-bold">{t("badges.title")}</h1>
         <Button
           onClick={() => {
             navigate("/badges/new");
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
-          New Badge
+          {t("badges.createBadge")}
         </Button>
       </div>
 
@@ -114,8 +116,8 @@ export function BadgesListPage(): JSX.Element {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Badge</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("campaigns.type")}</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
                 </TableHeader>
@@ -146,7 +148,7 @@ export function BadgesListPage(): JSX.Element {
                       </TableCell>
                       <TableCell>
                         <UIBadge variant={badge.isActive ? "default" : "secondary"}>
-                          {badge.isActive ? "Active" : "Inactive"}
+                          {badge.isActive ? t("common.active") : t("common.inactive")}
                         </UIBadge>
                       </TableCell>
                       <TableCell>
@@ -176,7 +178,7 @@ export function BadgesListPage(): JSX.Element {
                   {data?.items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center text-muted-foreground">
-                        No badges found. Create your first badge to get started.
+                        {t("common.noResults")}
                       </TableCell>
                     </TableRow>
                   )}
@@ -192,7 +194,7 @@ export function BadgesListPage(): JSX.Element {
                       setPage((p) => Math.max(1, p - 1));
                     }}
                   >
-                    Previous
+                    {t("common.previous")}
                   </Button>
                   <span className="text-sm text-muted-foreground">
                     Page {data.page} of {data.totalPages}
@@ -205,7 +207,7 @@ export function BadgesListPage(): JSX.Element {
                       setPage((p) => p + 1);
                     }}
                   >
-                    Next
+                    {t("common.next")}
                   </Button>
                 </div>
               )}

@@ -49,6 +49,7 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
             email: admin.email,
             name: admin.name,
             role: admin.role,
+            locale: admin.locale,
           },
         },
       });
@@ -68,6 +69,68 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
     const blankCookie = adminLucia.createBlankSessionCookie();
     void reply.header("Set-Cookie", blankCookie.serialize());
     return reply.send({ ok: true });
+  });
+
+  /** GET /admin/me — current admin user info */
+  app.get("/admin/me", async (request, reply) => {
+    const adminId = request.adminId;
+    if (!adminId) {
+      return reply.status(401).send({
+        error: { code: "UNAUTHORIZED", message: "Not authenticated" },
+      });
+    }
+
+    const admin = await prisma.adminUser.findUnique({
+      where: { id: adminId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        locale: true,
+        programId: true,
+      },
+    });
+
+    if (!admin) {
+      return reply.status(404).send({
+        error: { code: "NOT_FOUND", message: "Admin user not found" },
+      });
+    }
+
+    return reply.send({ data: admin });
+  });
+
+  const updateAdminMeSchema = z.object({
+    locale: z.enum(["es-MX", "en-US"]).optional(),
+    name: z.string().min(1).optional(),
+  });
+
+  /** PATCH /admin/me — update current admin user */
+  app.patch("/admin/me", async (request, reply) => {
+    const adminId = request.adminId;
+    if (!adminId) {
+      return reply.status(401).send({
+        error: { code: "UNAUTHORIZED", message: "Not authenticated" },
+      });
+    }
+
+    const body = updateAdminMeSchema.parse(request.body);
+
+    const admin = await prisma.adminUser.update({
+      where: { id: adminId },
+      data: body,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        locale: true,
+        programId: true,
+      },
+    });
+
+    return reply.send({ data: admin });
   });
 
   done();

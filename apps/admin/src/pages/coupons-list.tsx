@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -34,18 +35,19 @@ const DISCOUNT_LABELS: Record<string, string> = {
   EXPERIENCE: "Experience",
 };
 
-const MODE_LABELS: Record<string, string> = {
-  SHARED: "Shared",
-  INDIVIDUAL: "Individual",
-  LIMITED: "Limited",
-};
-
 export function CouponsListPage(): JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [modeFilter, setModeFilter] = useState<string>("all");
   const pageSize = 20;
+
+  const modeLabels: Record<string, string> = {
+    SHARED: "Shared",
+    INDIVIDUAL: "Individual",
+    LIMITED: "Limited",
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["coupons", page, modeFilter],
@@ -65,14 +67,14 @@ export function CouponsListPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Coupons</h1>
+        <h1 className="text-3xl font-bold">{t("coupons.title")}</h1>
         <Button
           onClick={() => {
             navigate("/coupons/generate");
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
-          Generate Bulk
+          {t("coupons.generateCoupon")}
         </Button>
       </div>
 
@@ -101,17 +103,17 @@ export function CouponsListPage(): JSX.Element {
           ) : isError || !data ? (
             <p className="text-destructive">Failed to load coupons.</p>
           ) : data.items.length === 0 ? (
-            <p className="text-muted-foreground">No coupons found.</p>
+            <p className="text-muted-foreground">{t("common.noResults")}</p>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Code</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead>{t("campaigns.type")}</TableHead>
                     <TableHead>Mode</TableHead>
                     <TableHead>Usage</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead className="w-20" />
                   </TableRow>
@@ -126,7 +128,7 @@ export function CouponsListPage(): JSX.Element {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {MODE_LABELS[c.mode] ?? c.mode}
+                        {modeLabels[c.mode] ?? c.mode}
                       </TableCell>
                       <TableCell className="text-sm">
                         {c.usedCount}
@@ -140,7 +142,7 @@ export function CouponsListPage(): JSX.Element {
                               : "bg-slate-100 text-slate-800"
                           }
                         >
-                          {c.isActive ? "Active" : "Inactive"}
+                          {c.isActive ? t("common.active") : t("common.inactive")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -172,7 +174,7 @@ export function CouponsListPage(): JSX.Element {
                       setPage((p) => p - 1);
                     }}
                   >
-                    Previous
+                    {t("common.previous")}
                   </Button>
                   <span className="text-sm text-muted-foreground">
                     Page {page} of {data.totalPages}
@@ -185,7 +187,7 @@ export function CouponsListPage(): JSX.Element {
                       setPage((p) => p + 1);
                     }}
                   >
-                    Next
+                    {t("common.next")}
                   </Button>
                 </div>
               )}

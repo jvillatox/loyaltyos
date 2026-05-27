@@ -17,12 +17,14 @@ import { prisma } from "./db.js";
 import { getBusinessMetricsRegistry } from "./lib/business-metrics.js";
 import { errorHandler } from "./lib/error-handler.js";
 import { authPlugin } from "./plugins/auth.js";
+import { adminAiRoutes } from "./routes/admin/ai.js";
 import { adminAuthRoutes } from "./routes/admin/auth.js";
 import { adminBadgesRoutes } from "./routes/admin/badges.js";
 import { adminCampaignsRoutes } from "./routes/admin/campaigns.js";
 import { adminCoalitionRoutes } from "./routes/admin/coalition.js";
 import { adminCouponsRoutes } from "./routes/admin/coupons.js";
 import { adminNotificationsRoutes } from "./routes/admin/notifications.js";
+import { adminProgramsRoutes } from "./routes/admin/programs.js";
 import { adminRewardsRoutes } from "./routes/admin/rewards.js";
 import { adminSegmentsRoutes } from "./routes/admin/segments.js";
 import { adminTiersRoutes } from "./routes/admin/tiers.js";
@@ -169,8 +171,10 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   await app.register(couponsRoutes, { prefix: "/api/v1" });
   await app.register(rewardsRoutes, { prefix: "/api/v1" });
   await app.register(adminRewardsRoutes, { prefix: "/api/v1" });
+  await app.register(adminAiRoutes, { prefix: "/api/v1" });
   await app.register(coalitionRoutes, { prefix: "/api/v1" });
   await app.register(adminCoalitionRoutes, { prefix: "/api/v1" });
+  await app.register(adminProgramsRoutes, { prefix: "/api/v1" });
 
   return app;
 }

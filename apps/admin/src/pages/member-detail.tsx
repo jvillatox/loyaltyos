@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { z } from "zod";
 
@@ -51,6 +52,7 @@ const transactionTypeColors: Record<string, "default" | "secondary" | "destructi
 };
 
 export function MemberDetailPage(): JSX.Element {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const memberId = id ?? "";
   const queryClient = useQueryClient();
@@ -125,7 +127,7 @@ export function MemberDetailPage(): JSX.Element {
         <Button variant="ghost" asChild>
           <Link to="/members">
             <ChevronLeft className="mr-2 h-4 w-4" />
-            Back to Members
+            {t("members.backToList")}
           </Link>
         </Button>
         <Card>
@@ -143,7 +145,7 @@ export function MemberDetailPage(): JSX.Element {
         <Button variant="ghost" asChild>
           <Link to="/members">
             <ChevronLeft className="mr-2 h-4 w-4" />
-            Back to Members
+            {t("members.backToList")}
           </Link>
         </Button>
       </div>
@@ -386,7 +388,7 @@ export function MemberDetailPage(): JSX.Element {
                       setTxPage((p) => p - 1);
                     }}
                   >
-                    Previous
+                    {t("common.previous")}
                   </Button>
                   <Button
                     variant="outline"
@@ -396,7 +398,7 @@ export function MemberDetailPage(): JSX.Element {
                       setTxPage((p) => p + 1);
                     }}
                   >
-                    Next
+                    {t("common.next")}
                   </Button>
                 </div>
               </div>

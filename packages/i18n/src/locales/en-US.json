@@ -1,0 +1,158 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "loading": "Loading…",
+    "error": "Error",
+    "success": "Success",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "back": "Back",
+    "next": "Next",
+    "confirm": "Confirm",
+    "close": "Close",
+    "noResults": "No results",
+    "noData": "No data",
+    "actions": "Actions",
+    "status": "Status",
+    "name": "Name",
+    "email": "Email",
+    "description": "Description",
+    "active": "Active",
+    "inactive": "Inactive",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "optional": "Optional",
+    "required": "Required",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "pageInfo": "Page {{page}} of {{totalPages}} ({{total}} total)",
+    "previous": "Previous",
+    "previousPage": "Previous",
+    "nextPage": "Next"
+  },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot your password?",
+    "invalidCredentials": "Invalid credentials",
+    "signingIn": "Signing in…",
+    "loginTitle": "LoyaltyOS",
+    "loginDescription": "Sign in to the admin dashboard",
+    "networkError": "Network error. Is the API running?"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "activeMembers": "Active Members",
+    "pointsIssued": "Points Issued",
+    "pointsRedeemed": "Points Redeemed",
+    "redemptionRatio": "Redemption Ratio",
+    "pointsOverview": "Points Overview",
+    "failedToLoad": "Failed to load dashboard data"
+  },
+  "members": {
+    "title": "Members",
+    "addMember": "Add Member",
+    "tier": "Tier",
+    "balance": "Balance",
+    "joinedAt": "Joined",
+    "lastActivity": "Last Activity",
+    "searchPlaceholder": "Search by name, email, or external ID…",
+    "failedToLoad": "Failed to load members",
+    "noMembersFound": "No members found",
+    "externalId": "External ID",
+    "points": "pts",
+    "na": "N/A",
+    "backToList": "Back to Members",
+    "tiers": {
+      "bronze": "Bronze",
+      "silver": "Silver",
+      "gold": "Gold",
+      "platinum": "Platinum"
+    }
+  },
+  "campaigns": {
+    "title": "Campaigns",
+    "createCampaign": "Create Campaign",
+    "type": "Type",
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused",
+      "ended": "Ended"
+    },
+    "typeLabels": {
+      "BONUS_POINTS": "Bonus Points",
+      "SPEND_AND_GET": "Spend & Get",
+      "FREQUENCY": "Frequency",
+      "MILESTONE": "Milestone",
+      "REFERRAL": "Referral",
+      "BIRTHDAY": "Birthday",
+      "ANNIVERSARY": "Anniversary",
+      "FLASH_SALE": "Flash Sale",
+      "TIER_UPGRADE_BONUS": "Tier Upgrade"
+    }
+  },
+  "segments": {
+    "title": "Segments",
+    "createSegment": "Create Segment"
+  },
+  "coupons": {
+    "title": "Coupons",
+    "createCoupon": "Create Coupon",
+    "generateCoupon": "Generate Coupons"
+  },
+  "rewards": {
+    "title": "Rewards",
+    "createReward": "Create Reward"
+  },
+  "badges": {
+    "title": "Badges",
+    "createBadge": "Create Badge"
+  },
+  "tiers": {
+    "title": "Tiers"
+  },
+  "coalition": {
+    "title": "Coalition"
+  },
+  "analytics": {
+    "title": "Analytics"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "members": "Members",
+    "campaigns": "Campaigns",
+    "coupons": "Coupons",
+    "segments": "Segments",
+    "badges": "Badges",
+    "tiers": "Tiers",
+    "rewards": "Rewards",
+    "coalition": "Coalition",
+    "signOut": "Sign out"
+  },
+  "errors": {
+    "INVALID_INPUT": "Invalid input",
+    "UNAUTHORIZED": "Unauthorized",
+    "FORBIDDEN": "Forbidden",
+    "NOT_FOUND": "Not found",
+    "CONFLICT": "Conflict: resource already exists",
+    "RATE_LIMITED": "Too many requests",
+    "INTERNAL_ERROR": "Internal error",
+    "INSUFFICIENT_BALANCE": "Insufficient balance",
+    "pageNotFound": "Page not found",
+    "backToDashboard": "Back to Dashboard"
+  }
+}

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Eye } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { fetchApi } from "@/lib/api-client";
 import type { Member, PaginatedResponse } from "@/types";
 
 export function MembersListPage(): JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -56,14 +58,14 @@ export function MembersListPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Members</h1>
+        <h1 className="text-3xl font-bold">{t("members.title")}</h1>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex items-center gap-4">
             <Input
-              placeholder="Search by name, email, or external ID..."
+              placeholder={t("members.searchPlaceholder")}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -77,11 +79,11 @@ export function MembersListPage(): JSX.Element {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>External ID</TableHead>
-                  <TableHead>Balance</TableHead>
-                  <TableHead>Joined</TableHead>
+                  <TableHead>{t("common.name")}</TableHead>
+                  <TableHead>{t("common.email")}</TableHead>
+                  <TableHead>{t("members.externalId")}</TableHead>
+                  <TableHead>{t("members.balance")}</TableHead>
+                  <TableHead>{t("members.joinedAt")}</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -113,23 +115,23 @@ export function MembersListPage(): JSX.Element {
           ) : isError || !data ? (
             <div className="py-8 text-center">
               <p className="text-destructive">
-                {error instanceof Error ? error.message : "Failed to load members"}
+                {error instanceof Error ? error.message : t("members.failedToLoad")}
               </p>
             </div>
           ) : data.items.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-muted-foreground">No members found</p>
+              <p className="text-muted-foreground">{t("members.noMembersFound")}</p>
             </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>External ID</TableHead>
-                    <TableHead>Balance</TableHead>
-                    <TableHead>Joined</TableHead>
+                    <TableHead>{t("common.name")}</TableHead>
+                    <TableHead>{t("common.email")}</TableHead>
+                    <TableHead>{t("members.externalId")}</TableHead>
+                    <TableHead>{t("members.balance")}</TableHead>
+                    <TableHead>{t("members.joinedAt")}</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -139,12 +141,12 @@ export function MembersListPage(): JSX.Element {
                       <TableCell className="font-medium">
                         {(member.firstName ?? member.lastName)
                           ? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
-                          : "N/A"}
+                          : t("members.na")}
                       </TableCell>
-                      <TableCell>{member.email ?? "N/A"}</TableCell>
+                      <TableCell>{member.email ?? t("members.na")}</TableCell>
                       <TableCell>{member.externalId ?? "--"}</TableCell>
                       <TableCell>
-                        {(member.pointAccount?.balance ?? 0).toLocaleString()} pts
+                        {(member.pointAccount?.balance ?? 0).toLocaleString()} {t("members.points")}
                       </TableCell>
                       <TableCell>{new Date(member.joinedAt).toLocaleDateString()}</TableCell>
                       <TableCell>
@@ -165,7 +167,11 @@ export function MembersListPage(): JSX.Element {
 
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Page {data.page} of {data.totalPages} ({data.total} total)
+                  {t("common.pageInfo", {
+                    page: data.page,
+                    totalPages: data.totalPages,
+                    total: data.total,
+                  })}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -176,7 +182,7 @@ export function MembersListPage(): JSX.Element {
                       setPage((p) => p - 1);
                     }}
                   >
-                    Previous
+                    {t("common.previous")}
                   </Button>
                   <Button
                     variant="outline"
@@ -186,7 +192,7 @@ export function MembersListPage(): JSX.Element {
                       setPage((p) => p + 1);
                     }}
                   >
-                    Next
+                    {t("common.next")}
                   </Button>
                 </div>
               </div>

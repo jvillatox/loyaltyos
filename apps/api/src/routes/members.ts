@@ -114,6 +114,33 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     return reply.send({ data: member });
   });
 
+  const patchMemberSchema = z.object({
+    locale: z.enum(["es-MX", "en-US"]).nullable().optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    metadata: z.record(z.unknown()).optional(),
+    tags: z.array(z.string()).optional(),
+  });
+
+  /** PATCH /members/:id — update member fields including locale override */
+  app.patch("/members/:id", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = patchMemberSchema.parse(request.body);
+
+    const data: Record<string, unknown> = {};
+    if (body.locale !== undefined) data.locale = body.locale;
+    if (body.firstName !== undefined) data.firstName = body.firstName;
+    if (body.lastName !== undefined) data.lastName = body.lastName;
+    if (body.tags !== undefined) data.tags = body.tags;
+    if (body.metadata !== undefined) data.metadata = body.metadata;
+
+    const member = await prisma.member.update({
+      where: { id },
+      data: data as Prisma.MemberUpdateInput,
+    });
+    return reply.send({ data: member });
+  });
+
   // GET /members/me/balance — authenticated member balance
   app.get("/members/me/balance", async (request, reply) => {
     const memberId = request.memberId;

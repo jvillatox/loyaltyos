@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Pause, Pencil, Play, Plus } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -25,23 +26,24 @@ import { fetchApi } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { Campaign, PaginatedResponse } from "@/types";
 
-const TYPE_LABELS: Record<string, string> = {
-  BONUS_POINTS: "Bonus Points",
-  SPEND_AND_GET: "Spend & Get",
-  FREQUENCY: "Frequency",
-  MILESTONE: "Milestone",
-  REFERRAL: "Referral",
-  BIRTHDAY: "Birthday",
-  ANNIVERSARY: "Anniversary",
-  FLASH_SALE: "Flash Sale",
-  TIER_UPGRADE_BONUS: "Tier Upgrade",
-};
-
 export function CampaignsListPage(): JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  const typeLabels: Record<string, string> = {
+    BONUS_POINTS: t("campaigns.typeLabels.BONUS_POINTS"),
+    SPEND_AND_GET: t("campaigns.typeLabels.SPEND_AND_GET"),
+    FREQUENCY: t("campaigns.typeLabels.FREQUENCY"),
+    MILESTONE: t("campaigns.typeLabels.MILESTONE"),
+    REFERRAL: t("campaigns.typeLabels.REFERRAL"),
+    BIRTHDAY: t("campaigns.typeLabels.BIRTHDAY"),
+    ANNIVERSARY: t("campaigns.typeLabels.ANNIVERSARY"),
+    FLASH_SALE: t("campaigns.typeLabels.FLASH_SALE"),
+    TIER_UPGRADE_BONUS: t("campaigns.typeLabels.TIER_UPGRADE_BONUS"),
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["campaigns", page],
@@ -62,14 +64,14 @@ export function CampaignsListPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Campaigns</h1>
+        <h1 className="text-3xl font-bold">{t("campaigns.title")}</h1>
         <Button
           onClick={() => {
             navigate("/campaigns/new");
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
-          New Campaign
+          {t("campaigns.createCampaign")}
         </Button>
       </div>
 
@@ -87,15 +89,15 @@ export function CampaignsListPage(): JSX.Element {
           ) : isError || !data ? (
             <p className="text-destructive">Failed to load campaigns.</p>
           ) : data.items.length === 0 ? (
-            <p className="text-muted-foreground">No campaigns found.</p>
+            <p className="text-muted-foreground">{t("common.noResults")}</p>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("common.name")}</TableHead>
+                    <TableHead>{t("campaigns.type")}</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
                     <TableHead>Budget</TableHead>
                     <TableHead>Starts</TableHead>
                     <TableHead>Ends</TableHead>
@@ -107,7 +109,7 @@ export function CampaignsListPage(): JSX.Element {
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">{c.name}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{TYPE_LABELS[c.type] ?? c.type}</Badge>
+                        <Badge variant="secondary">{typeLabels[c.type] ?? c.type}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -117,7 +119,7 @@ export function CampaignsListPage(): JSX.Element {
                               : "bg-slate-100 text-slate-800",
                           )}
                         >
-                          {c.isActive ? "Active" : "Inactive"}
+                          {c.isActive ? t("common.active") : t("common.inactive")}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -143,7 +145,7 @@ export function CampaignsListPage(): JSX.Element {
                               }}
                             >
                               <Pencil className="mr-2 h-4 w-4" />
-                              Edit
+                              {t("common.edit")}
                             </DropdownMenuItem>
                             {!c.isActive && (
                               <DropdownMenuItem
@@ -191,7 +193,7 @@ export function CampaignsListPage(): JSX.Element {
                       setPage((p) => p - 1);
                     }}
                   >
-                    Previous
+                    {t("common.previous")}
                   </Button>
                   <span className="text-sm text-muted-foreground">
                     Page {page} of {data.totalPages}
@@ -204,7 +206,7 @@ export function CampaignsListPage(): JSX.Element {
                       setPage((p) => p + 1);
                     }}
                   >
-                    Next
+                    {t("common.next")}
                   </Button>
                 </div>
               )}

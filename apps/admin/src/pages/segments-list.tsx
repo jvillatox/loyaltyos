@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ import { fetchApi } from "@/lib/api-client";
 import type { PaginatedResponse, Segment } from "@/types";
 
 export function SegmentsListPage(): JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -50,14 +52,14 @@ export function SegmentsListPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Segments</h1>
+        <h1 className="text-3xl font-bold">{t("segments.title")}</h1>
         <Button
           onClick={() => {
             navigate("/segments/new");
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
-          New Segment
+          {t("segments.createSegment")}
         </Button>
       </div>
 
@@ -85,16 +87,16 @@ export function SegmentsListPage(): JSX.Element {
           ) : isError || !data ? (
             <p className="text-destructive">Failed to load segments.</p>
           ) : data.items.length === 0 ? (
-            <p className="text-muted-foreground">No segments found.</p>
+            <p className="text-muted-foreground">{t("common.noResults")}</p>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead>{t("common.name")}</TableHead>
+                    <TableHead>{t("campaigns.type")}</TableHead>
                     <TableHead>Members</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="w-20" />
                   </TableRow>
@@ -117,7 +119,7 @@ export function SegmentsListPage(): JSX.Element {
                               : "bg-slate-100 text-slate-800"
                           }
                         >
-                          {s.isActive ? "Active" : "Inactive"}
+                          {s.isActive ? t("common.active") : t("common.inactive")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -160,7 +162,7 @@ export function SegmentsListPage(): JSX.Element {
                       setPage((p) => p - 1);
                     }}
                   >
-                    Previous
+                    {t("common.previous")}
                   </Button>
                   <span className="text-sm text-muted-foreground">
                     Page {page} of {data.totalPages}
@@ -173,7 +175,7 @@ export function SegmentsListPage(): JSX.Element {
                       setPage((p) => p + 1);
                     }}
                   >
-                    Next
+                    {t("common.next")}
                   </Button>
                 </div>
               )}
