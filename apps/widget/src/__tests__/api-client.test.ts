@@ -9,7 +9,7 @@ const config: WidgetConfig = {
   authToken: "test-token",
   theme: "light",
   accentColor: "#7c3aed",
-  locale: "en",
+  locale: "en-US",
   compact: false,
   mode: "full",
 };

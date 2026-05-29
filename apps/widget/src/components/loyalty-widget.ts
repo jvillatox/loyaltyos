@@ -8,6 +8,7 @@ import "./loyalty-tier-card.js";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
+import { widgetT } from "../i18n.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
 
 @customElement("loyalty-widget")
@@ -140,18 +141,21 @@ export class LoyaltyWidget extends LitElement {
   override render() {
     if (!this.controller.hasConfig) {
       return html`<div class="widget-inner">
-        Please provide configuration: program-id, api-base.
+        ${widgetT("widget.missingConfig", undefined, this.controller.locale)}
       </div>`;
     }
 
     this.applyTheme();
     const config = this.controller.config;
+    const locale = this.controller.locale;
 
     if (!this.controller.isAuthenticated && !this.authDismissed) {
       return html`
         <div class="auth-cta">
-          <p>Sign in to view your loyalty rewards</p>
-          <button @click=${this.handleSignIn}>Sign in</button>
+          <p>${widgetT("widget.signInPrompt", undefined, locale)}</p>
+          <button @click=${this.handleSignIn}>
+            ${widgetT("widget.signIn", undefined, locale)}
+          </button>
           <a
             href="#"
             style="font-size:12px;color:var(--loy-color-text-secondary);text-decoration:underline"
@@ -160,7 +164,7 @@ export class LoyaltyWidget extends LitElement {
               this.authDismissed = true;
               this.requestUpdate();
             }}
-            >Not now</a
+            >${widgetT("widget.notNow", undefined, locale)}</a
           >
         </div>
       `;
@@ -176,7 +180,7 @@ export class LoyaltyWidget extends LitElement {
             <loyalty-points-card></loyalty-points-card>
           </div>
           <a class="portal-link" href=${portalUrl} target="_blank" rel="noopener"
-            >View rewards in portal</a
+            >${widgetT("widget.viewRewards", undefined, locale)}</a
           >
         </div>
       `;
@@ -188,18 +192,20 @@ export class LoyaltyWidget extends LitElement {
           <loyalty-points-card></loyalty-points-card>
         </div>
         <div class="widget-section">
-          <div class="section-title">Badges</div>
+          <div class="section-title">${widgetT("widget.badges", undefined, locale)}</div>
           <loyalty-badges-gallery></loyalty-badges-gallery>
         </div>
         <div class="widget-section">
-          <div class="section-title">Top Rewards</div>
+          <div class="section-title">${widgetT("widget.topRewards", undefined, locale)}</div>
           <loyalty-rewards-top3></loyalty-rewards-top3>
         </div>
         <div class="widget-section">
-          <div class="section-title">Your Tier</div>
+          <div class="section-title">${widgetT("widget.yourTier", undefined, locale)}</div>
           <loyalty-tier-card></loyalty-tier-card>
         </div>
-        <a class="portal-link" href=${portalUrl} target="_blank" rel="noopener">Open full portal</a>
+        <a class="portal-link" href=${portalUrl} target="_blank" rel="noopener"
+          >${widgetT("widget.openPortal", undefined, locale)}</a
+        >
       </div>
     `;
   }

@@ -24,6 +24,9 @@ const mockPrisma = vi.hoisted(() => ({
     delete: vi.fn(),
     count: vi.fn(),
   },
+  member: {
+    findUnique: vi.fn(),
+  },
 }));
 
 vi.mock("@prisma/client", () => ({}));
@@ -186,6 +189,10 @@ describe("NotificationsService.createNotification", () => {
 
 describe("NotificationsService.sendTrigger", () => {
   it("finds matching templates and creates notifications", async () => {
+    mockPrisma.member.findUnique.mockResolvedValue({
+      locale: "es-MX",
+      program: { defaultLocale: "es-MX" },
+    });
     mockPrisma.notificationTemplate.findMany.mockResolvedValue([
       templateRow({ triggerEvent: "registration" }),
     ]);
@@ -203,11 +210,15 @@ describe("NotificationsService.sendTrigger", () => {
 
     expect(result).toHaveLength(1);
     expect(mockPrisma.notificationTemplate.findMany).toHaveBeenCalledWith({
-      where: { programId: "prog-1", triggerEvent: "registration" },
+      where: { programId: "prog-1", triggerEvent: "registration", locale: "es-MX" },
     });
   });
 
   it("renders template with Handlebars variables", async () => {
+    mockPrisma.member.findUnique.mockResolvedValue({
+      locale: null,
+      program: { defaultLocale: "es-MX" },
+    });
     mockPrisma.notificationTemplate.findMany.mockResolvedValue([
       templateRow({
         subject: "Hi {{firstName}}",
@@ -239,12 +250,47 @@ describe("NotificationsService.sendTrigger", () => {
   });
 
   it("returns empty when no templates match", async () => {
+    mockPrisma.member.findUnique.mockResolvedValue({
+      locale: "es-MX",
+      program: { defaultLocale: "es-MX" },
+    });
     mockPrisma.notificationTemplate.findMany.mockResolvedValue([]);
 
     const svc = new NotificationsService(mockPrisma as never);
     const result = await svc.sendTrigger("prog-1", "unknown_event", "mem-1", {});
 
     expect(result).toHaveLength(0);
+  });
+
+  it("falls back to program.defaultLocale before es-MX", async () => {
+    // Member has an unsupported locale; program default is en-US
+    mockPrisma.member.findUnique.mockResolvedValue({
+      locale: "fr-FR",
+      program: { defaultLocale: "en-US" },
+    });
+    // No templates for fr-FR
+    mockPrisma.notificationTemplate.findMany.mockResolvedValueOnce([]);
+    // Templates exist for en-US (program default)
+    mockPrisma.notificationTemplate.findMany.mockResolvedValueOnce([
+      templateRow({ triggerEvent: "registration", locale: "en-US" }),
+    ]);
+    mockPrisma.notification.create.mockResolvedValue(notificationRow({ status: "PENDING" }));
+    mockPrisma.notification.findFirst.mockResolvedValue(notificationRow({ status: "PENDING" }));
+    mockPrisma.notification.update.mockResolvedValue(
+      notificationRow({ status: "SENT", sentAt: new Date() }),
+    );
+
+    const svc = new NotificationsService(mockPrisma as never);
+    const result = await svc.sendTrigger("prog-1", "registration", "mem-1", {
+      firstName: "Test",
+      balance: 500,
+    });
+
+    expect(result).toHaveLength(1);
+    // Should have been called with en-US (program default), not es-MX
+    expect(mockPrisma.notificationTemplate.findMany).toHaveBeenCalledWith({
+      where: { programId: "prog-1", triggerEvent: "registration", locale: "en-US" },
+    });
   });
 });
 

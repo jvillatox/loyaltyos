@@ -1,3 +1,4 @@
+import { widgetT } from "../i18n.js";
 import type { WidgetConfig } from "../types.js";
 
 export class ApiError extends Error {
@@ -32,7 +33,11 @@ export async function fetchApi<T>(
 
   if (response.status === 401) {
     window.dispatchEvent(new CustomEvent("loyaltyos:auth-required"));
-    throw new ApiError(401, "UNAUTHORIZED", "Authentication required");
+    throw new ApiError(
+      401,
+      "UNAUTHORIZED",
+      widgetT("widget.authRequired", undefined, config.locale),
+    );
   }
 
   const body = (await response.json()) as { data?: T; error?: { code: string; message: string } };

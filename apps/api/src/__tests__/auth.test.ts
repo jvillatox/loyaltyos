@@ -57,11 +57,16 @@ const memberFixture = {
   firstName: "Carlos",
   lastName: "Mendoza",
   programId: "prog_dev",
+  locale: null,
   joinedAt: new Date("2024-01-15"),
   deletedAt: null,
   tags: [],
   createdAt: new Date("2024-01-15"),
   updatedAt: new Date("2024-01-15"),
+  program: {
+    defaultLocale: "es-MX",
+    supportedLocales: ["es-MX", "en-US"],
+  },
 };
 
 function mockApiKeyValid() {

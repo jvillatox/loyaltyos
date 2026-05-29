@@ -44,6 +44,35 @@ hbs.registerHelper("eq", (a: unknown, b: unknown) => a === b);
 
 hbs.registerHelper("neq", (a: unknown, b: unknown) => a !== b);
 
+// Locale-aware formatting helpers
+hbs.registerHelper("formatCurrency", (amount: number, currency: string, locale: string) => {
+  try {
+    return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
+  } catch {
+    return `${String(amount)} ${currency}`;
+  }
+});
+
+hbs.registerHelper(
+  "formatDate",
+  (date: string | Date, style: "long" | "short" | "medium", locale: string) => {
+    try {
+      const d = typeof date === "string" ? new Date(date) : date;
+      return new Intl.DateTimeFormat(locale, { dateStyle: style }).format(d);
+    } catch {
+      return String(date);
+    }
+  },
+);
+
+hbs.registerHelper("formatPoints", (n: number, locale: string) => {
+  try {
+    return `${new Intl.NumberFormat(locale).format(n)} pts`;
+  } catch {
+    return `${String(n)} pts`;
+  }
+});
+
 /**
  * Renders a Handlebars template string with the given context.
  * Variables use `{{var}}`, `{{nested.path}}`, `{{#if var}}...{{/if}}`, `{{#each list}}...{{/each}}`.

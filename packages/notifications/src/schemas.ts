@@ -5,6 +5,7 @@ const channelEnum = z.enum(["EMAIL", "SMS", "PUSH", "IN_APP", "WEBHOOK"]);
 export const templateCreateSchema = z.object({
   programId: z.string().min(1),
   name: z.string().min(1).max(100),
+  locale: z.string().optional(),
   channel: channelEnum,
   subject: z.string().optional(),
   bodyHtml: z.string().optional(),

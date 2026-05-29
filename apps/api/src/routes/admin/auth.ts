@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { prisma } from "../../db.js";
 import { adminLucia } from "../../lib/auth/admin-lucia.js";
+import { LoyaltyError } from "../../lib/errors.js";
 
 const loginSchema = z.object({
   email: z.string().email().toLowerCase(),
@@ -28,9 +29,7 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
       const valid = await verifyPassword(admin?.passwordHash ?? dummyHash, body.password);
 
       if (!admin || !valid) {
-        return reply.status(401).send({
-          error: { code: "INVALID_CREDENTIALS", message: "Invalid email or password" },
-        });
+        throw new LoyaltyError("INVALID_CREDENTIALS", 401);
       }
 
       await prisma.adminUser.update({
@@ -75,9 +74,7 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
   app.get("/admin/me", async (request, reply) => {
     const adminId = request.adminId;
     if (!adminId) {
-      return reply.status(401).send({
-        error: { code: "UNAUTHORIZED", message: "Not authenticated" },
-      });
+      throw new LoyaltyError("UNAUTHORIZED", 401);
     }
 
     const admin = await prisma.adminUser.findUnique({
@@ -93,9 +90,7 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
     });
 
     if (!admin) {
-      return reply.status(404).send({
-        error: { code: "NOT_FOUND", message: "Admin user not found" },
-      });
+      throw new LoyaltyError("NOT_FOUND", 404);
     }
 
     return reply.send({ data: admin });
@@ -110,9 +105,7 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
   app.patch("/admin/me", async (request, reply) => {
     const adminId = request.adminId;
     if (!adminId) {
-      return reply.status(401).send({
-        error: { code: "UNAUTHORIZED", message: "Not authenticated" },
-      });
+      throw new LoyaltyError("UNAUTHORIZED", 401);
     }
 
     const body = updateAdminMeSchema.parse(request.body);

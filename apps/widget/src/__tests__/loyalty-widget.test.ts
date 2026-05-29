@@ -126,6 +126,10 @@ describe("WidgetConfigController", () => {
   });
 
   it("applies default values", async () => {
+    // Mock navigator to return a non-matching locale so the hard fallback kicks in
+    const origLanguage = navigator.language;
+    Object.defineProperty(navigator, "language", { value: "fr-FR", configurable: true });
+
     @customElement("test-config-defaults")
     class TestConfigDefaults extends LitElement {
       controller = new WidgetConfigController(this);
@@ -136,7 +140,9 @@ describe("WidgetConfigController", () => {
     `);
 
     expect(el.controller.config.theme).toBe("auto");
-    expect(el.controller.config.locale).toBe("en");
+    expect(el.controller.config.locale).toBe("es-MX");
     expect(el.controller.config.mode).toBe("full");
+
+    Object.defineProperty(navigator, "language", { value: origLanguage, configurable: true });
   });
 });

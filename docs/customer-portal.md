@@ -99,9 +99,9 @@ The portal uses CSS custom properties for branding. Override these in your style
 
 ## i18n
 
-Translation files are in `apps/portal/src/i18n/`. Currently supported:
+Translation files are in `packages/i18n/src/locales/`. Currently supported:
 
-- English (`en.json`)
-- Spanish (`es.json`)
+- English (`en-US.json`)
+- Spanish (`es-MX.json`)
 
-Add new languages by creating a new JSON file and registering it in the i18n config.
+Locale resolution follows a priority chain per surface. See [Localization](localization.md) for details on adding new languages, resolution order, and template authoring.

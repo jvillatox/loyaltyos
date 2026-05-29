@@ -53,7 +53,7 @@ export default function Transactions() {
                 : "border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]"
             }`}
           >
-            {type === "" ? t("filterAll") : type}
+            {type === "" ? t("filterAll") : t(`transactionTypes.${type}`)}
           </button>
         ))}
       </div>

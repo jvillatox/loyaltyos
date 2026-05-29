@@ -153,12 +153,10 @@ loyaltyos/
 │   │   │   │   └── layout/
 │   │   │   │       ├── app-layout.tsx
 │   │   │   │       └── bottom-nav.tsx
-│   │   │   ├── i18n/
-│   │   │   │   └── locales/       # en.json, es.json
 │   │   │   ├── lib/
 │   │   │   │   ├── api-client.ts
 │   │   │   │   ├── auth.ts
-│   │   │   │   ├── i18n.ts
+│   │   │   │   ├── i18n.ts         # bootstrapLocale, setUserLocale
 │   │   │   │   └── theme.ts
 │   │   │   ├── pages/
 │   │   │   │   ├── badges.tsx      # Badges gallery with progress
@@ -312,6 +310,18 @@ loyaltyos/
 │   │       ├── repository.ts
 │   │       ├── types.ts
 │   │       └── __tests__/
+│   ├── i18n/                       # Shared translations (es-MX, en-US)
+│   │   ├── README.md
+│   │   ├── package.json
+│   │   └── src/
+│   │       ├── index.ts
+│   │       ├── catalog.ts
+│   │       ├── detect.ts
+│   │       ├── format.ts
+│   │       ├── locales.ts
+│   │       └── locales/
+│   │           ├── es-MX.json
+│   │           └── en-US.json
 │   ├── coupons/                    # Coupon system
 │   │   ├── README.md
 │   │   ├── package.json

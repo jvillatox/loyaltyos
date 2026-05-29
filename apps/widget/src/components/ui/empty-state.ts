@@ -3,7 +3,7 @@ import { customElement, property } from "lit/decorators.js";
 
 @customElement("loy-empty")
 export class LoyEmpty extends LitElement {
-  @property({ type: String }) override title = "Nothing here yet";
+  @property({ type: String }) override title = "";
   @property({ type: String }) description = "";
 
   static override styles = css`

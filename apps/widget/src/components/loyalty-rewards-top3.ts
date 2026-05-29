@@ -5,6 +5,7 @@ import "./ui/spinner.js";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
+import { widgetT } from "../i18n.js";
 import { fetchApi } from "../lib/api-client.js";
 import { formatPoints } from "../lib/format.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
@@ -92,21 +93,21 @@ export class LoyaltyRewardsTop3 extends LitElement {
 
   override render() {
     if (!this.controller.isAuthenticated) return null;
-    if (this.loading) return html`<loy-spinner></loy-spinner>`;
+    const locale = this.controller.locale;
+    if (this.loading) return html`<loy-spinner .locale=${locale}></loy-spinner>`;
     if (this.error)
       return html`<loy-error
         message=${this.error}
         retryable
+        .locale=${locale}
         @loy-retry=${this.fetchData}
       ></loy-error>`;
     if (!this.rewards || this.rewards.length === 0) {
       return html`<loy-empty
-        title="No rewards available"
-        description="Check back soon for new rewards"
+        title=${widgetT("widget.noRewardsTitle", undefined, locale)}
+        description=${widgetT("widget.noRewardsDesc", undefined, locale)}
       ></loy-empty>`;
     }
-
-    const locale = this.controller.hasConfig ? this.controller.config.locale : "en";
 
     return html`
       <div class="rewards-row">

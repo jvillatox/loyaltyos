@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { lucia } from "../lib/auth/lucia.js";
+import { LoyaltyError } from "../lib/errors.js";
 import { notificationsService } from "../lib/notifications-setup.js";
 
 const TOKEN_MINUTES = 15;
@@ -30,6 +31,7 @@ async function triggerMagicLinkEmail(
   memberId: string,
   programId: string,
   magicLinkUrl: string,
+  locale?: string,
 ): Promise<void> {
   try {
     const member = await prisma.member.findFirst({
@@ -44,6 +46,7 @@ async function triggerMagicLinkEmail(
 
     await notificationsService.sendTrigger(programId, "auth.magic_link", memberId, {
       magicLinkUrl,
+      _locale: locale ?? "es-MX",
       member: {
         id: member?.id,
         email: member?.email,
@@ -68,13 +71,23 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
     "/auth/magic-link",
     { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { email, locale: _locale } = magicLinkSchema.parse(request.body);
+      const { email, locale: requestLocale } = magicLinkSchema.parse(request.body);
 
       const member = await prisma.member.findFirst({
         where: { email, deletedAt: null },
+        include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
       });
 
       if (member) {
+        // Persist locale on first contact if member.locale is null
+        const programLocales = member.program.supportedLocales;
+        if (requestLocale && !member.locale && programLocales.includes(requestLocale)) {
+          await prisma.member.update({
+            where: { id: member.id },
+            data: { locale: requestLocale },
+          });
+        }
+
         const rawToken = generateToken();
         const tokenHash = hashToken(rawToken);
 
@@ -89,11 +102,13 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
         const baseUrl = resolvePortalUrl(member.programId);
         const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
 
-        // Fire and forget
-        void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl);
+        // Resolve locale for notification: request → member → program default
+        const notificationLocale = requestLocale ?? member.locale ?? member.program.defaultLocale;
+
+        // Fire and forget with locale in context
+        void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, notificationLocale);
       } else {
         // No-op for non-existent emails: prevent enumeration
-        // Log for observability
         request.log.info({ email }, "Magic link requested for unknown email");
       }
 
@@ -116,9 +131,7 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
     });
 
     if (!record) {
-      return reply.status(401).send({
-        error: { code: "INVALID_TOKEN", message: "Invalid or expired token" },
-      });
+      throw new LoyaltyError("INVALID_TOKEN", 401);
     }
 
     // Atomic: mark as consumed
@@ -169,25 +182,19 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
   app.get("/auth/me", async (request, reply) => {
     const cookieHeader = request.headers.cookie;
     if (!cookieHeader) {
-      return reply.status(401).send({
-        error: { code: "UNAUTHORIZED", message: "No session cookie" },
-      });
+      throw new LoyaltyError("UNAUTHORIZED", 401);
     }
 
     const sessionId = lucia.readSessionCookie(cookieHeader);
     if (!sessionId) {
-      return reply.status(401).send({
-        error: { code: "UNAUTHORIZED", message: "Invalid session" },
-      });
+      throw new LoyaltyError("UNAUTHORIZED", 401);
     }
 
     const { session, user } = await lucia.validateSession(sessionId);
     if (!user) {
       const blankCookie = lucia.createBlankSessionCookie();
       void reply.header("Set-Cookie", blankCookie.serialize());
-      return reply.status(401).send({
-        error: { code: "UNAUTHORIZED", message: "Session expired" },
-      });
+      throw new LoyaltyError("UNAUTHORIZED", 401);
     }
 
     // Sliding expiration: refresh cookie if session is fresh (close to expiry)
@@ -198,6 +205,7 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
 
     const member = await prisma.member.findUnique({
       where: { id: user.id },
+      include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
     });
 
     return reply.send({
@@ -209,6 +217,13 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
         lastName: member?.lastName,
         joinedAt: member?.joinedAt,
         programId: member?.programId,
+        locale: member?.locale ?? null,
+        program: member?.program
+          ? {
+              defaultLocale: member.program.defaultLocale,
+              supportedLocales: member.program.supportedLocales,
+            }
+          : null,
       },
     });
   });

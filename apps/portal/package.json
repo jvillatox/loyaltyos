@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@loyaltyos/core": "workspace:*",
+    "@loyaltyos/i18n": "workspace:*",
     "@tanstack/react-query": "^5.45.1",
     "clsx": "^2.1.1",
     "i18next": "^23.11.5",

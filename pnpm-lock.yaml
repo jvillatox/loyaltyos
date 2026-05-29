@@ -353,6 +353,9 @@ importers:
       '@loyaltyos/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@loyaltyos/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       '@tanstack/react-query':
         specifier: ^5.45.1
         version: 5.100.10(react@18.3.1)
@@ -454,6 +457,9 @@ importers:
 
   apps/widget:
     dependencies:
+      '@loyaltyos/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       lit:
         specifier: ^3.1.4
         version: 3.3.3

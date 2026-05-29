@@ -30,7 +30,7 @@ function login() {
 describe("Portal", () => {
   beforeEach(() => {
     sessionStorage.clear();
-    void i18n.changeLanguage("en");
+    void i18n.changeLanguage("en-US");
   });
 
   it("renders home page with bottom navigation", () => {
@@ -74,7 +74,7 @@ describe("Portal", () => {
   it("language selector changes value", async () => {
     renderApp("/profile");
     const select = screen.getByRole("combobox", { name: /Language/ });
-    await userEvent.selectOptions(select, "es");
+    await userEvent.selectOptions(select, "es-MX");
     expect(screen.getByRole("combobox", { name: /Idioma/ })).toBeDefined();
   });
 

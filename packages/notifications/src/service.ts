@@ -105,7 +105,27 @@ export class NotificationsService {
     memberId: string,
     context: Record<string, unknown>,
   ): Promise<NotificationRow[]> {
-    const templates = await this.repo.findTemplatesByTrigger(programId, triggerEvent);
+    // Resolve locale: context._locale override > member.locale > program.defaultLocale > es-MX
+    const contextLocale = typeof context._locale === "string" ? context._locale : undefined;
+    const memberLocale = await this.repo.findMemberLocale(memberId);
+    const programDefaultLocale = await this.repo.findProgramDefaultLocale(memberId);
+    const resolvedLocale = contextLocale ?? memberLocale ?? "es-MX";
+
+    // Find templates matching the trigger, filtered by locale
+    let templates = await this.repo.findTemplatesByTrigger(programId, triggerEvent, resolvedLocale);
+
+    // Fallback chain: try program default, then es-MX
+    if (templates.length === 0 && programDefaultLocale && programDefaultLocale !== resolvedLocale) {
+      templates = await this.repo.findTemplatesByTrigger(
+        programId,
+        triggerEvent,
+        programDefaultLocale,
+      );
+    }
+    if (templates.length === 0 && resolvedLocale !== "es-MX") {
+      templates = await this.repo.findTemplatesByTrigger(programId, triggerEvent, "es-MX");
+    }
+
     if (templates.length === 0) return [];
 
     const member = context.member as Record<string, unknown> | undefined;
@@ -113,15 +133,18 @@ export class NotificationsService {
     if (member?.email) metadata.email = member.email;
     if (member?.phone) metadata.phone = member.phone;
 
+    // Pass locale to template context for formatting helpers
+    const renderContext = { ...context, _locale: resolvedLocale };
+
     const notifications: NotificationRow[] = [];
 
     for (const template of templates) {
       const body = template.bodyHtml
-        ? render(template.bodyHtml, context)
+        ? render(template.bodyHtml, renderContext)
         : template.bodyText
-          ? render(template.bodyText, context)
+          ? render(template.bodyText, renderContext)
           : undefined;
-      const subject = template.subject ? render(template.subject, context) : undefined;
+      const subject = template.subject ? render(template.subject, renderContext) : undefined;
 
       const notification = await this.repo.createNotification({
         templateId: template.id,

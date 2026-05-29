@@ -1,6 +1,6 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
 
-import { DEFAULT_CONFIG, type WidgetConfig } from "../types.js";
+import { DEFAULT_CONFIG, type WidgetConfig, type WidgetLocale } from "../types.js";
 
 interface AttributeDef {
   attr: string;
@@ -19,9 +19,14 @@ const ATTRS: AttributeDef[] = [
   },
   { attr: "accent-color", key: "accentColor", parse: (s) => s || "#7c3aed" },
   {
+    attr: "data-lang",
+    key: "locale",
+    parse: (s) => (["es-MX", "en-US"].includes(s) ? s : "es-MX"),
+  },
+  {
     attr: "locale",
     key: "locale",
-    parse: (s) => (["en", "es"].includes(s) ? s : "en"),
+    parse: (s) => (["es-MX", "en-US"].includes(s) ? s : "es-MX"),
   },
   { attr: "compact", key: "compact", parse: (s) => s === "true" },
   {
@@ -30,6 +35,29 @@ const ATTRS: AttributeDef[] = [
     parse: (s) => (["mini", "full"].includes(s) ? s : "full"),
   },
 ];
+
+function resolveDefaultLocale(): WidgetLocale {
+  // 1. URL ?lang=
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryLang = params.get("lang");
+    if (queryLang === "es-MX" || queryLang === "en-US") return queryLang;
+  } catch {
+    // ignore
+  }
+
+  // 2. navigator.language
+  try {
+    const nav = navigator.language;
+    if (nav.startsWith("es")) return "es-MX";
+    if (nav.startsWith("en")) return "en-US";
+  } catch {
+    // ignore
+  }
+
+  // 3. Hard fallback
+  return "es-MX";
+}
 
 export class WidgetConfigController implements ReactiveController {
   private host: ReactiveControllerHost & HTMLElement;
@@ -63,6 +91,11 @@ export class WidgetConfigController implements ReactiveController {
     return this._config?.authToken != null && this._config.authToken.length > 0;
   }
 
+  /** Resolved locale from attributes, query string, or navigator. */
+  get locale(): WidgetLocale {
+    return this._config?.locale ?? resolveDefaultLocale();
+  }
+
   private resolveConfig(): void {
     const partial: Record<string, unknown> = { ...DEFAULT_CONFIG };
 
@@ -75,6 +108,11 @@ export class WidgetConfigController implements ReactiveController {
       if (value !== null) {
         partial[key] = parse(value);
       }
+    }
+
+    // If locale was not set via attributes, compute from environment
+    if (!partial.locale || partial.locale === DEFAULT_CONFIG.locale) {
+      partial.locale = resolveDefaultLocale();
     }
 
     if (typeof partial.programId === "string" && typeof partial.apiBase === "string") {

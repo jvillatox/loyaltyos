@@ -463,11 +463,25 @@ async function main(): Promise<void> {
   );
   console.log("Created events, tiers, badges, and segment assignments\n");
 
-  // === Notification Templates ===
-  const pointsEarnedTemplate = await prisma.notificationTemplate.create({
+  // === Notification Templates (both locales) ===
+  await prisma.notificationTemplate.create({
     data: {
       programId: program.id,
       name: "Points Earned",
+      locale: "es-MX",
+      channel: "EMAIL",
+      triggerEvent: "points.earned",
+      subject: "¡Ganaste {{points}} puntos!",
+      bodyHtml:
+        "<h1>¡Puntos Ganados! 🎉</h1><p>Hola {{member.firstName}},</p><p>Acabas de ganar <strong>{{points}} puntos</strong>. Tu nuevo saldo es <strong>{{balance}} puntos</strong>.</p>",
+    },
+  });
+
+  await prisma.notificationTemplate.create({
+    data: {
+      programId: program.id,
+      name: "Points Earned",
+      locale: "en-US",
       channel: "EMAIL",
       triggerEvent: "points.earned",
       subject: "You earned {{points}} points!",
@@ -475,12 +489,26 @@ async function main(): Promise<void> {
         "<h1>Points Earned 🎉</h1><p>Hi {{member.firstName}},</p><p>You just earned <strong>{{points}} points</strong>! Your new balance is <strong>{{balance}} points</strong>.</p>",
     },
   });
-  console.log("Created notification template: Points Earned");
+  console.log("Created notification templates: Points Earned (es-MX, en-US)");
 
   await prisma.notificationTemplate.create({
     data: {
       programId: program.id,
       name: "Magic Link",
+      locale: "es-MX",
+      channel: "EMAIL",
+      triggerEvent: "auth.magic_link",
+      subject: "Inicia sesión en {{program.name}}",
+      bodyHtml:
+        '<h1>Inicia sesión en {{program.name}}</h1><p>Hola {{member.firstName}},</p><p>Haz clic en el enlace para iniciar sesión en tu cuenta de recompensas:</p><p><a href="{{magicLinkUrl}}">Iniciar sesión en {{program.name}}</a></p><p>Este enlace expira en 15 minutos. Si no lo solicitaste, puedes ignorar este correo.</p>',
+    },
+  });
+
+  await prisma.notificationTemplate.create({
+    data: {
+      programId: program.id,
+      name: "Magic Link",
+      locale: "en-US",
       channel: "EMAIL",
       triggerEvent: "auth.magic_link",
       subject: "Sign in to {{program.name}}",
@@ -488,7 +516,109 @@ async function main(): Promise<void> {
         '<h1>Sign in to {{program.name}}</h1><p>Hi {{member.firstName}},</p><p>Click the link below to sign in to your rewards account:</p><p><a href="{{magicLinkUrl}}">Sign in to {{program.name}}</a></p><p>This link expires in 15 minutes. If you didn\'t request this, you can safely ignore this email.</p>',
     },
   });
-  console.log("Created notification template: Magic Link");
+  console.log("Created notification templates: Magic Link (es-MX, en-US)");
+
+  // Additional templates for both locales
+  const templateDefs = [
+    {
+      name: "Welcome",
+      triggerEvent: "member.registered",
+      esMX: {
+        subject: "¡Bienvenido a {{program.name}}!",
+        bodyHtml:
+          "<h1>¡Bienvenido {{member.firstName}}!</h1><p>Gracias por unirte a <strong>{{program.name}}</strong>. Empieza a ganar puntos hoy.</p>",
+      },
+      enUS: {
+        subject: "Welcome to {{program.name}}!",
+        bodyHtml:
+          "<h1>Welcome {{member.firstName}}!</h1><p>Thanks for joining <strong>{{program.name}}</strong>. Start earning points today.</p>",
+      },
+    },
+    {
+      name: "Points Redeemed",
+      triggerEvent: "points.redeemed",
+      esMX: {
+        subject: "Canjeaste {{points}} puntos",
+        bodyHtml:
+          "<h1>Puntos Canjeados</h1><p>Hola {{member.firstName}},</p><p>Canjeaste <strong>{{points}} puntos</strong> por <strong>{{reward.name}}</strong>.</p>",
+      },
+      enUS: {
+        subject: "You redeemed {{points}} points",
+        bodyHtml:
+          "<h1>Points Redeemed</h1><p>Hi {{member.firstName}},</p><p>You redeemed <strong>{{points}} points</strong> for <strong>{{reward.name}}</strong>.</p>",
+      },
+    },
+    {
+      name: "Coupon Issued",
+      triggerEvent: "coupon.issued",
+      esMX: {
+        subject: "¡Tienes un cupón nuevo!",
+        bodyHtml:
+          "<h1>¡Cupón Disponible!</h1><p>Hola {{member.firstName}},</p><p>Tienes un cupón: <strong>{{coupon.code}}</strong>. Válido hasta {{coupon.expiresAt}}.</p>",
+      },
+      enUS: {
+        subject: "You've got a new coupon!",
+        bodyHtml:
+          "<h1>Coupon Available!</h1><p>Hi {{member.firstName}},</p><p>Your coupon: <strong>{{coupon.code}}</strong>. Valid until {{coupon.expiresAt}}.</p>",
+      },
+    },
+    {
+      name: "Tier Changed",
+      triggerEvent: "tier.changed",
+      esMX: {
+        subject: "¡Subiste de nivel a {{tier.name}}!",
+        bodyHtml:
+          "<h1>¡Nuevo Nivel!</h1><p>Hola {{member.firstName}},</p><p>Felicitaciones, has alcanzado el nivel <strong>{{tier.name}}</strong>.</p>",
+      },
+      enUS: {
+        subject: "You've reached {{tier.name}} tier!",
+        bodyHtml:
+          "<h1>New Tier!</h1><p>Hi {{member.firstName}},</p><p>Congratulations, you've reached the <strong>{{tier.name}}</strong> tier.</p>",
+      },
+    },
+    {
+      name: "Expiration Warning",
+      triggerEvent: "points.expiring",
+      esMX: {
+        subject: "{{points}} puntos por vencer",
+        bodyHtml:
+          "<h1>Puntos por Vencer</h1><p>Hola {{member.firstName}},</p><p>Tienes <strong>{{points}} puntos</strong> que vencerán el {{expirationDate}}. ¡Úsalos antes de que expiren!</p>",
+      },
+      enUS: {
+        subject: "{{points}} points expiring soon",
+        bodyHtml:
+          "<h1>Points Expiring</h1><p>Hi {{member.firstName}},</p><p>You have <strong>{{points}} points</strong> expiring on {{expirationDate}}. Use them before they expire!</p>",
+      },
+    },
+  ];
+
+  for (const def of templateDefs) {
+    await prisma.notificationTemplate.create({
+      data: {
+        programId: program.id,
+        name: def.name,
+        locale: "es-MX",
+        channel: "EMAIL",
+        triggerEvent: def.triggerEvent,
+        subject: def.esMX.subject,
+        bodyHtml: def.esMX.bodyHtml,
+      },
+    });
+    await prisma.notificationTemplate.create({
+      data: {
+        programId: program.id,
+        name: def.name,
+        locale: "en-US",
+        channel: "EMAIL",
+        triggerEvent: def.triggerEvent,
+        subject: def.enUS.subject,
+        bodyHtml: def.enUS.bodyHtml,
+      },
+    });
+  }
+  console.log(
+    "Created additional notification templates (both locales): Welcome, Points Redeemed, Coupon Issued, Tier Changed, Expiration Warning",
+  );
 
   // === Summary ===
   const counts = {
@@ -518,7 +648,7 @@ async function main(): Promise<void> {
   console.log(`Admin Password:       demo1234   (dev only)`);
   console.log(`Demo Member ID:       ${members[0]!.id}`);
   console.log(`Demo Member Email:    ${members[0]!.email ?? ""}`);
-  console.log(`Template points.earned ID:  ${pointsEarnedTemplate.id}`);
+  console.log(`Notification Templates:  ${String(await prisma.notificationTemplate.count())}`);
   console.log("=".repeat(60));
   console.log("\nNext steps:");
   console.log("  Portal:   http://localhost:5173");

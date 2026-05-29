@@ -437,6 +437,7 @@ model NotificationTemplate {
   id              String              @id @default(cuid())
   programId       String
   name            String
+  locale          String              @default("es-MX")
   channel         NotificationChannel
   subject         String?
   bodyHtml        String?
@@ -450,6 +451,7 @@ model NotificationTemplate {
   program       Program         @relation(fields: [programId], references: [id], onDelete: Cascade)
   notifications Notification[]
 
+  @@unique([programId, name, locale])
   @@index([programId])
   @@index([triggerEvent])
 }

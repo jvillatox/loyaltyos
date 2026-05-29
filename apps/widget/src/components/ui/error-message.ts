@@ -1,10 +1,14 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
+import { widgetT } from "../../i18n.js";
+import type { WidgetLocale } from "../../types.js";
+
 @customElement("loy-error")
 export class LoyError extends LitElement {
-  @property({ type: String }) message = "Something went wrong";
+  @property({ type: String }) message = "";
   @property({ type: Boolean }) retryable = false;
+  @property({ type: String }) locale: WidgetLocale = "es-MX";
 
   static override styles = css`
     :host {
@@ -46,14 +50,16 @@ export class LoyError extends LitElement {
   override render() {
     return html`
       <span class="icon">&#9888;</span>
-      <span class="message">${this.message}</span>
+      <span class="message"
+        >${this.message || widgetT("widget.somethingWentWrong", undefined, this.locale)}</span
+      >
       ${this.retryable
         ? html`<button
             @click=${() => {
               this.handleRetry();
             }}
           >
-            Retry
+            ${widgetT("widget.retry", undefined, this.locale)}
           </button>`
         : null}
     `;

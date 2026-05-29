@@ -4,6 +4,7 @@ import "./ui/spinner.js";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
+import { widgetT } from "../i18n.js";
 import { fetchApi } from "../lib/api-client.js";
 import { formatPoints } from "../lib/format.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
@@ -110,22 +111,25 @@ export class LoyaltyTierCard extends LitElement {
 
   override render() {
     if (!this.controller.isAuthenticated) return null;
-    if (this.loading) return html`<loy-spinner></loy-spinner>`;
+    const locale = this.controller.locale;
+    if (this.loading) return html`<loy-spinner .locale=${locale}></loy-spinner>`;
     if (this.error)
       return html`<loy-error
         message=${this.error}
         retryable
+        .locale=${locale}
         @loy-retry=${this.fetchData}
       ></loy-error>`;
     if (!this.data) return null;
 
     const tier = this.data.currentTier;
     if (!tier) {
-      return html`<div class="tier-card"><div class="no-tier">No tier assigned yet</div></div>`;
+      return html`<div class="tier-card">
+        <div class="no-tier">${widgetT("widget.noTier", undefined, locale)}</div>
+      </div>`;
     }
 
     const progressPct = this.data.pointsProgress;
-    const locale = this.controller.hasConfig ? this.controller.config.locale : "en";
 
     return html`
       <div class="tier-card">
@@ -141,7 +145,9 @@ export class LoyaltyTierCard extends LitElement {
           </div>
           <div class="tier-info">
             <h3>${tier.name}</h3>
-            <span class="rank">Rank ${String(tier.rank)}</span>
+            <span class="rank"
+              >${widgetT("widget.rank", undefined, locale)} ${String(tier.rank)}</span
+            >
           </div>
         </div>
 
@@ -149,7 +155,10 @@ export class LoyaltyTierCard extends LitElement {
           ? html`
               <div class="progress-section">
                 <div class="progress-label-row">
-                  <span>Progress to ${this.data.nextTier.name}</span>
+                  <span
+                    >${widgetT("widget.progressTo", undefined, locale)}
+                    ${this.data.nextTier.name}</span
+                  >
                   <span>${String(progressPct)}%</span>
                 </div>
                 <div class="progress-bar">
@@ -158,14 +167,20 @@ export class LoyaltyTierCard extends LitElement {
                 ${this.data.pointsToNext !== null
                   ? html`
                       <div class="progress-label-row" style="margin-top:var(--loy-space-xs)">
-                        <span>${formatPoints(this.data.pointsToNext, locale)} to go</span>
-                        <span>${formatPoints(this.data.nextTier.minPoints, locale)} needed</span>
+                        <span
+                          >${formatPoints(this.data.pointsToNext, locale)}
+                          ${widgetT("widget.toGo", undefined, locale)}</span
+                        >
+                        <span
+                          >${formatPoints(this.data.nextTier.minPoints, locale)}
+                          ${widgetT("widget.needed", undefined, locale)}</span
+                        >
                       </div>
                     `
                   : null}
               </div>
             `
-          : html`<div class="max-tier">You've reached the highest tier!</div>`}
+          : html`<div class="max-tier">${widgetT("widget.maxTier", undefined, locale)}</div>`}
       </div>
     `;
   }

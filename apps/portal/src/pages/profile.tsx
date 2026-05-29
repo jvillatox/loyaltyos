@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 
 import { fetchApi, patchApi, postApi } from "../lib/api-client";
 import { clearSession, getSession, isAuthenticated, sendMagicLink } from "../lib/auth";
+import { setUserLocale } from "../lib/i18n";
 import { applyTheme } from "../lib/theme";
 import type { MemberProfile } from "../types";
 
@@ -82,11 +83,6 @@ export default function Profile() {
     window.location.href = "/";
   };
 
-  const handleLanguageChange = (lng: string) => {
-    void i18n.changeLanguage(lng);
-    sessionStorage.setItem("locale", lng);
-  };
-
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 py-6">
       <h1 className="text-2xl font-bold">{t("profile")}</h1>
@@ -151,12 +147,12 @@ export default function Profile() {
                 )}
                 {profile.data.phone && (
                   <div className="flex justify-between">
-                    <dt>Phone</dt>
+                    <dt>{t("phone")}</dt>
                     <dd>{profile.data.phone}</dd>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <dt>ID</dt>
+                  <dt>{t("id")}</dt>
                   <dd className="font-mono text-xs">{session?.memberId}</dd>
                 </div>
               </dl>
@@ -200,13 +196,13 @@ export default function Profile() {
             <select
               value={i18n.language}
               onChange={(e) => {
-                handleLanguageChange(e.target.value);
+                void setUserLocale(e.target.value);
               }}
               className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
               aria-label={t("language")}
             >
-              <option value="en">English</option>
-              <option value="es">Español</option>
+              <option value="en-US">English</option>
+              <option value="es-MX">Español</option>
             </select>
           </div>
         </div>

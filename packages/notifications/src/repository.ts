@@ -61,10 +61,31 @@ export function createRepository(prisma: PrismaClient) {
       return { items, total };
     },
 
-    async findTemplatesByTrigger(programId: string, triggerEvent: string): Promise<TemplateRow[]> {
-      return prisma.notificationTemplate.findMany({
-        where: { programId, triggerEvent },
+    async findTemplatesByTrigger(
+      programId: string,
+      triggerEvent: string,
+      locale?: string,
+    ): Promise<TemplateRow[]> {
+      const where: Prisma.NotificationTemplateWhereInput = { programId, triggerEvent };
+      if (locale) where.locale = locale;
+      return prisma.notificationTemplate.findMany({ where });
+    },
+
+    async findMemberLocale(memberId: string): Promise<string | null> {
+      const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        select: { locale: true, program: { select: { defaultLocale: true } } },
       });
+      if (!member) return null;
+      return member.locale ?? member.program.defaultLocale;
+    },
+
+    async findProgramDefaultLocale(memberId: string): Promise<string | null> {
+      const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        select: { program: { select: { defaultLocale: true } } },
+      });
+      return member?.program.defaultLocale ?? null;
     },
 
     // Notification

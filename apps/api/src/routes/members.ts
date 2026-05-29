@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { adaptPointsMetrics, getBusinessMetrics } from "../lib/business-metrics.js";
+import { LoyaltyError } from "../lib/errors.js";
 import { notificationsService } from "../lib/notifications-setup.js";
 
 const points = new PointsService(prisma, adaptPointsMetrics(getBusinessMetrics()));
@@ -100,6 +101,40 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Member not found" } });
     }
     return reply.send({ data: member });
+  });
+
+  const patchMeSchema = z.object({
+    locale: z.enum(["es-MX", "en-US"]),
+  });
+
+  /** PATCH /members/me — update authenticated member's locale */
+  app.patch("/members/me", async (request, reply) => {
+    const memberId = request.memberId;
+    if (!memberId) {
+      throw new LoyaltyError("UNAUTHORIZED", 401);
+    }
+
+    const body = patchMeSchema.parse(request.body);
+
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: { program: { select: { supportedLocales: true } } },
+    });
+    if (!member) {
+      throw new LoyaltyError("NOT_FOUND", 404);
+    }
+
+    const programLocales = member.program.supportedLocales;
+    if (!programLocales.includes(body.locale)) {
+      throw new LoyaltyError("INVALID_INPUT", 400);
+    }
+
+    const updated = await prisma.member.update({
+      where: { id: memberId },
+      data: { locale: body.locale },
+    });
+
+    return reply.send({ data: updated });
   });
 
   app.get("/members/:id", async (request, reply) => {

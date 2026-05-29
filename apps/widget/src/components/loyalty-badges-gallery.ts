@@ -5,6 +5,7 @@ import "./ui/spinner.js";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
+import { widgetT } from "../i18n.js";
 import { fetchApi } from "../lib/api-client.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
 import type { BadgeProgress } from "../types.js";
@@ -114,17 +115,19 @@ export class LoyaltyBadgesGallery extends LitElement {
 
   override render() {
     if (!this.controller.isAuthenticated) return null;
-    if (this.loading) return html`<loy-spinner></loy-spinner>`;
+    const locale = this.controller.locale;
+    if (this.loading) return html`<loy-spinner .locale=${locale}></loy-spinner>`;
     if (this.error)
       return html`<loy-error
         message=${this.error}
         retryable
+        .locale=${locale}
         @loy-retry=${this.fetchData}
       ></loy-error>`;
     if (!this.badges || this.badges.length === 0) {
       return html`<loy-empty
-        title="No badges yet"
-        description="Keep earning points to unlock badges"
+        title=${widgetT("widget.noBadgesTitle", undefined, locale)}
+        description=${widgetT("widget.noBadgesDesc", undefined, locale)}
       ></loy-empty>`;
     }
 
@@ -141,7 +144,9 @@ export class LoyaltyBadgesGallery extends LitElement {
                 ? html`<div class="badge-desc">${b.badge.description}</div>`
                 : null}
               ${b.unlocked
-                ? html`<div class="unlocked-label">Unlocked</div>`
+                ? html`<div class="unlocked-label">
+                    ${widgetT("widget.unlocked", undefined, locale)}
+                  </div>`
                 : html`
                     <div class="progress-bar">
                       <div class="progress-fill" style="width:${String(b.progress)}%"></div>

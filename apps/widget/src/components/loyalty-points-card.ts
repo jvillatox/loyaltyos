@@ -4,6 +4,7 @@ import "./ui/spinner.js";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
+import { widgetT } from "../i18n.js";
 import { fetchApi } from "../lib/api-client.js";
 import { formatPoints } from "../lib/format.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
@@ -87,29 +88,29 @@ export class LoyaltyPointsCard extends LitElement {
 
   override render() {
     if (!this.controller.isAuthenticated) return null;
-    if (this.loading) return html`<loy-spinner></loy-spinner>`;
+    const locale = this.controller.locale;
+    if (this.loading) return html`<loy-spinner .locale=${locale}></loy-spinner>`;
     if (this.error)
       return html`<loy-error
         message=${this.error}
         retryable
+        .locale=${locale}
         @loy-retry=${this.fetchData}
       ></loy-error>`;
     if (!this.data) return null;
 
-    const locale = this.controller.hasConfig ? this.controller.config.locale : "en";
-
     return html`
       <div class="balance-grid">
         <div class="stat">
-          <div class="stat-label">Confirmed</div>
+          <div class="stat-label">${widgetT("widget.confirmed", undefined, locale)}</div>
           <div class="stat-value confirmed">${formatPoints(this.data.confirmed, locale)}</div>
         </div>
         <div class="stat">
-          <div class="stat-label">Pending</div>
+          <div class="stat-label">${widgetT("widget.pending", undefined, locale)}</div>
           <div class="stat-value pending">${formatPoints(this.data.pending, locale)}</div>
         </div>
         <div class="stat">
-          <div class="stat-label">Total</div>
+          <div class="stat-label">${widgetT("widget.total", undefined, locale)}</div>
           <div class="stat-value">${formatPoints(this.data.total, locale)}</div>
         </div>
       </div>

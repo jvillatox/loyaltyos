@@ -1,8 +1,13 @@
 import { css, html, LitElement } from "lit";
-import { customElement } from "lit/decorators.js";
+import { customElement, property } from "lit/decorators.js";
+
+import { widgetT } from "../../i18n.js";
+import type { WidgetLocale } from "../../types.js";
 
 @customElement("loy-spinner")
 export class LoySpinner extends LitElement {
+  @property({ type: String }) locale: WidgetLocale = "es-MX";
+
   static override styles = css`
     :host {
       display: flex;
@@ -26,6 +31,9 @@ export class LoySpinner extends LitElement {
   `;
 
   override render() {
-    return html`<div class="spinner" aria-label="Loading"></div>`;
+    return html`<div
+      class="spinner"
+      aria-label=${widgetT("widget.loading", undefined, this.locale)}
+    ></div>`;
   }
 }

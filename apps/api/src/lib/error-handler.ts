@@ -28,6 +28,10 @@ import {
   CouponNotFoundError,
   CouponNotStartedError,
 } from "@loyaltyos/coupons";
+import type { SupportedLocale } from "@loyaltyos/i18n";
+import { resolveLocale } from "@loyaltyos/i18n";
+import enUS from "@loyaltyos/i18n/src/locales/en-US.json" with { type: "json" };
+import esMX from "@loyaltyos/i18n/src/locales/es-MX.json" with { type: "json" };
 import {
   RewardInsufficientPointsError,
   RewardNotActiveError,
@@ -44,13 +48,56 @@ import {
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 
+import { LoyaltyError } from "./errors.js";
+
+const CATALOGS: Record<SupportedLocale, Record<string, unknown>> = {
+  "es-MX": esMX,
+  "en-US": enUS,
+};
+
 interface ApiError {
   code: string;
   message: string;
   details?: unknown;
 }
 
-function mapError(err: FastifyError | Error): { status: number; body: { error: ApiError } } {
+function localizeMessage(code: string, locale: SupportedLocale): string {
+  const catalog = CATALOGS[locale];
+  const parts = ["errors", ...code.split(".")];
+  let current: unknown = catalog;
+  for (const part of parts) {
+    if (typeof current !== "object" || current === null || !(part in current)) {
+      // Return the code itself if no translation exists
+      return code;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+  return typeof current === "string" ? current : code;
+}
+
+function getLocale(req: FastifyRequest): SupportedLocale {
+  const acceptLanguage = req.headers["accept-language"];
+  return resolveLocale({ acceptLanguage });
+}
+
+function mapError(
+  err: FastifyError | Error | LoyaltyError,
+  locale: SupportedLocale,
+): { status: number; body: { error: ApiError } } {
+  // LoyaltyError — user-thrown with explicit code
+  if (err instanceof LoyaltyError) {
+    return {
+      status: err.httpStatus,
+      body: {
+        error: {
+          code: err.code,
+          message: localizeMessage(err.code, locale),
+          details: err.params,
+        },
+      },
+    };
+  }
+
   // Validation
   if (err instanceof ZodError) {
     return {
@@ -58,7 +105,7 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
       body: {
         error: {
           code: "VALIDATION_ERROR",
-          message: "Request validation failed",
+          message: localizeMessage("VALIDATION_ERROR", locale),
           details: err.errors,
         },
       },
@@ -72,7 +119,8 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
       body: {
         error: {
           code: "INSUFFICIENT_BALANCE",
-          message: err.message,
+          message: localizeMessage("INSUFFICIENT_BALANCE", locale),
+          details: { available: (err as unknown as { available?: number }).available },
         },
       },
     };
@@ -84,7 +132,7 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
       body: {
         error: {
           code: "TRANSACTION_NOT_FOUND",
-          message: err.message,
+          message: localizeMessage("TRANSACTION_NOT_FOUND", locale),
         },
       },
     };
@@ -96,7 +144,7 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
       body: {
         error: {
           code: "ALREADY_REVERSED",
-          message: err.message,
+          message: localizeMessage("ALREADY_REVERSED", locale),
         },
       },
     };
@@ -106,35 +154,60 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
   if (err instanceof CampaignNotFoundError) {
     return {
       status: 404,
-      body: { error: { code: "CAMPAIGN_NOT_FOUND", message: err.message } },
+      body: {
+        error: {
+          code: "CAMPAIGN_NOT_FOUND",
+          message: localizeMessage("CAMPAIGN_NOT_FOUND", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CampaignNotActiveError) {
     return {
       status: 409,
-      body: { error: { code: "CAMPAIGN_NOT_ACTIVE", message: err.message } },
+      body: {
+        error: {
+          code: "CAMPAIGN_NOT_ACTIVE",
+          message: localizeMessage("CAMPAIGN_NOT_ACTIVE", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CampaignBudgetExhaustedError) {
     return {
       status: 422,
-      body: { error: { code: "CAMPAIGN_BUDGET_EXHAUSTED", message: err.message } },
+      body: {
+        error: {
+          code: "CAMPAIGN_BUDGET_EXHAUSTED",
+          message: localizeMessage("CAMPAIGN_BUDGET_EXHAUSTED", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CampaignUserLimitReachedError) {
     return {
       status: 422,
-      body: { error: { code: "CAMPAIGN_USER_LIMIT_REACHED", message: err.message } },
+      body: {
+        error: {
+          code: "CAMPAIGN_USER_LIMIT_REACHED",
+          message: localizeMessage("CAMPAIGN_USER_LIMIT_REACHED", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CampaignOutOfValidityError) {
     return {
       status: 422,
-      body: { error: { code: "CAMPAIGN_OUT_OF_VALIDITY", message: err.message } },
+      body: {
+        error: {
+          code: "CAMPAIGN_OUT_OF_VALIDITY",
+          message: localizeMessage("CAMPAIGN_OUT_OF_VALIDITY", locale),
+        },
+      },
     };
   }
 
@@ -142,56 +215,87 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
   if (err instanceof CouponNotFoundError) {
     return {
       status: 404,
-      body: { error: { code: "COUPON_NOT_FOUND", message: err.message } },
+      body: {
+        error: { code: "COUPON_NOT_FOUND", message: localizeMessage("COUPON_NOT_FOUND", locale) },
+      },
     };
   }
 
   if (err instanceof CouponCodeDuplicateError) {
     return {
       status: 409,
-      body: { error: { code: "COUPON_CODE_DUPLICATE", message: err.message } },
+      body: {
+        error: {
+          code: "COUPON_CODE_DUPLICATE",
+          message: localizeMessage("COUPON_CODE_DUPLICATE", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CouponExpiredError) {
     return {
       status: 422,
-      body: { error: { code: "COUPON_EXPIRED", message: err.message } },
+      body: {
+        error: { code: "COUPON_EXPIRED", message: localizeMessage("COUPON_EXPIRED", locale) },
+      },
     };
   }
 
   if (err instanceof CouponNotStartedError) {
     return {
       status: 422,
-      body: { error: { code: "COUPON_NOT_STARTED", message: err.message } },
+      body: {
+        error: {
+          code: "COUPON_NOT_STARTED",
+          message: localizeMessage("COUPON_NOT_STARTED", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CouponExhaustedError) {
     return {
       status: 422,
-      body: { error: { code: "COUPON_EXHAUSTED", message: err.message } },
+      body: {
+        error: { code: "COUPON_EXHAUSTED", message: localizeMessage("COUPON_EXHAUSTED", locale) },
+      },
     };
   }
 
   if (err instanceof CouponMemberLimitError) {
     return {
       status: 422,
-      body: { error: { code: "COUPON_MEMBER_LIMIT", message: err.message } },
+      body: {
+        error: {
+          code: "COUPON_MEMBER_LIMIT",
+          message: localizeMessage("COUPON_MEMBER_LIMIT", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CouponMinPurchaseError) {
     return {
       status: 422,
-      body: { error: { code: "COUPON_MIN_PURCHASE", message: err.message } },
+      body: {
+        error: {
+          code: "COUPON_MIN_PURCHASE",
+          message: localizeMessage("COUPON_MIN_PURCHASE", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CouponChannelError) {
     return {
       status: 422,
-      body: { error: { code: "COUPON_CHANNEL_ERROR", message: err.message } },
+      body: {
+        error: {
+          code: "COUPON_CHANNEL_ERROR",
+          message: localizeMessage("COUPON_CHANNEL_ERROR", locale),
+        },
+      },
     };
   }
 
@@ -199,35 +303,54 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
   if (err instanceof RewardNotFoundError) {
     return {
       status: 404,
-      body: { error: { code: "REWARD_NOT_FOUND", message: err.message } },
+      body: {
+        error: { code: "REWARD_NOT_FOUND", message: localizeMessage("REWARD_NOT_FOUND", locale) },
+      },
     };
   }
 
   if (err instanceof RewardNotActiveError) {
     return {
       status: 422,
-      body: { error: { code: "REWARD_NOT_ACTIVE", message: err.message } },
+      body: {
+        error: { code: "REWARD_NOT_ACTIVE", message: localizeMessage("REWARD_NOT_ACTIVE", locale) },
+      },
     };
   }
 
   if (err instanceof RewardOutOfStockError) {
     return {
       status: 422,
-      body: { error: { code: "REWARD_OUT_OF_STOCK", message: err.message } },
+      body: {
+        error: {
+          code: "REWARD_OUT_OF_STOCK",
+          message: localizeMessage("REWARD_OUT_OF_STOCK", locale),
+        },
+      },
     };
   }
 
   if (err instanceof RewardTierInsufficientError) {
     return {
       status: 422,
-      body: { error: { code: "REWARD_TIER_INSUFFICIENT", message: err.message } },
+      body: {
+        error: {
+          code: "REWARD_TIER_INSUFFICIENT",
+          message: localizeMessage("REWARD_TIER_INSUFFICIENT", locale),
+        },
+      },
     };
   }
 
   if (err instanceof RewardInsufficientPointsError) {
     return {
       status: 422,
-      body: { error: { code: "REWARD_INSUFFICIENT_POINTS", message: err.message } },
+      body: {
+        error: {
+          code: "REWARD_INSUFFICIENT_POINTS",
+          message: localizeMessage("REWARD_INSUFFICIENT_POINTS", locale),
+        },
+      },
     };
   }
 
@@ -235,21 +358,36 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
   if (err instanceof CoalitionConfigNotFoundError) {
     return {
       status: 404,
-      body: { error: { code: "COALITION_CONFIG_NOT_FOUND", message: err.message } },
+      body: {
+        error: {
+          code: "COALITION_CONFIG_NOT_FOUND",
+          message: localizeMessage("COALITION_CONFIG_NOT_FOUND", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CoalitionAccountNotLinkedError) {
     return {
       status: 404,
-      body: { error: { code: "COALITION_ACCOUNT_NOT_LINKED", message: err.message } },
+      body: {
+        error: {
+          code: "COALITION_ACCOUNT_NOT_LINKED",
+          message: localizeMessage("COALITION_ACCOUNT_NOT_LINKED", locale),
+        },
+      },
     };
   }
 
   if (err instanceof CoalitionBusinessError) {
     return {
       status: 422,
-      body: { error: { code: "COALITION_BUSINESS_ERROR", message: err.message } },
+      body: {
+        error: {
+          code: "COALITION_BUSINESS_ERROR",
+          message: localizeMessage("COALITION_BUSINESS_ERROR", locale),
+        },
+      },
     };
   }
 
@@ -257,7 +395,10 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
     return {
       status: 502,
       body: {
-        error: { code: "EXTERNAL_SERVICE_ERROR", message: err.message },
+        error: {
+          code: "EXTERNAL_SERVICE_ERROR",
+          message: localizeMessage("EXTERNAL_SERVICE_ERROR", locale),
+        },
       },
     };
   }
@@ -266,7 +407,7 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
     return {
       status: 503,
       body: {
-        error: { code: "CIRCUIT_OPEN", message: err.message },
+        error: { code: "CIRCUIT_OPEN", message: localizeMessage("CIRCUIT_OPEN", locale) },
       },
     };
   }
@@ -275,7 +416,10 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
     return {
       status: 501,
       body: {
-        error: { code: "UNSUPPORTED_OPERATION", message: err.message },
+        error: {
+          code: "UNSUPPORTED_OPERATION",
+          message: localizeMessage("UNSUPPORTED_OPERATION", locale),
+        },
       },
     };
   }
@@ -284,28 +428,45 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
   if (err instanceof SegmentNotFoundError) {
     return {
       status: 404,
-      body: { error: { code: "SEGMENT_NOT_FOUND", message: err.message } },
+      body: {
+        error: { code: "SEGMENT_NOT_FOUND", message: localizeMessage("SEGMENT_NOT_FOUND", locale) },
+      },
     };
   }
 
   if (err instanceof SegmentNotActiveError) {
     return {
       status: 422,
-      body: { error: { code: "SEGMENT_NOT_ACTIVE", message: err.message } },
+      body: {
+        error: {
+          code: "SEGMENT_NOT_ACTIVE",
+          message: localizeMessage("SEGMENT_NOT_ACTIVE", locale),
+        },
+      },
     };
   }
 
   if (err instanceof SegmentNotStaticError) {
     return {
       status: 422,
-      body: { error: { code: "SEGMENT_NOT_STATIC", message: err.message } },
+      body: {
+        error: {
+          code: "SEGMENT_NOT_STATIC",
+          message: localizeMessage("SEGMENT_NOT_STATIC", locale),
+        },
+      },
     };
   }
 
   if (err instanceof InvalidSegmentRuleError) {
     return {
       status: 400,
-      body: { error: { code: "INVALID_SEGMENT_RULE", message: err.message } },
+      body: {
+        error: {
+          code: "INVALID_SEGMENT_RULE",
+          message: localizeMessage("INVALID_SEGMENT_RULE", locale),
+        },
+      },
     };
   }
 
@@ -317,7 +478,7 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
       body: {
         error: {
           code: fastifyErr.code || "REQUEST_ERROR",
-          message: fastifyErr.message,
+          message: localizeMessage(fastifyErr.code || "REQUEST_ERROR", locale),
         },
       },
     };
@@ -329,18 +490,21 @@ function mapError(err: FastifyError | Error): { status: number; body: { error: A
     body: {
       error: {
         code: "INTERNAL_ERROR",
-        message: "An unexpected error occurred",
+        message: localizeMessage("INTERNAL_ERROR", locale),
       },
     },
   };
 }
 
+export { LoyaltyError };
+
 export async function errorHandler(
-  err: FastifyError | Error,
+  err: FastifyError | Error | LoyaltyError,
   _req: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
-  const { status, body } = mapError(err);
+  const locale = getLocale(_req);
+  const { status, body } = mapError(err, locale);
   if (status === 500) {
     _req.log.error(err);
   }

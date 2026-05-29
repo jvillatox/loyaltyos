@@ -20,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@loyaltyos/i18n": "workspace:*",
     "lit": "^3.1.4"
   },
   "devDependencies": {
