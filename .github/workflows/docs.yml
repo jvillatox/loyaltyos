@@ -47,7 +47,7 @@ jobs:
             -o docs-site/build/helm/index.yaml
           echo "Helm index fetched ($(wc -c < docs-site/build/helm/index.yaml) bytes)"
 
-      - uses: actions/configure-pages@v4
+      - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v3
         with:
