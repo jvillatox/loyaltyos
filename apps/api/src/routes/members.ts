@@ -108,34 +108,38 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
   });
 
   /** PATCH /members/me — update authenticated member's locale */
-  app.patch("/members/me", async (request, reply) => {
-    const memberId = request.memberId;
-    if (!memberId) {
-      throw new LoyaltyError("UNAUTHORIZED", 401);
-    }
+  app.patch(
+    "/members/me",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const memberId = request.memberId;
+      if (!memberId) {
+        throw new LoyaltyError("UNAUTHORIZED", 401);
+      }
 
-    const body = patchMeSchema.parse(request.body);
+      const body = patchMeSchema.parse(request.body);
 
-    const member = await prisma.member.findUnique({
-      where: { id: memberId },
-      include: { program: { select: { supportedLocales: true } } },
-    });
-    if (!member) {
-      throw new LoyaltyError("NOT_FOUND", 404);
-    }
+      const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        include: { program: { select: { supportedLocales: true } } },
+      });
+      if (!member) {
+        throw new LoyaltyError("NOT_FOUND", 404);
+      }
 
-    const programLocales = member.program.supportedLocales;
-    if (!programLocales.includes(body.locale)) {
-      throw new LoyaltyError("INVALID_INPUT", 400);
-    }
+      const programLocales = member.program.supportedLocales;
+      if (!programLocales.includes(body.locale)) {
+        throw new LoyaltyError("INVALID_INPUT", 400);
+      }
 
-    const updated = await prisma.member.update({
-      where: { id: memberId },
-      data: { locale: body.locale },
-    });
+      const updated = await prisma.member.update({
+        where: { id: memberId },
+        data: { locale: body.locale },
+      });
 
-    return reply.send({ data: updated });
-  });
+      return reply.send({ data: updated });
+    },
+  );
 
   app.get("/members/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);

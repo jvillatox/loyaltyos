@@ -12,6 +12,7 @@ import {
 await initTracing("loyaltyos-worker");
 
 import { closeQueueConnection } from "./lib/queue.js";
+import { startGiftCardExpireWorker, startGiftCardGenerateWorker } from "./workers/giftcards.js";
 import { startNotificationsWorker } from "./workers/notifications.js";
 
 // Metrics
@@ -20,6 +21,8 @@ setupDefaultMetrics(metricsRegistry, "loyaltyos-worker");
 
 // Start workers
 startNotificationsWorker();
+startGiftCardGenerateWorker();
+startGiftCardExpireWorker();
 
 // Minimal HTTP server for health check and metrics (Prometheus scrape target)
 const metricsPort = Number(process.env.WORKER_METRICS_PORT) || 3003;

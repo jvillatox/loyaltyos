@@ -288,6 +288,17 @@
     "SEGMENT_NOT_STATIC": "Segmento no estático",
     "INVALID_SEGMENT_RULE": "Regla de segmento inválida",
     "REQUEST_ERROR": "Error en la solicitud",
+    "GIFT_CARD_NOT_FOUND": "Tarjeta de regalo no encontrada",
+    "GIFT_CARD_EXPIRED": "Tarjeta de regalo expirada",
+    "GIFT_CARD_DEPLETED": "Tarjeta de regalo sin saldo",
+    "GIFT_CARD_CANCELLED": "Tarjeta de regalo cancelada",
+    "GIFT_CARD_INSUFFICIENT_BALANCE": "Saldo insuficiente en tarjeta de regalo",
+    "GIFT_CARD_BATCH_NOT_FOUND": "Lote de tarjetas de regalo no encontrado",
+    "GIFT_CARD_INVALID_CODE": "Código de tarjeta de regalo inválido",
+    "GIFT_CARD_IDEMPOTENCY_CONFLICT": "Conflicto de idempotencia en operación de tarjeta",
+    "GIFT_CARD_TERMS_TEMPLATE_NOT_FOUND": "Plantilla de términos no encontrada",
+    "GIFT_CARD_LOCK": "La tarjeta está siendo procesada, intente de nuevo",
+    "GIFT_CARD_NOT_ACTIVE": "La tarjeta de regalo no está activa",
     "INVALID_TOKEN": "Token inválido o expirado",
     "INVALID_CREDENTIALS": "Correo o contraseña inválidos"
   }

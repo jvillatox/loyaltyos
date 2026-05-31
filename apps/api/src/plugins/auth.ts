@@ -25,7 +25,7 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
   app.decorateRequest("adminId", null);
   app.decorateRequest("actor", { type: "SYSTEM" as AuditActorType, id: "anonymous" });
 
-  app.addHook("onRequest", async (request) => {
+  app.addHook("preHandler", async (request) => {
     // Replace shared default actor with a fresh per-request instance
     request.actor = { type: "SYSTEM" as AuditActorType, id: "anonymous" };
 

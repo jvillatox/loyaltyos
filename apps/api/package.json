@@ -27,6 +27,7 @@
     "@loyaltyos/coalition": "workspace:*",
     "@loyaltyos/core": "workspace:*",
     "@loyaltyos/coupons": "workspace:*",
+    "@loyaltyos/giftcards": "workspace:*",
     "@loyaltyos/i18n": "workspace:*",
     "@loyaltyos/notifications": "workspace:*",
     "@loyaltyos/rewards": "workspace:*",

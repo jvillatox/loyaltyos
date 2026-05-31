@@ -32,7 +32,7 @@ export function isAuthenticated(): boolean {
   return sessionStorage.getItem("member-id") !== null;
 }
 
-export async function sendMagicLink(email: string, locale = "en"): Promise<void> {
+export async function sendMagicLink(email: string, locale = "es-MX"): Promise<void> {
   await postApi("/auth/magic-link", { email, locale });
 }
 

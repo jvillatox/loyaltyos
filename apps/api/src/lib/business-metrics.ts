@@ -1,6 +1,7 @@
 import type { CoalitionServiceMetrics } from "@loyaltyos/coalition";
 import type { PointsServiceMetrics } from "@loyaltyos/core";
 import type { CouponsServiceMetrics } from "@loyaltyos/coupons";
+import type { GiftCardsServiceMetrics } from "@loyaltyos/giftcards";
 import type { BusinessMetrics, Registry } from "@loyaltyos/telemetry";
 import { createBusinessMetrics, createMetricsRegistry } from "@loyaltyos/telemetry";
 
@@ -63,6 +64,23 @@ export function adaptCoalitionMetrics(bm: BusinessMetrics): CoalitionServiceMetr
     },
     setCircuitBreakerState(adapter, state) {
       bm.coalitionCircuitBreakerState.set({ adapter }, state);
+    },
+  };
+}
+
+export function adaptGiftCardMetrics(bm: BusinessMetrics): GiftCardsServiceMetrics {
+  return {
+    recordGenerate(programId, currency, count) {
+      bm.giftCardsGeneratedTotal.inc({ program_id: programId, currency }, count);
+    },
+    recordRedeem(programId, currency) {
+      bm.giftCardsRedeemedTotal.inc({ program_id: programId, currency });
+    },
+    recordRedeemedAmount(programId, currency, amount) {
+      bm.giftCardsRedeemedAmount.inc({ program_id: programId, currency }, amount);
+    },
+    setOutstandingBalance(programId, currency, balance) {
+      bm.giftCardsOutstandingBalance.set({ program_id: programId, currency }, balance);
     },
   };
 }

@@ -61,9 +61,9 @@ function NotFound(): JSX.Element {
     <div className="flex h-screen items-center justify-center">
       <div className="text-center">
         <h1 className="text-4xl font-bold">404</h1>
-        <p className="mt-2 text-muted-foreground">{t("errors.pageNotFound")}</p>
+        <p className="mt-2 text-muted-foreground">{t("navigation.pageNotFound")}</p>
         <a href="/" className="mt-4 inline-block text-primary underline">
-          {t("errors.backToDashboard")}
+          {t("navigation.backToDashboard")}
         </a>
       </div>
     </div>

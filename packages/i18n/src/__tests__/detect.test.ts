@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isSupportedLocale, resolveLocale } from "../detect.js";
+import { DEFAULT_LOCALE, isSupportedLocale, resolveLocale } from "../detect.js";
 
 describe("isSupportedLocale", () => {
   it("returns true for es-MX", () => {
@@ -54,7 +54,7 @@ describe("resolveLocale", () => {
     expect(resolveLocale({})).toBe("es-MX");
   });
 
-  it("matches language-only prefix", () => {
+  it("matches language-only prefix via accept-language-parser", () => {
     expect(
       resolveLocale({
         browserLanguage: "es",
@@ -78,5 +78,48 @@ describe("resolveLocale", () => {
         browserLanguage: "en-US",
       }),
     ).toBe("es-MX");
+  });
+
+  // ── q-weighted Accept-Language ─────────────────────────
+
+  it("handles q-weighted Accept-Language: es-MX,es;q=0.9,en;q=0.8", () => {
+    expect(
+      resolveLocale({
+        acceptLanguage: "es-MX,es;q=0.9,en;q=0.8",
+      }),
+    ).toBe("es-MX");
+  });
+
+  it("handles q-weighted Accept-Language: en-US,en;q=0.9", () => {
+    expect(
+      resolveLocale({
+        acceptLanguage: "en-US,en;q=0.9",
+      }),
+    ).toBe("en-US");
+  });
+
+  it("falls back to closest supported when fr-FR has no exact match", () => {
+    // fr-FR,fr;q=0.9,en;q=0.5 → en-US is the closest supported
+    expect(
+      resolveLocale({
+        acceptLanguage: "fr-FR,fr;q=0.9,en;q=0.5",
+      }),
+    ).toBe("en-US");
+  });
+
+  it("handles wildcard * → DEFAULT_LOCALE", () => {
+    expect(
+      resolveLocale({
+        acceptLanguage: "*",
+      }),
+    ).toBe(DEFAULT_LOCALE);
+  });
+
+  it("handles empty string → DEFAULT_LOCALE", () => {
+    expect(
+      resolveLocale({
+        acceptLanguage: "",
+      }),
+    ).toBe(DEFAULT_LOCALE);
   });
 });

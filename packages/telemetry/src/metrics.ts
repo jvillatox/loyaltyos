@@ -88,6 +88,11 @@ export interface BusinessMetrics {
   coalitionCircuitBreakerState: Gauge;
   // Members
   activeMembersTotal: Gauge;
+  // Gift Cards
+  giftCardsGeneratedTotal: Counter;
+  giftCardsRedeemedTotal: Counter;
+  giftCardsRedeemedAmount: Counter;
+  giftCardsOutstandingBalance: Gauge;
 }
 
 export function createBusinessMetrics(registry: Registry): BusinessMetrics {
@@ -183,6 +188,34 @@ export function createBusinessMetrics(registry: Registry): BusinessMetrics {
     registers: [registry],
   });
 
+  const giftCardsGeneratedTotal = new Counter({
+    name: "loyaltyos_giftcards_generated_total",
+    help: "Total number of gift cards generated",
+    labelNames: ["program_id", "currency"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const giftCardsRedeemedTotal = new Counter({
+    name: "loyaltyos_giftcards_redeemed_total",
+    help: "Total number of gift card redemption transactions",
+    labelNames: ["program_id", "currency"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const giftCardsRedeemedAmount = new Counter({
+    name: "loyaltyos_giftcards_redeemed_amount",
+    help: "Total amount redeemed from gift cards",
+    labelNames: ["program_id", "currency"] as unknown as string[],
+    registers: [registry],
+  });
+
+  const giftCardsOutstandingBalance = new Gauge({
+    name: "loyaltyos_giftcards_outstanding_balance",
+    help: "Total outstanding gift card balance (liability)",
+    labelNames: ["program_id", "currency"] as unknown as string[],
+    registers: [registry],
+  });
+
   return {
     pointsEarnedTotal,
     pointsRedeemedTotal,
@@ -197,6 +230,10 @@ export function createBusinessMetrics(registry: Registry): BusinessMetrics {
     coalitionOperationsTotal,
     coalitionCircuitBreakerState,
     activeMembersTotal,
+    giftCardsGeneratedTotal,
+    giftCardsRedeemedTotal,
+    giftCardsRedeemedAmount,
+    giftCardsOutstandingBalance,
   };
 }
 

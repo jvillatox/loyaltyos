@@ -79,12 +79,18 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
       });
 
       if (member) {
-        // Persist locale on first contact if member.locale is null
         const programLocales = member.program.supportedLocales;
-        if (requestLocale && !member.locale && programLocales.includes(requestLocale)) {
+
+        // Single validated locale resolution
+        const requestedLocale =
+          requestLocale && programLocales.includes(requestLocale) ? requestLocale : undefined;
+        const effectiveLocale = requestedLocale ?? member.locale ?? member.program.defaultLocale;
+
+        // Persist locale on first contact
+        if (requestedLocale && !member.locale) {
           await prisma.member.update({
             where: { id: member.id },
-            data: { locale: requestLocale },
+            data: { locale: requestedLocale },
           });
         }
 
@@ -102,11 +108,8 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
         const baseUrl = resolvePortalUrl(member.programId);
         const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
 
-        // Resolve locale for notification: request → member → program default
-        const notificationLocale = requestLocale ?? member.locale ?? member.program.defaultLocale;
-
         // Fire and forget with locale in context
-        void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, notificationLocale);
+        void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, effectiveLocale);
       } else {
         // No-op for non-existent emails: prevent enumeration
         request.log.info({ email }, "Magic link requested for unknown email");

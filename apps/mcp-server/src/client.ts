@@ -349,6 +349,54 @@ export class LoyaltyOSClient {
     return data;
   }
 
+  // ── Gift Cards ──
+
+  async createGiftCardBatch(payload: {
+    name: string;
+    quantity: number;
+    initialAmount: number;
+    currency: string;
+    prefix?: string;
+    expirationDate: string;
+    termsTemplateId: string;
+  }): Promise<Record<string, unknown>> {
+    const { data } = await this.http.post<Record<string, unknown>>(
+      "/api/v1/admin/giftcards/batches",
+      payload,
+    );
+    return data;
+  }
+
+  async getGiftCardBatch(batchId: string): Promise<Record<string, unknown>> {
+    const { data } = await this.http.get<Record<string, unknown>>(
+      `/api/v1/admin/giftcards/batches/${batchId}`,
+    );
+    return data;
+  }
+
+  async redeemGiftCard(
+    code: string,
+    payload: { amount: number; memberId?: string; orderRef?: string },
+  ): Promise<Record<string, unknown>> {
+    const idempotencyKey = crypto.randomUUID();
+    const config: AxiosRequestConfig = {
+      headers: { "Idempotency-Key": idempotencyKey },
+    };
+    const { data } = await this.http.post<Record<string, unknown>>(
+      `/api/v1/giftcards/${encodeURIComponent(code)}/redeem`,
+      payload,
+      config,
+    );
+    return data;
+  }
+
+  async lookupGiftCard(code: string): Promise<Record<string, unknown>> {
+    const { data } = await this.http.post<Record<string, unknown>>(
+      `/api/v1/giftcards/${encodeURIComponent(code)}/validate`,
+    );
+    return data;
+  }
+
   // ── Program ──
 
   async getProgramConfig(): Promise<ProgramConfig> {

@@ -28,6 +28,19 @@ import {
   CouponNotFoundError,
   CouponNotStartedError,
 } from "@loyaltyos/coupons";
+import {
+  GiftCardBatchNotFoundError,
+  GiftCardCancelledError,
+  GiftCardExpiredError,
+  GiftCardIdempotencyConflictError,
+  GiftCardInsufficientBalanceError,
+  GiftCardInvalidCodeError,
+  GiftCardLockError,
+  GiftCardNotActiveError,
+  GiftCardNotFoundError,
+  GiftCardRedeemedError,
+  TermsTemplateNotFoundError,
+} from "@loyaltyos/giftcards";
 import type { SupportedLocale } from "@loyaltyos/i18n";
 import { resolveLocale } from "@loyaltyos/i18n";
 import enUS from "@loyaltyos/i18n/src/locales/en-US.json" with { type: "json" };
@@ -61,13 +74,16 @@ interface ApiError {
   details?: unknown;
 }
 
-function localizeMessage(code: string, locale: SupportedLocale): string {
+export function localizeMessage(code: string, locale: SupportedLocale): string {
   const catalog = CATALOGS[locale];
   const parts = ["errors", ...code.split(".")];
   let current: unknown = catalog;
   for (const part of parts) {
-    if (typeof current !== "object" || current === null || !(part in current)) {
-      // Return the code itself if no translation exists
+    if (
+      typeof current !== "object" ||
+      current === null ||
+      !Object.prototype.hasOwnProperty.call(current, part)
+    ) {
       return code;
     }
     current = (current as Record<string, unknown>)[part];
@@ -92,7 +108,10 @@ function mapError(
         error: {
           code: err.code,
           message: localizeMessage(err.code, locale),
-          details: err.params,
+          // NOTE: err.params is intentionally NOT forwarded to the client.
+          // If a future endpoint needs structured failure details (e.g., gift
+          // card validation), add an explicit `clientDetails` field to
+          // LoyaltyError that requires conscious opt-in per call site.
         },
       },
     };
@@ -294,6 +313,144 @@ function mapError(
         error: {
           code: "COUPON_CHANNEL_ERROR",
           message: localizeMessage("COUPON_CHANNEL_ERROR", locale),
+        },
+      },
+    };
+  }
+
+  // Gift card domain errors
+  if (err instanceof GiftCardNotFoundError) {
+    return {
+      status: 404,
+      body: {
+        error: {
+          code: "GIFT_CARD_NOT_FOUND",
+          message: localizeMessage("GIFT_CARD_NOT_FOUND", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardExpiredError) {
+    return {
+      status: 422,
+      body: {
+        error: {
+          code: "GIFT_CARD_EXPIRED",
+          message: localizeMessage("GIFT_CARD_EXPIRED", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardRedeemedError) {
+    return {
+      status: 422,
+      body: {
+        error: {
+          code: "GIFT_CARD_DEPLETED",
+          message: localizeMessage("GIFT_CARD_DEPLETED", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardCancelledError) {
+    return {
+      status: 422,
+      body: {
+        error: {
+          code: "GIFT_CARD_CANCELLED",
+          message: localizeMessage("GIFT_CARD_CANCELLED", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardInsufficientBalanceError) {
+    const gcErr = err;
+    return {
+      status: 422,
+      body: {
+        error: {
+          code: "GIFT_CARD_INSUFFICIENT_BALANCE",
+          message: localizeMessage("GIFT_CARD_INSUFFICIENT_BALANCE", locale),
+          details: {
+            requested: gcErr.requested,
+            available: gcErr.available,
+          },
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardBatchNotFoundError) {
+    return {
+      status: 404,
+      body: {
+        error: {
+          code: "GIFT_CARD_BATCH_NOT_FOUND",
+          message: localizeMessage("GIFT_CARD_BATCH_NOT_FOUND", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardInvalidCodeError) {
+    return {
+      status: 422,
+      body: {
+        error: {
+          code: "GIFT_CARD_INVALID_CODE",
+          message: localizeMessage("GIFT_CARD_INVALID_CODE", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardIdempotencyConflictError) {
+    return {
+      status: 409,
+      body: {
+        error: {
+          code: "GIFT_CARD_IDEMPOTENCY_CONFLICT",
+          message: localizeMessage("GIFT_CARD_IDEMPOTENCY_CONFLICT", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof TermsTemplateNotFoundError) {
+    return {
+      status: 404,
+      body: {
+        error: {
+          code: "GIFT_CARD_TERMS_TEMPLATE_NOT_FOUND",
+          message: localizeMessage("GIFT_CARD_TERMS_TEMPLATE_NOT_FOUND", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardLockError) {
+    return {
+      status: 409,
+      body: {
+        error: {
+          code: "GIFT_CARD_LOCK",
+          message: localizeMessage("GIFT_CARD_LOCK", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardNotActiveError) {
+    return {
+      status: 422,
+      body: {
+        error: {
+          code: "GIFT_CARD_NOT_ACTIVE",
+          message: localizeMessage("GIFT_CARD_NOT_ACTIVE", locale),
         },
       },
     };

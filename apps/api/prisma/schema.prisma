@@ -39,6 +39,8 @@ model Program {
   apiKeys            ApiKey[]
   webhookSubscriptions WebhookSubscription[]
   auditLogs          AuditLog[]
+  termsTemplates     TermsTemplate[]
+  giftCardBatches    GiftCardBatch[]
 
   @@index([isActive])
 }
@@ -74,6 +76,7 @@ model Member {
   events             Event[]
   sessions           Session[]
   magicLinkTokens    MagicLinkToken[]
+  giftCardTransactions GiftCardTransaction[]
 
   @@unique([programId, externalId])
   @@index([programId])
@@ -332,6 +335,110 @@ model CouponRedemption {
   @@index([memberId])
 }
 
+enum BatchStatus {
+  pending
+  generating
+  ready
+  partial
+  failed
+  cancelled
+}
+
+enum GiftCardStatus {
+  pending
+  active
+  partially_redeemed
+  depleted
+  expired
+  cancelled
+}
+
+enum GiftCardTxType {
+  activate
+  redeem
+  refund
+  cancel
+  expire
+}
+
+model TermsTemplate {
+  id        String   @id @default(cuid())
+  programId String
+  name      String
+  locale    String   @default("es-MX")
+  body      String   @db.Text
+  version   Int      @default(1)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  program Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  batches GiftCardBatch[]
+
+  @@unique([programId, name, locale, version])
+}
+
+model GiftCardBatch {
+  id              String      @id @default(cuid())
+  programId       String
+  name            String
+  quantity        Int
+  initialAmount   Decimal     @db.Decimal(12, 2)
+  currency        String      @db.Char(3)
+  prefix          String?     @db.VarChar(8)
+  expirationDate  DateTime
+  termsTemplateId String
+  status          BatchStatus @default(pending)
+  generationJobId String?
+  generatedCount  Int         @default(0)
+  createdById     String
+  createdAt       DateTime    @default(now())
+
+  program       Program       @relation(fields: [programId], references: [id], onDelete: Restrict)
+  termsTemplate TermsTemplate @relation(fields: [termsTemplateId], references: [id])
+  createdBy     AdminUser     @relation(fields: [createdById], references: [id])
+  giftCards     GiftCard[]
+
+  @@index([programId, status])
+}
+
+model GiftCard {
+  id               String         @id @default(cuid())
+  code             String         @unique
+  batchId          String
+  initialAmount    Decimal        @db.Decimal(12, 2)
+  balance          Decimal        @db.Decimal(12, 2)
+  currency         String         @db.Char(3)
+  expirationDate   DateTime
+  status           GiftCardStatus @default(pending)
+  activatedAt      DateTime?
+  lastRedemptionAt DateTime?
+  metadata         Json?
+
+  batch        GiftCardBatch         @relation(fields: [batchId], references: [id])
+  transactions GiftCardTransaction[]
+
+  @@index([batchId])
+  @@index([status, expirationDate])
+}
+
+model GiftCardTransaction {
+  id             String         @id @default(cuid())
+  giftCardId     String
+  type           GiftCardTxType
+  amount         Decimal        @db.Decimal(12, 2)
+  balanceAfter   Decimal        @db.Decimal(12, 2)
+  memberId       String?
+  orderRef       String?
+  idempotencyKey String?        @unique
+  createdById    String?
+  createdAt      DateTime       @default(now())
+
+  giftCard GiftCard       @relation(fields: [giftCardId], references: [id])
+  member   Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@index([giftCardId, createdAt])
+}
+
 model Reward {
   id          String   @id @default(cuid())
   programId   String
@@ -570,9 +677,10 @@ model AdminUser {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  program      Program        @relation(fields: [programId], references: [id], onDelete: Restrict)
+  program      Program          @relation(fields: [programId], references: [id], onDelete: Restrict)
   auditLogs    AuditLog[]
   sessions     AdminSession[]
+  giftCardBatches GiftCardBatch[]
 
   @@index([programId])
   @@index([email])

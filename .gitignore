@@ -15,3 +15,9 @@ infra/k8s/helm/loyaltyos/charts/
 
 # Docusaurus
 .docusaurus/
+
+# i18n script compiled outputs (run via tsx)
+packages/i18n/scripts/*.js
+packages/i18n/scripts/*.d.ts
+packages/i18n/scripts/*.js.map
+packages/i18n/scripts/*.d.ts.map

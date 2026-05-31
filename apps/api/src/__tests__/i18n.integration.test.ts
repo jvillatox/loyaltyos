@@ -184,6 +184,32 @@ describe("POST /auth/magic-link — locale persistence", () => {
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.member.update).not.toHaveBeenCalled();
   });
+
+  it("does not persist script tag as locale and does not 500", async () => {
+    mockPrisma.member.findFirst.mockResolvedValueOnce({
+      ...memberFixture,
+      locale: null,
+      program: programFixture,
+    });
+    mockPrisma.magicLinkToken.create.mockResolvedValue({
+      id: "tok-xss",
+      memberId: "mem-1",
+      tokenHash: "hash",
+      expiresAt: new Date(),
+      consumedAt: null,
+      createdAt: new Date(),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/magic-link",
+      payload: { email: "carlos@example.com", locale: "<script>" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Must not persist the injected value
+    expect(mockPrisma.member.update).not.toHaveBeenCalled();
+  });
 });
 
 // ── GET /auth/me extended response ─────────────────────────
@@ -314,6 +340,25 @@ describe("PATCH /members/me", () => {
     });
 
     expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 429 after exceeding rate limit", async () => {
+    mockPrisma.apiKey.findUnique.mockResolvedValue(null);
+
+    // Fire 31 requests — the first 30 should not 429, at least one must 429
+    const results: number[] = [];
+    for (let i = 0; i < 31; i++) {
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/v1/members/me",
+        payload: { locale: "en-US" },
+      });
+      results.push(res.statusCode);
+    }
+
+    expect(results.filter((s) => s === 429).length).toBeGreaterThanOrEqual(1);
+    // All other responses should still be 401 (missing auth) — not 200
+    expect(results.filter((s) => s !== 429 && s !== 401).length).toBe(0);
   });
 });
 

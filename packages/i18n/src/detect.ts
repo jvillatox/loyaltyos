@@ -1,7 +1,11 @@
+import { pick } from "accept-language-parser";
+
 const SUPPORTED_LOCALES = ["es-MX", "en-US"] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 export const DEFAULT_LOCALE: SupportedLocale = "es-MX";
+
+const SUPPORTED_READONLY: readonly string[] = SUPPORTED_LOCALES;
 
 export function isSupportedLocale(locale: string): locale is SupportedLocale {
   return SUPPORTED_LOCALES.includes(locale as SupportedLocale);
@@ -17,24 +21,28 @@ export function resolveLocale(input: {
   userPreference?: string;
   programDefault?: string;
 }): SupportedLocale {
-  const candidates = [
-    input.userPreference,
-    input.browserLanguage,
-    input.acceptLanguage,
-    input.programDefault,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    // Try exact match first
-    if (isSupportedLocale(candidate)) return candidate;
-    // Try matching just the language part (e.g., "es" → "es-MX")
-    const lang = candidate.split("-")[0];
-    if (lang) {
-      const match = SUPPORTED_LOCALES.find((l) => l.startsWith(lang));
-      if (match) return match;
-    }
+  // 1. User preference (explicit choice) — highest priority
+  if (input.userPreference && isSupportedLocale(input.userPreference)) {
+    return input.userPreference;
   }
 
+  // 2. Browser language — try exact match then closest via accept-language-parser
+  if (input.browserLanguage) {
+    const picked = pick(SUPPORTED_READONLY, input.browserLanguage);
+    if (picked) return picked as SupportedLocale;
+  }
+
+  // 3. Accept-Language header — properly handles q= weights and region matching
+  if (input.acceptLanguage) {
+    const picked = pick(SUPPORTED_READONLY, input.acceptLanguage);
+    if (picked) return picked as SupportedLocale;
+  }
+
+  // 4. Program default
+  if (input.programDefault && isSupportedLocale(input.programDefault)) {
+    return input.programDefault;
+  }
+
+  // 5. Hard fallback
   return DEFAULT_LOCALE;
 }

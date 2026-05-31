@@ -288,6 +288,17 @@
     "SEGMENT_NOT_STATIC": "Segment not static",
     "INVALID_SEGMENT_RULE": "Invalid segment rule",
     "REQUEST_ERROR": "Request error",
+    "GIFT_CARD_NOT_FOUND": "Gift card not found",
+    "GIFT_CARD_EXPIRED": "Gift card expired",
+    "GIFT_CARD_DEPLETED": "Gift card depleted",
+    "GIFT_CARD_CANCELLED": "Gift card cancelled",
+    "GIFT_CARD_INSUFFICIENT_BALANCE": "Insufficient gift card balance",
+    "GIFT_CARD_BATCH_NOT_FOUND": "Gift card batch not found",
+    "GIFT_CARD_INVALID_CODE": "Invalid gift card code",
+    "GIFT_CARD_IDEMPOTENCY_CONFLICT": "Idempotency conflict on gift card operation",
+    "GIFT_CARD_TERMS_TEMPLATE_NOT_FOUND": "Terms template not found",
+    "GIFT_CARD_LOCK": "Gift card is being processed, please retry",
+    "GIFT_CARD_NOT_ACTIVE": "Gift card is not active",
     "INVALID_TOKEN": "Invalid or expired token",
     "INVALID_CREDENTIALS": "Invalid email or password"
   }

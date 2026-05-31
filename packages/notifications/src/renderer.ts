@@ -1,3 +1,11 @@
+/**
+ * Template safety is enforced by three layers:
+ * (1) admin-only template authoring (no untrusted template input),
+ * (2) sanitized context (sanitizeContext strips prototype-chain keys),
+ * (3) Handlebars 4.7+ runtime blocks prototype property/method access
+ *     via allowProtoPropertiesByDefault: false and
+ *     allowProtoMethodsByDefault: false.
+ */
 import Handlebars from "handlebars";
 
 const hbs = Handlebars.create();
@@ -78,25 +86,28 @@ hbs.registerHelper("formatPoints", (n: number, locale: string) => {
  * Variables use `{{var}}`, `{{nested.path}}`, `{{#if var}}...{{/if}}`, `{{#each list}}...{{/each}}`.
  */
 export function render(template: string, context: Record<string, unknown>): string {
-  // Disallow template strings that attempt to access dangerous globals
-  const blocked =
-    /\{\{.*\b(constructor|__proto__|prototype|require|process|global|globalThis)\b.*\}\}/i;
-  if (blocked.test(template)) {
-    return "";
-  }
-
   const compiled = hbs.compile(template, { noEscape: false, strict: false });
-  return compiled(sanitizeContext(context));
+  return compiled(sanitizeContext(context), {
+    allowProtoPropertiesByDefault: false,
+    allowProtoMethodsByDefault: false,
+  });
 }
 
 // Strip prototype chain to prevent sandbox escape via __proto__ or constructor
 function sanitizeContext(obj: Record<string, unknown>): Record<string, unknown> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const clean: Record<string, unknown> = Object.create(null);
+  const clean = Object.create(null) as Record<string, unknown>;
   for (const [key, value] of Object.entries(obj)) {
     if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      clean[key] = sanitizeContext(value as Record<string, unknown>);
+    if (value !== null && typeof value === "object") {
+      if (Array.isArray(value)) {
+        clean[key] = value.map((item: unknown) =>
+          item !== null && typeof item === "object" && !Array.isArray(item)
+            ? sanitizeContext(item as Record<string, unknown>)
+            : item,
+        );
+      } else {
+        clean[key] = sanitizeContext(value as Record<string, unknown>);
+      }
     } else {
       clean[key] = value;
     }
