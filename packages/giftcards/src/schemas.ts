@@ -40,6 +40,8 @@ export const redeemSchema = z.object({
   memberId: z.string().optional(),
   idempotencyKey: z.string().min(1),
   orderRef: z.string().optional(),
+  createdById: z.string().optional(),
+  requestProgramId: z.string().min(1),
 });
 
 export const refundSchema = z.object({
@@ -47,10 +49,14 @@ export const refundSchema = z.object({
   amount: z.number().positive(),
   idempotencyKey: z.string().min(1),
   reason: z.string().optional(),
+  createdById: z.string().optional(),
+  requestProgramId: z.string().min(1),
 });
 
 export const cancelCardSchema = z.object({
   code: z.string().min(1),
+  createdById: z.string().optional(),
+  requestProgramId: z.string().min(1),
 });
 
 export const exportSchema = z.object({

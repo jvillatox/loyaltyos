@@ -299,6 +299,9 @@
     "GIFT_CARD_TERMS_TEMPLATE_NOT_FOUND": "Terms template not found",
     "GIFT_CARD_LOCK": "Gift card is being processed, please retry",
     "GIFT_CARD_NOT_ACTIVE": "Gift card is not active",
+    "BATCH_NOT_CANCELLABLE": "Batch cannot be cancelled because cards have been redeemed",
+    "REFUND_EXCEEDS_INITIAL": "Refund would exceed the initial card amount",
+    "GIFT_CARD_CODE_COLLISION": "Code generation failed: too many collisions",
     "INVALID_TOKEN": "Invalid or expired token",
     "INVALID_CREDENTIALS": "Invalid email or password"
   }

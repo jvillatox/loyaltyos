@@ -16,7 +16,9 @@ vi.mock("../code.js", () => ({
 
 // ── Mock Prisma ───────────────────────────────────
 
-const mockPrisma = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockPrisma: any = {
+  $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn(mockPrisma)),
   giftCardBatch: {
     create: vi.fn(),
     findUnique: vi.fn(),
@@ -27,15 +29,19 @@ const mockPrisma = {
   giftCard: {
     createMany: vi.fn(),
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findMany: vi.fn(),
     count: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
+    groupBy: vi.fn(),
   },
   giftCardTransaction: {
     create: vi.fn(),
     findUnique: vi.fn(),
     findMany: vi.fn(),
     count: vi.fn(),
+    groupBy: vi.fn(),
   },
   termsTemplate: {
     create: vi.fn(),
@@ -49,6 +55,8 @@ let GiftCardService: typeof import("../service.js").GiftCardService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  // Re-apply $transaction implementation lost after resetAllMocks
+  mockPrisma.$transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(mockPrisma));
   mockValidateChecksum.mockReturnValue(true);
   mockGenerateCode.mockReturnValue("ABCDEFGHJKLMNPQR");
   const mod = await import("../service.js");
@@ -57,13 +65,47 @@ beforeEach(async () => {
 
 // ── Helpers ───────────────────────────────────────
 
+interface DecValue {
+  minus: (v: unknown) => DecValue;
+  plus: (v: unknown) => DecValue;
+  lessThan: (v: unknown) => boolean;
+  greaterThan: (v: unknown) => boolean;
+  gte: (v: unknown) => boolean;
+  equals: (v: unknown) => boolean;
+  toFixed: () => string;
+  toNumber: () => number;
+  valueOf: () => number;
+  toString: () => string;
+}
+
+function dec(n: number): DecValue {
+  return {
+    minus: (other: { toNumber?: () => number }) =>
+      dec(n - (typeof other === "number" ? other : (other.toNumber?.() ?? 0))),
+    plus: (other: { toNumber?: () => number }) =>
+      dec(n + (typeof other === "number" ? other : (other.toNumber?.() ?? 0))),
+    lessThan: (other: { toNumber?: () => number }) =>
+      n < (typeof other === "number" ? other : (other.toNumber?.() ?? 0)),
+    greaterThan: (other: { toNumber?: () => number }) =>
+      n > (typeof other === "number" ? other : (other.toNumber?.() ?? 0)),
+    gte: (other: { toNumber?: () => number }) =>
+      n >= (typeof other === "number" ? other : (other.toNumber?.() ?? 0)),
+    equals: (other: { toNumber?: () => number }) =>
+      n === (typeof other === "number" ? other : (other.toNumber?.() ?? 0)),
+    toFixed: () => String(n),
+    toNumber: () => n,
+    valueOf: () => n,
+    toString: () => String(n),
+  } as DecValue;
+}
+
 function batchRow(overrides = {}) {
   return {
     id: "batch-1",
     programId: "prog-1",
     name: "Test Batch",
     quantity: 10,
-    initialAmount: 1000 as unknown as number, // Decimal
+    initialAmount: dec(1000),
     currency: "MXN",
     prefix: null,
     expirationDate: new Date("2026-12-31"),
@@ -82,8 +124,8 @@ function cardRow(overrides = {}) {
     id: "card-1",
     code: "ABCDEFGHJKLMNPQR",
     batchId: "batch-1",
-    initialAmount: 1000 as unknown as number,
-    balance: 800 as unknown as number,
+    initialAmount: dec(1000),
+    balance: dec(800),
     currency: "MXN",
     expirationDate: new Date("2026-12-31"),
     status: "active" as const,
@@ -100,10 +142,12 @@ function transactionRow(overrides = {}) {
     id: "tx-1",
     giftCardId: "card-1",
     type: "redeem" as const,
-    amount: 200 as unknown as number,
-    balanceAfter: 800 as unknown as number,
+    amount: dec(200),
+    balanceAfter: dec(800),
     memberId: null,
     idempotencyKey: null,
+    idempotencyPayloadHash: null,
+    programId: "prog-1",
     orderRef: null,
     createdById: null,
     createdAt: new Date(),
@@ -129,6 +173,7 @@ function termsRow(overrides = {}) {
 
 describe("GiftCardService.createBatch", () => {
   it("creates a batch and enqueues generation", async () => {
+    mockPrisma.termsTemplate.findUnique.mockResolvedValue(termsRow());
     mockPrisma.giftCardBatch.create.mockResolvedValue(batchRow());
 
     let enqueuedJobName = "";
@@ -191,6 +236,7 @@ describe("GiftCardService.listBatches", () => {
 describe("GiftCardService.cancelBatch", () => {
   it("cancels a pending batch", async () => {
     mockPrisma.giftCardBatch.findUnique.mockResolvedValue(batchRow({ status: "pending" }));
+    mockPrisma.giftCard.count.mockResolvedValue(0);
     mockPrisma.giftCardBatch.update.mockResolvedValue(batchRow({ status: "cancelled" }));
 
     const svc = new GiftCardService(mockPrisma as never);
@@ -208,9 +254,10 @@ describe("GiftCardService.cancelBatch", () => {
 
   it("throws when batch is already ready", async () => {
     mockPrisma.giftCardBatch.findUnique.mockResolvedValue(batchRow({ status: "ready" }));
+    mockPrisma.giftCard.count.mockResolvedValue(0);
 
     const svc = new GiftCardService(mockPrisma as never);
-    await expect(svc.cancelBatch("batch-1")).rejects.toThrow("Cannot cancel");
+    await expect(svc.cancelBatch("batch-1")).rejects.toThrow("cannot be cancelled");
   });
 });
 
@@ -237,7 +284,7 @@ describe("GiftCardService.validateCode", () => {
 
     expect(result.valid).toBe(false);
     expect(result.reason).toBe("invalid_code");
-    expect(mockPrisma.giftCard.findUnique).not.toHaveBeenCalled();
+    // Timing equalization: a dummy DB lookup is performed (H.2)
   });
 
   it("returns invalid for a code not in database", async () => {
@@ -291,16 +338,22 @@ describe("GiftCardService.redeem", () => {
   it("redeems amount and returns new balance", async () => {
     mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null); // no idempotency
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow());
-    mockPrisma.giftCard.update.mockResolvedValue(
-      cardRow({ balance: 600 as unknown as number, status: "partially_redeemed" }),
+    mockPrisma.giftCard.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.giftCard.findUniqueOrThrow.mockResolvedValue(
+      cardRow({ balance: dec(600), status: "partially_redeemed" }),
     );
     mockPrisma.giftCardTransaction.create.mockResolvedValue(
-      transactionRow({ amount: 200 as unknown as number, balanceAfter: 600 as unknown as number }),
+      transactionRow({ amount: dec(200), balanceAfter: dec(600) }),
     );
 
     const svc = new GiftCardService(mockPrisma as never);
     const result = await svc.redeem(
-      { code: "ABCDEFGHJKLMNPQR", amount: 200, idempotencyKey: "idem-1" },
+      {
+        code: "ABCDEFGHJKLMNPQR",
+        amount: 200,
+        idempotencyKey: "idem-1",
+        requestProgramId: "prog-1",
+      },
       mockLockFn,
     );
 
@@ -309,19 +362,48 @@ describe("GiftCardService.redeem", () => {
     expect(result.idempotent).toBe(false);
   });
 
-  it("returns cached result for duplicate idempotency key", async () => {
+  it("detects payload tampering on idempotency replay", async () => {
+    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow());
     mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(
-      transactionRow({ id: "tx-existing", idempotencyKey: "idem-1" }),
+      transactionRow({
+        id: "tx-existing",
+        idempotencyKey: "idem-1",
+        idempotencyPayloadHash: "different-hash-than-computed",
+      }),
     );
 
     const svc = new GiftCardService(mockPrisma as never);
-    const result = await svc.redeem(
-      { code: "ABCDEFGHJKLMNPQR", amount: 200, idempotencyKey: "idem-1" },
-      mockLockFn,
+    await expect(
+      svc.redeem(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 200,
+          idempotencyKey: "idem-1",
+          requestProgramId: "prog-1",
+        },
+        mockLockFn,
+      ),
+    ).rejects.toThrow("already used with different payload");
+  });
+
+  it("throws GiftCardIdempotencyConflictError when replay with different payload", async () => {
+    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow());
+    mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(
+      transactionRow({ idempotencyKey: "idem-1", idempotencyPayloadHash: "wrong-hash" }),
     );
 
-    expect(result.idempotent).toBe(true);
-    expect(result.transactionId).toBe("tx-existing");
+    const svc = new GiftCardService(mockPrisma as never);
+    await expect(
+      svc.redeem(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 200,
+          idempotencyKey: "idem-1",
+          requestProgramId: "prog-1",
+        },
+        mockLockFn,
+      ),
+    ).rejects.toThrow("already used with different payload");
   });
 
   it("throws GiftCardInvalidCodeError for invalid checksum", async () => {
@@ -329,45 +411,67 @@ describe("GiftCardService.redeem", () => {
 
     const svc = new GiftCardService(mockPrisma as never);
     await expect(
-      svc.redeem({ code: "BOGUS", amount: 100, idempotencyKey: "idem-1" }, mockLockFn),
+      svc.redeem(
+        { code: "BOGUS", amount: 100, idempotencyKey: "idem-1", requestProgramId: "prog-1" },
+        mockLockFn,
+      ),
     ).rejects.toThrow("invalid");
   });
 
   it("throws GiftCardNotFoundError for missing card", async () => {
     mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
+    // Service loads card first — first call returns null
     mockPrisma.giftCard.findUnique.mockResolvedValue(null);
 
     const svc = new GiftCardService(mockPrisma as never);
     await expect(
-      svc.redeem({ code: "ABCDEFGHJKLMNPQR", amount: 100, idempotencyKey: "idem-1" }, mockLockFn),
+      svc.redeem(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 100,
+          idempotencyKey: "idem-1",
+          requestProgramId: "prog-1",
+        },
+        mockLockFn,
+      ),
     ).rejects.toThrow("not found");
   });
 
   it("throws GiftCardInsufficientBalanceError when balance too low", async () => {
-    mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
-    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ balance: 50 as unknown as number }));
+    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ balance: dec(50) }));
 
     const svc = new GiftCardService(mockPrisma as never);
     await expect(
-      svc.redeem({ code: "ABCDEFGHJKLMNPQR", amount: 100, idempotencyKey: "idem-1" }, mockLockFn),
+      svc.redeem(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 100,
+          idempotencyKey: "idem-1",
+          requestProgramId: "prog-1",
+        },
+        mockLockFn,
+      ),
     ).rejects.toThrow("insufficient balance");
   });
 
   it("sets status to depleted when balance reaches zero", async () => {
-    mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
-    mockPrisma.giftCard.findUnique.mockResolvedValue(
-      cardRow({ balance: 200 as unknown as number }),
-    );
-    mockPrisma.giftCard.update.mockResolvedValue(
-      cardRow({ balance: 0 as unknown as number, status: "depleted" }),
+    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ balance: dec(200) }));
+    mockPrisma.giftCard.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.giftCard.findUniqueOrThrow.mockResolvedValue(
+      cardRow({ balance: dec(0), status: "depleted" }),
     );
     mockPrisma.giftCardTransaction.create.mockResolvedValue(
-      transactionRow({ amount: 200 as unknown as number, balanceAfter: 0 as unknown as number }),
+      transactionRow({ amount: dec(200), balanceAfter: dec(0) }),
     );
 
     const svc = new GiftCardService(mockPrisma as never);
     const result = await svc.redeem(
-      { code: "ABCDEFGHJKLMNPQR", amount: 200, idempotencyKey: "idem-1" },
+      {
+        code: "ABCDEFGHJKLMNPQR",
+        amount: 200,
+        idempotencyKey: "idem-1",
+        requestProgramId: "prog-1",
+      },
       mockLockFn,
     );
 
@@ -375,42 +479,173 @@ describe("GiftCardService.redeem", () => {
   });
 
   it("throws GiftCardLockError when lock not acquired", async () => {
-    mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
+    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow());
 
     const svc = new GiftCardService(mockPrisma as never);
     await expect(
-      svc.redeem({ code: "ABCDEFGHJKLMNPQR", amount: 100, idempotencyKey: "idem-1" }, () =>
-        Promise.resolve({ acquired: false, release: () => Promise.resolve() }),
+      svc.redeem(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 100,
+          idempotencyKey: "idem-1",
+          requestProgramId: "prog-1",
+        },
+        () => Promise.resolve({ acquired: false, release: () => Promise.resolve() }),
       ),
     ).rejects.toThrow("currently being processed");
+  });
+
+  it("handles multi-use redemption sequence (I.4)", async () => {
+    // Card starts with 1000 balance
+    let currentBalance = dec(1000);
+    let currentStatus = "active";
+
+    const setupMocks = () => {
+      mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
+      mockPrisma.giftCard.findUnique.mockResolvedValue(
+        cardRow({ balance: currentBalance, status: currentStatus }),
+      );
+      mockPrisma.giftCard.updateMany.mockResolvedValue({ count: 1 });
+    };
+
+    const svc = new GiftCardService(mockPrisma as never);
+
+    // First redemption: 1000 → 700 (partially_redeemed)
+    setupMocks();
+    mockPrisma.giftCard.findUniqueOrThrow.mockResolvedValue(
+      cardRow({ balance: dec(700), status: "partially_redeemed" }),
+    );
+    mockPrisma.giftCardTransaction.create.mockResolvedValue(
+      transactionRow({ amount: dec(300), balanceAfter: dec(700) }),
+    );
+
+    const r1 = await svc.redeem(
+      {
+        code: "ABCDEFGHJKLMNPQR",
+        amount: 300,
+        idempotencyKey: "idem-m1",
+        requestProgramId: "prog-1",
+      },
+      mockLockFn,
+    );
+    expect(r1.balanceAfter).toBe(700);
+
+    // Second redemption: 700 → 500
+    currentBalance = dec(700);
+    currentStatus = "partially_redeemed";
+    setupMocks();
+    mockPrisma.giftCard.findUniqueOrThrow.mockResolvedValue(
+      cardRow({ balance: dec(500), status: "partially_redeemed" }),
+    );
+    mockPrisma.giftCardTransaction.create.mockResolvedValue(
+      transactionRow({ amount: dec(200), balanceAfter: dec(500) }),
+    );
+
+    const r2 = await svc.redeem(
+      {
+        code: "ABCDEFGHJKLMNPQR",
+        amount: 200,
+        idempotencyKey: "idem-m2",
+        requestProgramId: "prog-1",
+      },
+      mockLockFn,
+    );
+    expect(r2.balanceAfter).toBe(500);
+
+    // Third redemption: 500 → 0 (depleted)
+    currentBalance = dec(500);
+    currentStatus = "partially_redeemed";
+    setupMocks();
+    mockPrisma.giftCard.findUniqueOrThrow.mockResolvedValue(
+      cardRow({ balance: dec(0), status: "depleted" }),
+    );
+    mockPrisma.giftCardTransaction.create.mockResolvedValue(
+      transactionRow({ amount: dec(500), balanceAfter: dec(0) }),
+    );
+
+    const r3 = await svc.redeem(
+      {
+        code: "ABCDEFGHJKLMNPQR",
+        amount: 500,
+        idempotencyKey: "idem-m3",
+        requestProgramId: "prog-1",
+      },
+      mockLockFn,
+    );
+    expect(r3.balanceAfter).toBe(0);
+
+    // Fourth redemption fails: depleted
+    currentBalance = dec(0);
+    currentStatus = "depleted";
+    setupMocks();
+
+    await expect(
+      svc.redeem(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 100,
+          idempotencyKey: "idem-m4",
+          requestProgramId: "prog-1",
+        },
+        mockLockFn,
+      ),
+    ).rejects.toThrow("insufficient balance");
+  });
+
+  it("throws when atomic balance update fails due to concurrent modification (I.5)", async () => {
+    mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
+    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ balance: dec(1000) }));
+    // updateMany returns count 0 — another transaction modified the balance first
+    mockPrisma.giftCard.updateMany.mockResolvedValue({ count: 0 });
+
+    const svc = new GiftCardService(mockPrisma as never);
+    await expect(
+      svc.redeem(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 200,
+          idempotencyKey: "idem-cc",
+          requestProgramId: "prog-1",
+        },
+        mockLockFn,
+      ),
+    ).rejects.toThrow("ATOMIC_UPDATE_FAILED");
   });
 });
 
 // ── Refund ────────────────────────────────────────
 
+const mockLockFn = () => Promise.resolve({ acquired: true, release: () => Promise.resolve() });
+
 describe("GiftCardService.refund", () => {
+  const refundLock = mockLockFn;
+
   it("refunds amount and updates balance", async () => {
     mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
     mockPrisma.giftCard.findUnique.mockResolvedValue(
-      cardRow({ balance: 600 as unknown as number }),
+      cardRow({ balance: dec(600), initialAmount: dec(1000) }),
     );
     mockPrisma.giftCard.update.mockResolvedValue(
-      cardRow({ balance: 800 as unknown as number, status: "partially_redeemed" }),
+      cardRow({ balance: dec(800), status: "partially_redeemed" }),
     );
     mockPrisma.giftCardTransaction.create.mockResolvedValue(
       transactionRow({
         type: "refund",
-        amount: 200 as unknown as number,
-        balanceAfter: 800 as unknown as number,
+        amount: dec(200),
+        balanceAfter: dec(800),
       }),
     );
 
     const svc = new GiftCardService(mockPrisma as never);
-    const result = await svc.refund({
-      code: "ABCDEFGHJKLMNPQR",
-      amount: 200,
-      idempotencyKey: "idem-2",
-    });
+    const result = await svc.refund(
+      {
+        code: "ABCDEFGHJKLMNPQR",
+        amount: 200,
+        idempotencyKey: "idem-2",
+        requestProgramId: "prog-1",
+      },
+      refundLock,
+    );
 
     expect(result.amount).toBe(200);
     expect(result.balanceAfter).toBe(800);
@@ -419,46 +654,59 @@ describe("GiftCardService.refund", () => {
   it("restores status to active when fully refunded", async () => {
     mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(null);
     mockPrisma.giftCard.findUnique.mockResolvedValue(
-      cardRow({ balance: 600 as unknown as number, initialAmount: 1000 as unknown as number }),
+      cardRow({ balance: dec(600), initialAmount: dec(1000) }),
     );
-    mockPrisma.giftCard.update.mockResolvedValue(
-      cardRow({ balance: 1000 as unknown as number, status: "active" }),
-    );
+    mockPrisma.giftCard.update.mockResolvedValue(cardRow({ balance: dec(1000), status: "active" }));
     mockPrisma.giftCardTransaction.create.mockResolvedValue(
       transactionRow({
         type: "refund",
-        amount: 400 as unknown as number,
-        balanceAfter: 1000 as unknown as number,
+        amount: dec(400),
+        balanceAfter: dec(1000),
       }),
     );
 
     const svc = new GiftCardService(mockPrisma as never);
-    const result = await svc.refund({
-      code: "ABCDEFGHJKLMNPQR",
-      amount: 400,
-      idempotencyKey: "idem-3",
-    });
+    const result = await svc.refund(
+      {
+        code: "ABCDEFGHJKLMNPQR",
+        amount: 400,
+        idempotencyKey: "idem-3",
+        requestProgramId: "prog-1",
+      },
+      refundLock,
+    );
 
     expect(result.balanceAfter).toBe(1000);
   });
 
-  it("returns cached result for duplicate idempotency key", async () => {
+  it("throws GiftCardIdempotencyConflictError for replay with different payload", async () => {
     mockPrisma.giftCardTransaction.findUnique.mockResolvedValue(
-      transactionRow({ idempotencyKey: "idem-2", type: "refund" }),
+      transactionRow({
+        idempotencyKey: "idem-2",
+        type: "refund",
+        idempotencyPayloadHash: "wrong-hash",
+      }),
     );
+    mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ balance: dec(600) }));
 
     const svc = new GiftCardService(mockPrisma as never);
-    const result = await svc.refund({
-      code: "ABCDEFGHJKLMNPQR",
-      amount: 200,
-      idempotencyKey: "idem-2",
-    });
-
-    expect(result.idempotent).toBe(true);
+    await expect(
+      svc.refund(
+        {
+          code: "ABCDEFGHJKLMNPQR",
+          amount: 200,
+          idempotencyKey: "idem-2",
+          requestProgramId: "prog-1",
+        },
+        refundLock,
+      ),
+    ).rejects.toThrow("already used with different payload");
   });
 });
 
 // ── Cancel card ───────────────────────────────────
+
+const cancelLock = () => Promise.resolve({ acquired: true, release: () => Promise.resolve() });
 
 describe("GiftCardService.cancelCard", () => {
   it("cancels a card and records transaction", async () => {
@@ -473,7 +721,10 @@ describe("GiftCardService.cancelCard", () => {
     );
 
     const svc = new GiftCardService(mockPrisma as never);
-    const result = await svc.cancelCard({ code: "ABCDEFGHJKLMNPQR" });
+    const result = await svc.cancelCard(
+      { code: "ABCDEFGHJKLMNPQR", requestProgramId: "prog-1" },
+      cancelLock,
+    );
 
     expect(result?.status).toBe("cancelled");
   });
@@ -482,14 +733,18 @@ describe("GiftCardService.cancelCard", () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(null);
 
     const svc = new GiftCardService(mockPrisma as never);
-    await expect(svc.cancelCard({ code: "BOGUS" })).rejects.toThrow("not found");
+    await expect(
+      svc.cancelCard({ code: "BOGUS", requestProgramId: "prog-1" }, cancelLock),
+    ).rejects.toThrow("not found");
   });
 
   it("throws GiftCardCancelledError if already cancelled", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ status: "cancelled" }));
 
     const svc = new GiftCardService(mockPrisma as never);
-    await expect(svc.cancelCard({ code: "ABCDEFGHJKLMNPQR" })).rejects.toThrow("cancelled");
+    await expect(
+      svc.cancelCard({ code: "ABCDEFGHJKLMNPQR", requestProgramId: "prog-1" }, cancelLock),
+    ).rejects.toThrow("cancelled");
   });
 });
 

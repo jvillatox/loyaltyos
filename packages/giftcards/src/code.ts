@@ -9,10 +9,9 @@ const CHECKSUM_LENGTH = 4;
  * Format: XXXX-XXXX-XXXX-CHCK (12-char body + 4-char HMAC-SHA256 checksum).
  * Optional prefix: PREFIX-XXXX-XXXX-XXXX-CHCK.
  */
-export function generateCode(prefix?: string, programSecret?: string): string {
-  const secret = programSecret ?? process.env.GIFTCARD_HMAC_SECRET ?? "dev-secret";
+export function generateCode(prefix: string | undefined, programSecret: string): string {
   const body = generateRandomString(BODY_LENGTH);
-  const checksum = computeChecksum(body, secret);
+  const checksum = computeChecksum(body, programSecret);
   const code = body + checksum;
   return prefix ? `${prefix}${code}` : code;
 }
@@ -21,14 +20,13 @@ export function generateCode(prefix?: string, programSecret?: string): string {
  * Validates the checksum embedded in a gift card code.
  * Uses timing-safe comparison.
  */
-export function validateChecksum(code: string, programSecret?: string): boolean {
-  const secret = programSecret ?? process.env.GIFTCARD_HMAC_SECRET ?? "dev-secret";
+export function validateChecksum(code: string, programSecret: string): boolean {
   const normalized = normalizeCode(code);
   if (normalized.length < BODY_LENGTH + CHECKSUM_LENGTH) return false;
 
   const body = normalized.slice(0, BODY_LENGTH);
   const checksum = normalized.slice(BODY_LENGTH, BODY_LENGTH + CHECKSUM_LENGTH);
-  const expected = computeChecksum(body, secret);
+  const expected = computeChecksum(body, programSecret);
 
   return timingSafeEqual(Buffer.from(checksum), Buffer.from(expected));
 }

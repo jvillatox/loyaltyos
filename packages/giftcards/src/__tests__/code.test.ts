@@ -2,30 +2,31 @@ import { describe, expect, it } from "vitest";
 
 import { ALPHABET, formatCode, generateCode, normalizeCode, validateChecksum } from "../code.js";
 
+const TEST_SECRET = "test-secret-32-bytes-random!!";
+
 describe("generateCode", () => {
   it("generates a 16-character dashless code", () => {
-    const code = generateCode();
+    const code = generateCode(undefined, TEST_SECRET);
     expect(code).toHaveLength(16);
     expect(code).not.toContain("-");
   });
 
   it("uses only characters from the alphabet", () => {
-    const code = generateCode();
+    const code = generateCode(undefined, TEST_SECRET);
     for (const ch of code) {
       expect(ALPHABET).toContain(ch);
     }
   });
 
   it("generates codes that pass checksum validation", () => {
-    const secret = "test-secret";
     for (let i = 0; i < 100; i++) {
-      const code = generateCode(undefined, secret);
-      expect(validateChecksum(code, secret)).toBe(true);
+      const code = generateCode(undefined, TEST_SECRET);
+      expect(validateChecksum(code, TEST_SECRET)).toBe(true);
     }
   });
 
   it("prepends a prefix when given", () => {
-    const code = generateCode("VIP", "secret");
+    const code = generateCode("VIP", TEST_SECRET);
     expect(code.startsWith("VIP")).toBe(true);
     // prefix + 12 body + 4 checksum = prefix.length + 16
     expect(code).toHaveLength(3 + 16);
@@ -34,7 +35,7 @@ describe("generateCode", () => {
   it("generates 10,000 unique codes with no duplicates", () => {
     const codes = new Set<string>();
     for (let i = 0; i < 10_000; i++) {
-      codes.add(generateCode());
+      codes.add(generateCode(undefined, TEST_SECRET));
     }
     expect(codes.size).toBe(10_000);
   });

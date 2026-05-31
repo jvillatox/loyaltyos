@@ -5,9 +5,16 @@ await initTracing("loyaltyos-api");
 
 import { buildApp, getBullMQMetrics, prisma } from "./app.js";
 import { getBusinessMetrics } from "./lib/business-metrics.js";
-import { scheduleGiftCardExpiration } from "./lib/giftcard-setup.js";
+import {
+  scheduleGiftCardExpiration,
+  scheduleOutstandingBalanceRefresh,
+} from "./lib/giftcard-setup.js";
 import { createQueue } from "./lib/queue.js";
-import { startGiftCardExpireWorker, startGiftCardGenerateWorker } from "./workers/giftcards.js";
+import {
+  startGiftCardExpireWorker,
+  startGiftCardGenerateWorker,
+  startOutstandingBalanceWorker,
+} from "./workers/giftcards.js";
 import { startNotificationsWorker } from "./workers/notifications.js";
 
 const app = await buildApp();
@@ -24,13 +31,20 @@ try {
   startNotificationsWorker();
   startGiftCardGenerateWorker();
   startGiftCardExpireWorker();
+  startOutstandingBalanceWorker();
   await scheduleGiftCardExpiration();
+  await scheduleOutstandingBalanceRefresh();
 
   // Collect BullMQ queue depth metrics periodically
   const bullmqMetrics = getBullMQMetrics();
   if (bullmqMetrics) {
     const queueGauge = bullmqMetrics.bullmqQueueDepth;
-    const queueNames = ["notifications", "giftcards.batch.generate", "giftcards.expire"];
+    const queueNames = [
+      "notifications",
+      "giftcards.batch.generate",
+      "giftcards.expire",
+      "giftcards.outstanding-balance.refresh",
+    ];
     const queues = queueNames.map((name) => createQueue(name));
 
     const collectQueueMetrics = async () => {

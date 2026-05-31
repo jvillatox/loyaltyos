@@ -422,21 +422,25 @@ model GiftCard {
 }
 
 model GiftCardTransaction {
-  id             String         @id @default(cuid())
-  giftCardId     String
-  type           GiftCardTxType
-  amount         Decimal        @db.Decimal(12, 2)
-  balanceAfter   Decimal        @db.Decimal(12, 2)
-  memberId       String?
-  orderRef       String?
-  idempotencyKey String?        @unique
-  createdById    String?
-  createdAt      DateTime       @default(now())
+  id                      String         @id @default(cuid())
+  giftCardId              String
+  type                    GiftCardTxType
+  amount                  Decimal        @db.Decimal(12, 2)
+  balanceAfter            Decimal        @db.Decimal(12, 2)
+  memberId                String?
+  orderRef                String?
+  idempotencyKey          String?
+  idempotencyPayloadHash  String?
+  programId               String
+  createdById             String?
+  createdAt               DateTime       @default(now())
 
   giftCard GiftCard       @relation(fields: [giftCardId], references: [id])
   member   Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
 
+  @@unique([programId, idempotencyKey])
   @@index([giftCardId, createdAt])
+  @@index([idempotencyPayloadHash])
 }
 
 model Reward {

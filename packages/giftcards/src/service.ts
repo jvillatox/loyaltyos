@@ -1,4 +1,7 @@
+import crypto from "node:crypto";
+
 import type { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { generateCode, normalizeCode, validateChecksum } from "./code.js";
 import type { RedisLockFn } from "./locks.js";
@@ -23,24 +26,33 @@ import type {
   ValidateCodeResult,
 } from "./types.js";
 import {
+  BatchNotCancellableError,
   GiftCardBatchNotFoundError,
   GiftCardCancelledError,
+  GiftCardCodeCollisionError,
   GiftCardExpiredError,
+  GiftCardIdempotencyConflictError,
   GiftCardInsufficientBalanceError,
   GiftCardInvalidCodeError,
   GiftCardLockError,
   GiftCardNotActiveError,
   GiftCardNotFoundError,
+  RefundExceedsInitialError,
   TermsTemplateNotFoundError,
 } from "./types.js";
 
 export type EnqueueFn = (jobName: string, data: Record<string, unknown>) => Promise<void>;
+
+function hashPayload(payload: Record<string, unknown>): string {
+  return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
 
 export class GiftCardService {
   private repo: ReturnType<typeof createRepository>;
   private metrics?: GiftCardsServiceMetrics;
   private codeSecret: string;
   private enqueueGenerate?: EnqueueFn;
+  private prisma: PrismaClient;
 
   constructor(
     prisma: PrismaClient,
@@ -50,9 +62,10 @@ export class GiftCardService {
       enqueueGenerate?: EnqueueFn;
     },
   ) {
+    this.prisma = prisma;
     this.repo = createRepository(prisma);
     this.metrics = options?.metrics;
-    this.codeSecret = options?.codeSecret ?? process.env.GIFTCARD_HMAC_SECRET ?? "dev-secret";
+    this.codeSecret = options?.codeSecret ?? "dev-secret";
     this.enqueueGenerate = options?.enqueueGenerate;
   }
 
@@ -64,6 +77,13 @@ export class GiftCardService {
 
   async createBatch(input: CreateBatchInput) {
     const parsed = createBatchSchema.parse(input);
+
+    // Pre-validate termsTemplateId (J.4)
+    const template = await this.repo.findTermsTemplateById(parsed.termsTemplateId);
+    if (!template) {
+      throw new TermsTemplateNotFoundError(parsed.termsTemplateId);
+    }
+
     const batch = await this.repo.createBatch({
       ...parsed,
       initialAmount: parsed.initialAmount,
@@ -106,9 +126,17 @@ export class GiftCardService {
   async cancelBatch(batchId: string) {
     const batch = await this.repo.findBatchById(batchId);
     if (!batch) throw new GiftCardBatchNotFoundError(batchId);
+
     if (!["pending", "generating", "partial"].includes(batch.status)) {
-      throw new Error(`Cannot cancel batch in status: ${batch.status}`);
+      throw new BatchNotCancellableError(batchId, 0);
     }
+
+    // Guard: reject if any cards have been redeemed (I.2)
+    const redeemedCount = await this.repo.countRedeemedCardsInBatch(batchId);
+    if (redeemedCount > 0) {
+      throw new BatchNotCancellableError(batchId, redeemedCount);
+    }
+
     return this.repo.updateBatchStatus(batchId, "cancelled");
   }
 
@@ -117,6 +145,9 @@ export class GiftCardService {
   async generateBatchCodes(batchId: string): Promise<void> {
     const batch = await this.repo.findBatchById(batchId);
     if (!batch) throw new GiftCardBatchNotFoundError(batchId);
+
+    // Idempotency guard: if already ready, short-circuit (J.3)
+    if (batch.status === "ready") return;
 
     const { quantity, initialAmount, currency, expirationDate, prefix } = batch;
     const chunkSize = 1000;
@@ -146,7 +177,6 @@ export class GiftCardService {
         const created = await this.repo.createCards(inputs);
         if (created < currentChunk) {
           failedChunks++;
-          // Regenerate only the missing codes
           const toGenerate = currentChunk - created;
           const retryInputs = Array.from({ length: toGenerate }, () => {
             const code = generateCode(prefix ?? undefined, this.codeSecret);
@@ -169,7 +199,7 @@ export class GiftCardService {
         await this.repo.incrementGeneratedCount(batchId, currentChunk);
 
         if (failedChunks > 3) {
-          throw new Error("Too many code collisions during generation");
+          throw new GiftCardCodeCollisionError();
         }
       }
 
@@ -178,6 +208,7 @@ export class GiftCardService {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await this.repo.updateBatchStatus(batchId, "failed", { error: message });
+      throw err; // Re-throw so BullMQ classifies as failed (J.2)
     }
   }
 
@@ -189,6 +220,10 @@ export class GiftCardService {
 
     // Checksum validation first (no DB hit)
     if (!validateChecksum(parsed.code, this.codeSecret)) {
+      // Timing equalization: perform a dummy DB lookup (H.2)
+      await this.repo
+        .findCardByCode(generateCode(undefined, this.codeSecret))
+        .catch(() => undefined);
       return { valid: false, reason: "invalid_code" };
     }
 
@@ -230,73 +265,118 @@ export class GiftCardService {
       throw new GiftCardInvalidCodeError(parsed.code);
     }
 
-    // Idempotency check
-    const existing = await this.repo.findTransactionByIdempotencyKey(parsed.idempotencyKey);
+    // Load card first to get programId for scoped idempotency check
+    const card = await this.repo.findCardByCode(normalized);
+    if (!card) throw new GiftCardNotFoundError(parsed.code);
+
+    // Cross-tenant guard (A.3)
+    if (card.batch.programId !== parsed.requestProgramId) {
+      throw new GiftCardNotFoundError(parsed.code);
+    }
+    const programId = card.batch.programId;
+
+    // Build payload hash (D.2)
+    const payloadHash = hashPayload({
+      code: normalized,
+      amount: parsed.amount,
+      memberId: parsed.memberId ?? null,
+      orderRef: parsed.orderRef ?? null,
+    });
+
+    // Idempotency check (scoped to program — D.3)
+    const existing = await this.repo.findTransactionByIdempotencyKey(
+      programId,
+      parsed.idempotencyKey,
+    );
     if (existing) {
+      if (existing.idempotencyPayloadHash !== payloadHash) {
+        throw new GiftCardIdempotencyConflictError(parsed.idempotencyKey);
+      }
       return {
         transactionId: existing.id,
         cardId: existing.giftCardId,
         amount: Number(existing.amount),
-        balanceAfter: Number(existing.balanceAfter),
-        currency: "",
+        balanceAfter: Number(card.balance),
+        currency: card.currency,
         idempotent: true,
       };
     }
 
-    // Acquire Redis lock
-    const lock = await acquireLock(normalized, 5);
+    // Acquire Redis lock (TTL 30s — B.4)
+    const lock = await acquireLock(normalized, 30);
     if (!lock.acquired) {
       throw new GiftCardLockError(parsed.code);
     }
 
     try {
-      const card = await this.repo.findCardByCode(normalized);
-      if (!card) throw new GiftCardNotFoundError(parsed.code);
+      // Re-read card inside lock
+      const locked = await this.repo.findCardByCode(normalized);
+      if (!locked) throw new GiftCardNotFoundError(parsed.code);
 
-      if (card.status === "expired" || new Date() > card.expirationDate) {
+      if (locked.status === "expired" || new Date() > locked.expirationDate) {
         throw new GiftCardExpiredError(parsed.code);
       }
-      if (card.status === "cancelled") throw new GiftCardCancelledError(parsed.code);
-      if (card.status === "depleted") {
+      if (locked.status === "cancelled") throw new GiftCardCancelledError(parsed.code);
+      if (locked.status === "depleted") {
         throw new GiftCardInsufficientBalanceError(parsed.code, parsed.amount, 0);
       }
-      if (card.status !== "active" && card.status !== "partially_redeemed") {
-        throw new GiftCardNotActiveError(parsed.code, card.status);
+      if (locked.status !== "active" && locked.status !== "partially_redeemed") {
+        throw new GiftCardNotActiveError(parsed.code, locked.status);
       }
 
-      const balance = Number(card.balance);
-      if (balance < parsed.amount) {
-        throw new GiftCardInsufficientBalanceError(parsed.code, parsed.amount, balance);
+      // Decimal math (F.1)
+      const balance = locked.balance;
+      const amount = new Prisma.Decimal(parsed.amount);
+      if (balance.lessThan(amount)) {
+        throw new GiftCardInsufficientBalanceError(parsed.code, parsed.amount, Number(balance));
       }
 
-      const balanceAfter = balance - parsed.amount;
-      const newStatus = balanceAfter === 0 ? "depleted" : "partially_redeemed";
+      const balanceAfter = balance.minus(amount);
+      const newStatus = balanceAfter.equals(0) ? "depleted" : "partially_redeemed";
 
       const now = new Date();
-      const updated = await this.repo.updateCardBalance(card.id, parsed.amount, newStatus, {
-        activatedAt: card.activatedAt ?? now,
-        lastRedemptionAt: now,
+
+      // Wrap state changes in $transaction (B.5)
+      const result = await this.prisma.$transaction(async (tx) => {
+        const updated = await this.repo.updateCardBalance(
+          locked.id,
+          parsed.amount,
+          newStatus as string,
+          {
+            activatedAt: locked.activatedAt ?? now,
+            lastRedemptionAt: now,
+          },
+          tx,
+        );
+
+        const txn = await this.repo.createTransaction(
+          {
+            giftCardId: locked.id,
+            type: "redeem",
+            amount: parsed.amount,
+            balanceAfter: Number(balanceAfter),
+            memberId: parsed.memberId,
+            idempotencyKey: parsed.idempotencyKey,
+            idempotencyPayloadHash: payloadHash,
+            programId,
+            orderRef: parsed.orderRef,
+            createdById: parsed.createdById,
+          },
+          tx,
+        );
+
+        return { updated, txn };
       });
 
-      const tx = await this.repo.createTransaction({
-        giftCardId: card.id,
-        type: "redeem",
-        amount: parsed.amount,
-        balanceAfter,
-        memberId: parsed.memberId,
-        idempotencyKey: parsed.idempotencyKey,
-        orderRef: parsed.orderRef,
-      });
-
-      this.metrics?.recordRedeem(card.batch.programId, card.currency);
-      this.metrics?.recordRedeemedAmount(card.batch.programId, card.currency, parsed.amount);
+      this.metrics?.recordRedeem(card.batch.programId, locked.currency);
+      this.metrics?.recordRedeemedAmount(card.batch.programId, locked.currency, parsed.amount);
 
       return {
-        transactionId: tx.id,
-        cardId: card.id,
+        transactionId: result.txn.id,
+        cardId: locked.id,
         amount: parsed.amount,
-        balanceAfter: Number(updated.balance),
-        currency: card.currency,
+        balanceAfter: Number(result.updated.balance),
+        currency: locked.currency,
         idempotent: false,
       };
     } finally {
@@ -306,75 +386,152 @@ export class GiftCardService {
 
   // ── Refund ────────────────────────────────
 
-  async refund(input: RefundInput): Promise<RedeemResult> {
+  async refund(input: RefundInput, acquireLock: RedisLockFn): Promise<RedeemResult> {
     const parsed = refundSchema.parse(input);
     const normalized = normalizeCode(parsed.code);
-
-    const existing = await this.repo.findTransactionByIdempotencyKey(parsed.idempotencyKey);
-    if (existing) {
-      return {
-        transactionId: existing.id,
-        cardId: existing.giftCardId,
-        amount: Number(existing.amount),
-        balanceAfter: Number(existing.balanceAfter),
-        currency: "",
-        idempotent: true,
-      };
-    }
 
     const card = await this.repo.findCardByCode(normalized);
     if (!card) throw new GiftCardNotFoundError(parsed.code);
 
-    const balance = Number(card.balance);
-    const initialAmount = Number(card.initialAmount);
-    const newBalance = balance + parsed.amount;
-
-    if (newBalance > initialAmount) {
-      throw new Error(
-        `Refund would exceed initial amount of ${String(initialAmount)} (current balance: ${String(balance)}, refund: ${String(parsed.amount)})`,
-      );
+    // Cross-tenant guard (A.3)
+    if (card.batch.programId !== parsed.requestProgramId) {
+      throw new GiftCardNotFoundError(parsed.code);
     }
+    const programId = card.batch.programId;
 
-    const newStatus = newBalance === initialAmount ? "active" : "partially_redeemed";
-
-    const updated = await this.repo.restoreCardBalance(card.id, parsed.amount, newStatus);
-
-    const tx = await this.repo.createTransaction({
-      giftCardId: card.id,
-      type: "refund",
+    // Build payload hash (D.2)
+    const payloadHash = hashPayload({
+      code: normalized,
       amount: parsed.amount,
-      balanceAfter: newBalance,
-      idempotencyKey: parsed.idempotencyKey,
+      reason: parsed.reason ?? null,
     });
 
-    return {
-      transactionId: tx.id,
-      cardId: card.id,
-      amount: parsed.amount,
-      balanceAfter: Number(updated.balance),
-      currency: card.currency,
-      idempotent: false,
-    };
+    // Idempotency check (scoped to program — D.3)
+    const existing = await this.repo.findTransactionByIdempotencyKey(
+      programId,
+      parsed.idempotencyKey,
+    );
+    if (existing) {
+      if (existing.idempotencyPayloadHash !== payloadHash) {
+        throw new GiftCardIdempotencyConflictError(parsed.idempotencyKey);
+      }
+      return {
+        transactionId: existing.id,
+        cardId: existing.giftCardId,
+        amount: Number(existing.amount),
+        balanceAfter: Number(card.balance),
+        currency: card.currency,
+        idempotent: true,
+      };
+    }
+
+    // Acquire Redis lock (B.2, B.4)
+    const lock = await acquireLock(normalized, 30);
+    if (!lock.acquired) {
+      throw new GiftCardLockError(parsed.code);
+    }
+
+    try {
+      const locked = await this.repo.findCardByCode(normalized);
+      if (!locked) throw new GiftCardNotFoundError(parsed.code);
+
+      const balance = locked.balance;
+      const initialAmount = locked.initialAmount;
+      const refundAmount = new Prisma.Decimal(parsed.amount);
+      const newBalance = balance.plus(refundAmount);
+
+      if (newBalance.greaterThan(initialAmount)) {
+        throw new RefundExceedsInitialError(
+          parsed.code,
+          Number(initialAmount),
+          Number(balance),
+          parsed.amount,
+        );
+      }
+
+      const newStatus = newBalance.equals(initialAmount) ? "active" : "partially_redeemed";
+
+      // Wrap state changes in $transaction (B.5)
+      const result = await this.prisma.$transaction(async (tx) => {
+        const updated = await this.repo.restoreCardBalance(
+          locked.id,
+          parsed.amount,
+          newStatus as string,
+          tx,
+        );
+
+        const txn = await this.repo.createTransaction(
+          {
+            giftCardId: locked.id,
+            type: "refund",
+            amount: parsed.amount,
+            balanceAfter: Number(newBalance),
+            idempotencyKey: parsed.idempotencyKey,
+            idempotencyPayloadHash: payloadHash,
+            programId,
+            createdById: parsed.createdById,
+          },
+          tx,
+        );
+
+        return { updated, txn };
+      });
+
+      return {
+        transactionId: result.txn.id,
+        cardId: locked.id,
+        amount: parsed.amount,
+        balanceAfter: Number(result.updated.balance),
+        currency: locked.currency,
+        idempotent: false,
+      };
+    } finally {
+      await lock.release();
+    }
   }
 
   // ── Cancel card ───────────────────────────
 
-  async cancelCard(input: CancelCardInput) {
+  async cancelCard(input: CancelCardInput, acquireLock: RedisLockFn) {
     const normalized = normalizeCode(input.code);
     const card = await this.repo.findCardByCode(normalized);
     if (!card) throw new GiftCardNotFoundError(input.code);
 
+    // Cross-tenant guard (A.3)
+    if (card.batch.programId !== input.requestProgramId) {
+      throw new GiftCardNotFoundError(input.code);
+    }
+    const programId = card.batch.programId;
+
     if (card.status === "cancelled") throw new GiftCardCancelledError(input.code);
 
-    await this.repo.updateCardStatus(card.id, "cancelled", { balance: 0 });
-    await this.repo.createTransaction({
-      giftCardId: card.id,
-      type: "cancel",
-      amount: Number(card.balance),
-      balanceAfter: 0,
-    });
+    // Acquire Redis lock (B.2, B.4)
+    const lock = await acquireLock(normalized, 30);
+    if (!lock.acquired) {
+      throw new GiftCardLockError(input.code);
+    }
 
-    return this.repo.findCardByCode(normalized);
+    try {
+      // Wrap state changes in $transaction (B.5)
+      await this.prisma.$transaction(async (tx) => {
+        await this.repo.updateCardStatus(card.id, "cancelled", { balance: 0 }, tx);
+        await this.repo.createTransaction(
+          {
+            giftCardId: card.id,
+            type: "cancel",
+            amount: Number(card.balance),
+            balanceAfter: 0,
+            programId,
+            createdById: input.createdById,
+          },
+          tx,
+        );
+      });
+
+      return this.repo.findCardByCode(normalized);
+    } finally {
+      await lock.release();
+    }
   }
 
   // ── Transactions ──────────────────────────
@@ -385,6 +542,7 @@ export class GiftCardService {
   ): Promise<PaginatedResult<unknown>> {
     const page = filters.page ?? 1;
     const pageSize = filters.pageSize ?? 20;
+
     const { items, total } = await this.repo.findTransactionsByCard(cardId, {
       page,
       pageSize,
@@ -397,18 +555,34 @@ export class GiftCardService {
 
   async processExpiredCards(): Promise<number> {
     const now = new Date();
-    const cards = await this.repo.findActiveExpired(now);
     let count = 0;
+    let cursor: string | undefined;
 
-    for (const card of cards) {
-      await this.repo.updateCardStatus(card.id, "expired");
-      await this.repo.createTransaction({
-        giftCardId: card.id,
-        type: "expire",
-        amount: Number(card.balance),
-        balanceAfter: 0,
-      });
-      count++;
+    // Pagination loop (J.6)
+    // eslint-disable-next-line no-constant-condition, @typescript-eslint/no-unnecessary-condition
+    while (true) {
+      const cards = await this.repo.findActiveExpired(now, 1000, cursor);
+
+      for (const card of cards) {
+        // Wrap each card's state change in its own $transaction
+        await this.prisma.$transaction(async (tx) => {
+          await this.repo.updateCardStatus(card.id, "expired", undefined, tx);
+          await this.repo.createTransaction(
+            {
+              giftCardId: card.id,
+              type: "expire",
+              amount: Number(card.balance),
+              balanceAfter: 0,
+              programId: card.batch.programId,
+            },
+            tx,
+          );
+        });
+        count++;
+      }
+
+      if (cards.length < 1000) break;
+      cursor = cards[cards.length - 1]?.id;
     }
 
     return count;
@@ -453,5 +627,11 @@ export class GiftCardService {
 
   async getMetrics(programId: string) {
     return this.repo.countCardsByStatus(programId);
+  }
+
+  async getOutstandingBalances(): Promise<
+    { programId: string; currency: string; total: number }[]
+  > {
+    return this.repo.sumOutstandingBalances();
   }
 }

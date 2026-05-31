@@ -29,8 +29,10 @@ import {
   CouponNotStartedError,
 } from "@loyaltyos/coupons";
 import {
+  BatchNotCancellableError,
   GiftCardBatchNotFoundError,
   GiftCardCancelledError,
+  GiftCardCodeCollisionError,
   GiftCardExpiredError,
   GiftCardIdempotencyConflictError,
   GiftCardInsufficientBalanceError,
@@ -39,6 +41,7 @@ import {
   GiftCardNotActiveError,
   GiftCardNotFoundError,
   GiftCardRedeemedError,
+  RefundExceedsInitialError,
   TermsTemplateNotFoundError,
 } from "@loyaltyos/giftcards";
 import type { SupportedLocale } from "@loyaltyos/i18n";
@@ -451,6 +454,48 @@ function mapError(
         error: {
           code: "GIFT_CARD_NOT_ACTIVE",
           message: localizeMessage("GIFT_CARD_NOT_ACTIVE", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof BatchNotCancellableError) {
+    return {
+      status: 409,
+      body: {
+        error: {
+          code: "BATCH_NOT_CANCELLABLE",
+          message: localizeMessage("BATCH_NOT_CANCELLABLE", locale),
+          details: { redeemedCount: err.redeemedCount },
+        },
+      },
+    };
+  }
+
+  if (err instanceof RefundExceedsInitialError) {
+    return {
+      status: 422,
+      body: {
+        error: {
+          code: "REFUND_EXCEEDS_INITIAL",
+          message: localizeMessage("REFUND_EXCEEDS_INITIAL", locale),
+          details: {
+            initialAmount: err.initialAmount,
+            currentBalance: err.currentBalance,
+            refundAmount: err.refundAmount,
+          },
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardCodeCollisionError) {
+    return {
+      status: 500,
+      body: {
+        error: {
+          code: "GIFT_CARD_CODE_COLLISION",
+          message: localizeMessage("GIFT_CARD_CODE_COLLISION", locale),
         },
       },
     };

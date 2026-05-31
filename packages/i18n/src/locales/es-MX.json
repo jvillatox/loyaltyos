@@ -299,6 +299,9 @@
     "GIFT_CARD_TERMS_TEMPLATE_NOT_FOUND": "Plantilla de términos no encontrada",
     "GIFT_CARD_LOCK": "La tarjeta está siendo procesada, intente de nuevo",
     "GIFT_CARD_NOT_ACTIVE": "La tarjeta de regalo no está activa",
+    "BATCH_NOT_CANCELLABLE": "El lote no se puede cancelar porque tiene tarjetas redimidas",
+    "REFUND_EXCEEDS_INITIAL": "El reembolso excedería el monto inicial de la tarjeta",
+    "GIFT_CARD_CODE_COLLISION": "Error al generar códigos: demasiadas colisiones",
     "INVALID_TOKEN": "Token inválido o expirado",
     "INVALID_CREDENTIALS": "Correo o contraseña inválidos"
   }

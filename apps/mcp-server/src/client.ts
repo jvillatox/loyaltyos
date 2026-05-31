@@ -376,24 +376,23 @@ export class LoyaltyOSClient {
 
   async redeemGiftCard(
     code: string,
-    payload: { amount: number; memberId?: string; orderRef?: string },
+    payload: { amount: number; memberId?: string; orderRef?: string; idempotencyKey: string },
   ): Promise<Record<string, unknown>> {
-    const idempotencyKey = crypto.randomUUID();
     const config: AxiosRequestConfig = {
-      headers: { "Idempotency-Key": idempotencyKey },
+      headers: { "Idempotency-Key": payload.idempotencyKey },
     };
     const { data } = await this.http.post<Record<string, unknown>>(
-      `/api/v1/giftcards/${encodeURIComponent(code)}/redeem`,
-      payload,
+      `/api/v1/giftcards/redeem`,
+      { code, amount: payload.amount, memberId: payload.memberId, orderRef: payload.orderRef },
       config,
     );
     return data;
   }
 
   async lookupGiftCard(code: string): Promise<Record<string, unknown>> {
-    const { data } = await this.http.post<Record<string, unknown>>(
-      `/api/v1/giftcards/${encodeURIComponent(code)}/validate`,
-    );
+    const { data } = await this.http.post<Record<string, unknown>>(`/api/v1/giftcards/validate`, {
+      code,
+    });
     return data;
   }
 

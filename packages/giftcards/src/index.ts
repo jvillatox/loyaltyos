@@ -17,8 +17,10 @@ export type {
 
 // Errors
 export {
+  BatchNotCancellableError,
   GiftCardBatchNotFoundError,
   GiftCardCancelledError,
+  GiftCardCodeCollisionError,
   GiftCardExpiredError,
   GiftCardIdempotencyConflictError,
   GiftCardInsufficientBalanceError,
@@ -27,6 +29,7 @@ export {
   GiftCardNotActiveError,
   GiftCardNotFoundError,
   GiftCardRedeemedError,
+  RefundExceedsInitialError,
   TermsTemplateNotFoundError,
 } from "./types.js";
 

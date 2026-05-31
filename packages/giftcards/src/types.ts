@@ -48,6 +48,8 @@ export interface RedeemInput {
   memberId?: string;
   idempotencyKey: string;
   orderRef?: string;
+  createdById?: string;
+  requestProgramId: string;
 }
 
 export interface RefundInput {
@@ -55,10 +57,14 @@ export interface RefundInput {
   amount: number;
   idempotencyKey: string;
   reason?: string;
+  createdById?: string;
+  requestProgramId: string;
 }
 
 export interface CancelCardInput {
   code: string;
+  createdById?: string;
+  requestProgramId: string;
 }
 
 export interface ValidateCodeResult {
@@ -178,5 +184,38 @@ export class GiftCardNotActiveError extends Error {
   constructor(code: string, status: string) {
     super(`Gift card "${code}" is not active (status: ${status})`);
     this.name = "GiftCardNotActiveError";
+  }
+}
+
+export class BatchNotCancellableError extends Error {
+  constructor(
+    batchId: string,
+    public readonly redeemedCount: number,
+  ) {
+    super(
+      `Batch "${batchId}" cannot be cancelled: ${String(redeemedCount)} cards already redeemed`,
+    );
+    this.name = "BatchNotCancellableError";
+  }
+}
+
+export class RefundExceedsInitialError extends Error {
+  constructor(
+    code: string,
+    public readonly initialAmount: number,
+    public readonly currentBalance: number,
+    public readonly refundAmount: number,
+  ) {
+    super(
+      `Refund of ${String(refundAmount)} would exceed initial amount of ${String(initialAmount)} for card "${code}"`,
+    );
+    this.name = "RefundExceedsInitialError";
+  }
+}
+
+export class GiftCardCodeCollisionError extends Error {
+  constructor() {
+    super("Too many code collisions during generation");
+    this.name = "GiftCardCodeCollisionError";
   }
 }

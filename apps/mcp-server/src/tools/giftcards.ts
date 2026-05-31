@@ -19,6 +19,12 @@ export const GiftCardRedeemSchema = z.object({
   amount: z.number().positive().describe("Amount to redeem"),
   memberId: z.string().optional().describe("Member ID redeeming the card"),
   orderRef: z.string().optional().describe("External order reference"),
+  idempotencyKey: z
+    .string()
+    .min(8)
+    .describe(
+      "Idempotency key required for safe retries. Generate deterministically per logical operation (e.g., hash of code|amount|orderRef). Must be at least 8 characters.",
+    ),
 });
 
 export function registerGiftCardTools(server: McpServer, client: LoyaltyOSClient): void {
@@ -59,12 +65,17 @@ export function registerGiftCardTools(server: McpServer, client: LoyaltyOSClient
 
   server.tool(
     "giftcards_redeem",
-    "Redeem a gift card. Deducts the specified amount from the card balance. Requires Idempotency-Key header for safe retries. Returns the new balance and transaction ID.",
+    "Redeem a gift card. Deducts the specified amount from the card balance. Requires idempotencyKey for safe retries — the caller must generate this deterministically. Returns the new balance and transaction ID.",
     GiftCardRedeemSchema.shape,
     async (params) => {
       try {
-        const { code, amount, memberId, orderRef } = params;
-        const result = await client.redeemGiftCard(code, { amount, memberId, orderRef });
+        const { code, amount, memberId, orderRef, idempotencyKey } = params;
+        const result = await client.redeemGiftCard(code, {
+          amount,
+          memberId,
+          orderRef,
+          idempotencyKey,
+        });
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         };
