@@ -302,6 +302,7 @@
     "BATCH_NOT_CANCELLABLE": "Batch cannot be cancelled because cards have been redeemed",
     "REFUND_EXCEEDS_INITIAL": "Refund would exceed the initial card amount",
     "GIFT_CARD_CODE_COLLISION": "Code generation failed: too many collisions",
+    "GIFT_CARD_CONCURRENT_UPDATE": "Concurrent update detected; retry the operation",
     "INVALID_TOKEN": "Invalid or expired token",
     "INVALID_CREDENTIALS": "Invalid email or password"
   }

@@ -178,7 +178,7 @@ describe("GiftCardService.createBatch", () => {
 
     let enqueuedJobName = "";
     let enqueuedData: Record<string, unknown> = {};
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     svc.setEnqueueGenerate((jobName, data) => {
       enqueuedJobName = jobName;
       enqueuedData = data;
@@ -206,7 +206,7 @@ describe("GiftCardService.getBatch", () => {
   it("returns a batch by id", async () => {
     mockPrisma.giftCardBatch.findUnique.mockResolvedValue(batchRow());
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.getBatch("batch-1");
 
     expect(result.id).toBe("batch-1");
@@ -215,7 +215,7 @@ describe("GiftCardService.getBatch", () => {
   it("throws GiftCardBatchNotFoundError for missing batch", async () => {
     mockPrisma.giftCardBatch.findUnique.mockResolvedValue(null);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(svc.getBatch("nonexistent")).rejects.toThrow("not found");
   });
 });
@@ -225,7 +225,7 @@ describe("GiftCardService.listBatches", () => {
     mockPrisma.giftCardBatch.findMany.mockResolvedValue([batchRow()]);
     mockPrisma.giftCardBatch.count.mockResolvedValue(1);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.listBatches("prog-1", {});
 
     expect(result.items).toHaveLength(1);
@@ -239,7 +239,7 @@ describe("GiftCardService.cancelBatch", () => {
     mockPrisma.giftCard.count.mockResolvedValue(0);
     mockPrisma.giftCardBatch.update.mockResolvedValue(batchRow({ status: "cancelled" }));
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.cancelBatch("batch-1");
 
     expect(result.status).toBe("cancelled");
@@ -248,7 +248,7 @@ describe("GiftCardService.cancelBatch", () => {
   it("throws GiftCardBatchNotFoundError for missing batch", async () => {
     mockPrisma.giftCardBatch.findUnique.mockResolvedValue(null);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(svc.cancelBatch("nonexistent")).rejects.toThrow("not found");
   });
 
@@ -256,7 +256,7 @@ describe("GiftCardService.cancelBatch", () => {
     mockPrisma.giftCardBatch.findUnique.mockResolvedValue(batchRow({ status: "ready" }));
     mockPrisma.giftCard.count.mockResolvedValue(0);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(svc.cancelBatch("batch-1")).rejects.toThrow("cannot be cancelled");
   });
 });
@@ -267,7 +267,7 @@ describe("GiftCardService.validateCode", () => {
   it("returns valid for an active card", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow());
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.validateCode({ code: "ABCD-EFGH-JKLM-NPQR" });
 
     expect(result.valid).toBe(true);
@@ -279,7 +279,7 @@ describe("GiftCardService.validateCode", () => {
   it("returns invalid for a code that fails checksum", async () => {
     mockValidateChecksum.mockReturnValue(false);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.validateCode({ code: "BOGUS-CODE-HERE-XYZ" });
 
     expect(result.valid).toBe(false);
@@ -290,7 +290,7 @@ describe("GiftCardService.validateCode", () => {
   it("returns invalid for a code not in database", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(null);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.validateCode({ code: "ABCDEFGHJKLMNPQR" });
 
     expect(result.valid).toBe(false);
@@ -302,7 +302,7 @@ describe("GiftCardService.validateCode", () => {
       cardRow({ expirationDate: new Date("2020-01-01") }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.validateCode({ code: "ABCDEFGHJKLMNPQR" });
 
     expect(result.valid).toBe(false);
@@ -312,7 +312,7 @@ describe("GiftCardService.validateCode", () => {
   it("returns invalid for a cancelled card", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ status: "cancelled" }));
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.validateCode({ code: "ABCDEFGHJKLMNPQR" });
 
     expect(result.valid).toBe(false);
@@ -322,7 +322,7 @@ describe("GiftCardService.validateCode", () => {
   it("returns invalid for a depleted card", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ status: "depleted" }));
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.validateCode({ code: "ABCDEFGHJKLMNPQR" });
 
     expect(result.valid).toBe(false);
@@ -346,7 +346,7 @@ describe("GiftCardService.redeem", () => {
       transactionRow({ amount: dec(200), balanceAfter: dec(600) }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.redeem(
       {
         code: "ABCDEFGHJKLMNPQR",
@@ -372,7 +372,7 @@ describe("GiftCardService.redeem", () => {
       }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.redeem(
         {
@@ -392,7 +392,7 @@ describe("GiftCardService.redeem", () => {
       transactionRow({ idempotencyKey: "idem-1", idempotencyPayloadHash: "wrong-hash" }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.redeem(
         {
@@ -409,7 +409,7 @@ describe("GiftCardService.redeem", () => {
   it("throws GiftCardInvalidCodeError for invalid checksum", async () => {
     mockValidateChecksum.mockReturnValue(false);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.redeem(
         { code: "BOGUS", amount: 100, idempotencyKey: "idem-1", requestProgramId: "prog-1" },
@@ -423,7 +423,7 @@ describe("GiftCardService.redeem", () => {
     // Service loads card first — first call returns null
     mockPrisma.giftCard.findUnique.mockResolvedValue(null);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.redeem(
         {
@@ -440,7 +440,7 @@ describe("GiftCardService.redeem", () => {
   it("throws GiftCardInsufficientBalanceError when balance too low", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ balance: dec(50) }));
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.redeem(
         {
@@ -464,7 +464,7 @@ describe("GiftCardService.redeem", () => {
       transactionRow({ amount: dec(200), balanceAfter: dec(0) }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.redeem(
       {
         code: "ABCDEFGHJKLMNPQR",
@@ -481,7 +481,7 @@ describe("GiftCardService.redeem", () => {
   it("throws GiftCardLockError when lock not acquired", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow());
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.redeem(
         {
@@ -508,7 +508,7 @@ describe("GiftCardService.redeem", () => {
       mockPrisma.giftCard.updateMany.mockResolvedValue({ count: 1 });
     };
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
 
     // First redemption: 1000 → 700 (partially_redeemed)
     setupMocks();
@@ -598,7 +598,7 @@ describe("GiftCardService.redeem", () => {
     // updateMany returns count 0 — another transaction modified the balance first
     mockPrisma.giftCard.updateMany.mockResolvedValue({ count: 0 });
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.redeem(
         {
@@ -609,7 +609,7 @@ describe("GiftCardService.redeem", () => {
         },
         mockLockFn,
       ),
-    ).rejects.toThrow("ATOMIC_UPDATE_FAILED");
+    ).rejects.toThrow("Concurrent update detected");
   });
 });
 
@@ -636,7 +636,7 @@ describe("GiftCardService.refund", () => {
       }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.refund(
       {
         code: "ABCDEFGHJKLMNPQR",
@@ -665,7 +665,7 @@ describe("GiftCardService.refund", () => {
       }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.refund(
       {
         code: "ABCDEFGHJKLMNPQR",
@@ -689,7 +689,7 @@ describe("GiftCardService.refund", () => {
     );
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ balance: dec(600) }));
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.refund(
         {
@@ -720,7 +720,7 @@ describe("GiftCardService.cancelCard", () => {
       transactionRow({ type: "cancel", amount: 500 as unknown as number }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.cancelCard(
       { code: "ABCDEFGHJKLMNPQR", requestProgramId: "prog-1" },
       cancelLock,
@@ -732,7 +732,7 @@ describe("GiftCardService.cancelCard", () => {
   it("throws GiftCardNotFoundError for missing card", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(null);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.cancelCard({ code: "BOGUS", requestProgramId: "prog-1" }, cancelLock),
     ).rejects.toThrow("not found");
@@ -741,7 +741,7 @@ describe("GiftCardService.cancelCard", () => {
   it("throws GiftCardCancelledError if already cancelled", async () => {
     mockPrisma.giftCard.findUnique.mockResolvedValue(cardRow({ status: "cancelled" }));
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(
       svc.cancelCard({ code: "ABCDEFGHJKLMNPQR", requestProgramId: "prog-1" }, cancelLock),
     ).rejects.toThrow("cancelled");
@@ -759,7 +759,7 @@ describe("GiftCardService.processExpiredCards", () => {
     mockPrisma.giftCard.update.mockResolvedValue(cardRow({ status: "expired" }));
     mockPrisma.giftCardTransaction.create.mockResolvedValue(transactionRow({ type: "expire" }));
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const count = await svc.processExpiredCards();
 
     expect(count).toBe(2);
@@ -770,7 +770,7 @@ describe("GiftCardService.processExpiredCards", () => {
   it("returns 0 when no cards to expire", async () => {
     mockPrisma.giftCard.findMany.mockResolvedValue([]);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const count = await svc.processExpiredCards();
 
     expect(count).toBe(0);
@@ -784,7 +784,7 @@ describe("GiftCardService.getTransactions", () => {
     mockPrisma.giftCardTransaction.findMany.mockResolvedValue([transactionRow()]);
     mockPrisma.giftCardTransaction.count.mockResolvedValue(1);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.getTransactions("card-1", {});
 
     expect(result.items).toHaveLength(1);
@@ -798,7 +798,7 @@ describe("GiftCardService.createTermsTemplate", () => {
   it("creates a terms template", async () => {
     mockPrisma.termsTemplate.create.mockResolvedValue(termsRow());
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.createTermsTemplate({
       programId: "prog-1",
       name: "Standard Terms",
@@ -814,7 +814,7 @@ describe("GiftCardService.getTermsTemplate", () => {
   it("returns a template by id", async () => {
     mockPrisma.termsTemplate.findUnique.mockResolvedValue(termsRow());
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.getTermsTemplate("terms-1");
 
     expect(result.id).toBe("terms-1");
@@ -823,7 +823,7 @@ describe("GiftCardService.getTermsTemplate", () => {
   it("throws TermsTemplateNotFoundError for missing template", async () => {
     mockPrisma.termsTemplate.findUnique.mockResolvedValue(null);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(svc.getTermsTemplate("nonexistent")).rejects.toThrow("not found");
   });
 });
@@ -832,7 +832,7 @@ describe("GiftCardService.listTermsTemplates", () => {
   it("returns list of templates", async () => {
     mockPrisma.termsTemplate.findMany.mockResolvedValue([termsRow()]);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.listTermsTemplates("prog-1");
 
     expect(result).toHaveLength(1);
@@ -846,7 +846,7 @@ describe("GiftCardService.updateTermsTemplate", () => {
       termsRow({ id: "terms-2", body: "Updated body text.", version: 2 }),
     );
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     const result = await svc.updateTermsTemplate("terms-1", { body: "Updated body text." });
 
     expect(mockPrisma.termsTemplate.create).toHaveBeenCalled();
@@ -856,7 +856,7 @@ describe("GiftCardService.updateTermsTemplate", () => {
   it("throws TermsTemplateNotFoundError for missing template", async () => {
     mockPrisma.termsTemplate.findUnique.mockResolvedValue(null);
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await expect(svc.updateTermsTemplate("nonexistent", { body: "New body" })).rejects.toThrow(
       "not found",
     );
@@ -867,7 +867,7 @@ describe("GiftCardService.deleteTermsTemplate", () => {
   it("soft-deletes a terms template", async () => {
     mockPrisma.termsTemplate.findUnique.mockResolvedValue(termsRow());
 
-    const svc = new GiftCardService(mockPrisma as never);
+    const svc = new GiftCardService(mockPrisma as never, { codeSecret: "test-secret" });
     await svc.deleteTermsTemplate("terms-1");
 
     expect(mockPrisma.termsTemplate.update).toHaveBeenCalledWith(

@@ -302,6 +302,7 @@
     "BATCH_NOT_CANCELLABLE": "El lote no se puede cancelar porque tiene tarjetas redimidas",
     "REFUND_EXCEEDS_INITIAL": "El reembolso excedería el monto inicial de la tarjeta",
     "GIFT_CARD_CODE_COLLISION": "Error al generar códigos: demasiadas colisiones",
+    "GIFT_CARD_CONCURRENT_UPDATE": "Actualización concurrente detectada; reintenta la operación",
     "INVALID_TOKEN": "Token inválido o expirado",
     "INVALID_CREDENTIALS": "Correo o contraseña inválidos"
   }

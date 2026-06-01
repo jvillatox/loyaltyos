@@ -34,12 +34,6 @@ function getRedisLock(): RedisLockFn {
 export function giftCardsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   const prefix = "/giftcards";
 
-  // Redact code in access logs (G.3)
-  app.addHook("onSend", async (_request, reply) => {
-    // Belt-and-suspenders: code never appears in logged bodies
-    void reply;
-  });
-
   // ── Validate ──────────────────────────────────
 
   // POST /giftcards/validate — Validate code balance/status
@@ -87,6 +81,7 @@ export function giftCardsRoutes(app: FastifyInstance, _opts: unknown, done: () =
         memberId: body.memberId,
         orderRef: body.orderRef,
         idempotencyKey,
+        createdById: request.memberId ?? undefined,
         requestProgramId: request.programId,
       },
       getRedisLock(),

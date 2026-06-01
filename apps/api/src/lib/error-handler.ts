@@ -33,6 +33,7 @@ import {
   GiftCardBatchNotFoundError,
   GiftCardCancelledError,
   GiftCardCodeCollisionError,
+  GiftCardConcurrentUpdateError,
   GiftCardExpiredError,
   GiftCardIdempotencyConflictError,
   GiftCardInsufficientBalanceError,
@@ -496,6 +497,18 @@ function mapError(
         error: {
           code: "GIFT_CARD_CODE_COLLISION",
           message: localizeMessage("GIFT_CARD_CODE_COLLISION", locale),
+        },
+      },
+    };
+  }
+
+  if (err instanceof GiftCardConcurrentUpdateError) {
+    return {
+      status: 409,
+      body: {
+        error: {
+          code: "GIFT_CARD_CONCURRENT_UPDATE",
+          message: localizeMessage("GIFT_CARD_CONCURRENT_UPDATE", locale),
         },
       },
     };

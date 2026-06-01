@@ -52,8 +52,18 @@ export function getBullMQMetrics(): BullMQMetricsExport | null {
 }
 
 export async function buildApp(opts: { logger?: boolean } = {}) {
+  const enableLogger = opts.logger ?? process.env.LOG_LEVEL !== "silent";
+
   const app = Fastify({
-    logger: opts.logger ?? process.env.LOG_LEVEL !== "silent",
+    logger: enableLogger
+      ? {
+          level: process.env.LOG_LEVEL ?? "info",
+          redact: {
+            paths: ["req.body.code", "req.body.giftCardCode", "*.code"],
+            censor: "[REDACTED]",
+          },
+        }
+      : false,
     genReqId: () => crypto.randomUUID(),
   });
 

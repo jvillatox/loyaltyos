@@ -1,8 +1,9 @@
-import { normalizeCode } from "@loyaltyos/giftcards";
+import { GiftCardBatchNotFoundError, normalizeCode } from "@loyaltyos/giftcards";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../db.js";
+import { audit } from "../../lib/audit.js";
 import { giftCardService } from "../../lib/giftcard-setup.js";
 import { requireAdmin } from "../../plugins/require-admin.js";
 
@@ -111,26 +112,68 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
         .object({ format: z.enum(["csv", "xlsx"]).default("csv") })
         .parse(request.query);
 
-      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      // R1: Cross-tenant guard — verify batch ownership before exporting
+      const batch = await prisma.giftCardBatch.findUnique({
+        where: { id },
+        include: { termsTemplate: { select: { version: true } } },
+      });
+      if (!batch || batch.programId !== request.programId) {
+        throw new GiftCardBatchNotFoundError(id);
+      }
+      const termsVersion = String(batch.termsTemplate.version);
 
-      const cards = await prisma.giftCard.findMany({
-        where: { batchId: id },
-        orderBy: { code: "asc" },
-        select: {
-          code: true,
-          initialAmount: true,
-          currency: true,
-          expirationDate: true,
-          status: true,
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const columns = [
+        "code",
+        "initialAmount",
+        "currency",
+        "expirationDate",
+        "termsTemplateVersion",
+        "status",
+      ];
+
+      // R5: Cursor pagination — stream 5k rows at a time, never load 1M into memory
+      const PAGE_SIZE = 5000;
+      let cardCount = 0;
+
+      const writeRow = (
+        writer: { write: (row: string[]) => void },
+        card: {
+          code: string;
+          initialAmount: unknown;
+          currency: string;
+          expirationDate: Date;
+          status: string;
         },
+      ) => {
+        writer.write([
+          card.code,
+          String(card.initialAmount),
+          card.currency,
+          card.expirationDate.toISOString(),
+          termsVersion,
+          card.status,
+        ]);
+      };
+
+      const xlsxRow = (card: {
+        code: string;
+        initialAmount: unknown;
+        currency: string;
+        expirationDate: Date;
+        status: string;
+      }) => ({
+        code: card.code,
+        initialAmount: Number(card.initialAmount),
+        currency: card.currency,
+        expirationDate: card.expirationDate.toISOString(),
+        termsTemplateVersion: termsVersion,
+        status: card.status,
       });
 
       if (format === "csv") {
         const { stringify } = await import("csv-stringify");
-        const stringifier = stringify({
-          header: true,
-          columns: ["code", "initialAmount", "currency", "expirationDate", "status"],
-        });
+        const stringifier = stringify({ header: true, columns });
 
         void reply.header("Content-Type", "text/csv");
         void reply.header(
@@ -139,22 +182,55 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
         );
 
         stringifier.on("data", (chunk: Buffer) => {
-          reply.raw.write(chunk);
+          void reply.raw.write(chunk);
         });
         stringifier.on("end", () => {
           reply.raw.end();
         });
 
-        for (const card of cards) {
-          stringifier.write([
-            card.code,
-            String(card.initialAmount),
-            card.currency,
-            card.expirationDate.toISOString(),
-            card.status,
-          ]);
+        let cursor: string | undefined;
+        let hasMore = true;
+        while (hasMore) {
+          const page = await prisma.giftCard.findMany({
+            where: { batchId: id },
+            take: PAGE_SIZE,
+            ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+            orderBy: { id: "asc" },
+            select: {
+              id: true,
+              code: true,
+              initialAmount: true,
+              currency: true,
+              expirationDate: true,
+              status: true,
+            },
+          });
+          if (page.length === 0) {
+            hasMore = false;
+            continue;
+          }
+          for (const card of page) {
+            writeRow(stringifier, card);
+            cardCount++;
+          }
+          if (page.length < PAGE_SIZE) {
+            hasMore = false;
+            continue;
+          }
+          const last = page.at(-1);
+          if (last) {
+            cursor = last.id;
+          } else {
+            hasMore = false;
+          }
         }
         stringifier.end();
+
+        await audit(request.programId, request.actor, "OTHER", "gift_card_batch", id, {
+          action: "giftcard.batch.export",
+          format: "csv",
+          cardCount,
+        });
 
         return reply.hijack();
       }
@@ -172,6 +248,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
         { header: "initialAmount", key: "initialAmount" },
         { header: "currency", key: "currency" },
         { header: "expirationDate", key: "expirationDate" },
+        { header: "termsTemplateVersion", key: "termsTemplateVersion" },
         { header: "status", key: "status" },
       ];
 
@@ -184,20 +261,51 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
         `attachment; filename="batch-${id}-${dateStr}.xlsx"`,
       );
 
-      for (const card of cards) {
-        worksheet
-          .addRow({
-            code: card.code,
-            initialAmount: Number(card.initialAmount),
-            currency: card.currency,
-            expirationDate: card.expirationDate.toISOString(),
-            status: card.status,
-          })
-          .commit();
+      let cursor: string | undefined;
+      let hasMore = true;
+      while (hasMore) {
+        const page = await prisma.giftCard.findMany({
+          where: { batchId: id },
+          take: PAGE_SIZE,
+          ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          orderBy: { id: "asc" },
+          select: {
+            id: true,
+            code: true,
+            initialAmount: true,
+            currency: true,
+            expirationDate: true,
+            status: true,
+          },
+        });
+        if (page.length === 0) {
+          hasMore = false;
+          continue;
+        }
+        for (const card of page) {
+          worksheet.addRow(xlsxRow(card)).commit();
+          cardCount++;
+        }
+        if (page.length < PAGE_SIZE) {
+          hasMore = false;
+          continue;
+        }
+        const last = page.at(-1);
+        if (last) {
+          cursor = last.id;
+        } else {
+          hasMore = false;
+        }
       }
 
       worksheet.commit();
       await workbook.commit();
+
+      await audit(request.programId, request.actor, "OTHER", "gift_card_batch", id, {
+        action: "giftcard.batch.export",
+        format: "xlsx",
+        cardCount,
+      });
 
       return reply.hijack();
     },
@@ -269,7 +377,10 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
     const body = transactionsBodySchema.parse(request.body);
     const normalized = normalizeCode(body.code);
 
-    const card = await prisma.giftCard.findUnique({ where: { code: normalized } });
+    // R2: Tenant-scoped lookup — reject codes from other programs
+    const card = await prisma.giftCard.findFirst({
+      where: { code: normalized, batch: { programId: request.programId } },
+    });
     if (!card) {
       return reply.status(404).send({
         error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },

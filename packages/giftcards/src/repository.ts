@@ -12,6 +12,7 @@ import type {
   CreateTermsTemplateInput,
   UpdateTermsTemplateInput,
 } from "./types.js";
+import { GiftCardConcurrentUpdateError } from "./types.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -152,7 +153,7 @@ export function createRepository(prisma: PrismaClient) {
         },
       });
       if (result.count === 0) {
-        throw new Error("ATOMIC_UPDATE_FAILED");
+        throw new GiftCardConcurrentUpdateError();
       }
       return db(tx).giftCard.findUniqueOrThrow({ where: { id } });
     },
@@ -310,26 +311,24 @@ export function createRepository(prisma: PrismaClient) {
     async sumOutstandingBalances(): Promise<
       { programId: string; currency: string; total: number }[]
     > {
-      const result = await prisma.giftCard.groupBy({
-        by: ["batchId", "currency"],
-        where: { status: { in: ["active", "partially_redeemed"] as never } },
-        _sum: { balance: true },
+      // Aggregate by (programId, currency) across all batches to avoid last-write-wins per batch
+      const rows = await prisma.giftCard.findMany({
+        where: {
+          status: { in: ["active", "partially_redeemed"] as never },
+        },
+        select: { balance: true, currency: true, batch: { select: { programId: true } } },
       });
 
-      const batchIds = [...new Set(result.map((r) => r.batchId))];
-      const batches = await prisma.giftCardBatch.findMany({
-        where: { id: { in: batchIds } },
-        select: { id: true, programId: true },
-      });
-      const batchProgramMap = new Map(batches.map((b) => [b.id, b.programId]));
+      const map = new Map<string, number>();
+      for (const row of rows) {
+        const key = `${row.batch.programId}|${row.currency}`;
+        map.set(key, (map.get(key) ?? 0) + Number(row.balance));
+      }
 
-      return result
-        .filter((r) => r._sum.balance !== null)
-        .map((r) => ({
-          programId: batchProgramMap.get(r.batchId) ?? "unknown",
-          currency: r.currency,
-          total: Number(r._sum.balance ?? 0),
-        }));
+      return Array.from(map.entries()).map(([key, total]) => {
+        const [programId = "", currency = ""] = key.split("|");
+        return { programId, currency, total };
+      });
     },
   };
 }

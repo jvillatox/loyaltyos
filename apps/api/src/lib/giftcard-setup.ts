@@ -14,7 +14,7 @@ if (
 }
 
 export const giftCardService = new GiftCardService(prisma, {
-  codeSecret: process.env.GIFTCARD_HMAC_SECRET,
+  codeSecret: process.env.GIFTCARD_HMAC_SECRET ?? "dev-secret",
   metrics: adaptGiftCardMetrics(getBusinessMetrics()),
 });
 

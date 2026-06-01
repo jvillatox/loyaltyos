@@ -21,6 +21,7 @@ export {
   GiftCardBatchNotFoundError,
   GiftCardCancelledError,
   GiftCardCodeCollisionError,
+  GiftCardConcurrentUpdateError,
   GiftCardExpiredError,
   GiftCardIdempotencyConflictError,
   GiftCardInsufficientBalanceError,

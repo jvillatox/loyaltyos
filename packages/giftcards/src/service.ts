@@ -65,8 +65,9 @@ export class GiftCardService {
     this.prisma = prisma;
     this.repo = createRepository(prisma);
     this.metrics = options?.metrics;
-    this.codeSecret = options?.codeSecret ?? "dev-secret";
-    this.enqueueGenerate = options?.enqueueGenerate;
+    if (!options?.codeSecret) throw new Error("GiftCardService: codeSecret is required");
+    this.codeSecret = options.codeSecret;
+    this.enqueueGenerate = options.enqueueGenerate;
   }
 
   setEnqueueGenerate(fn: EnqueueFn): void {

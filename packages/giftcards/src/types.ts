@@ -219,3 +219,10 @@ export class GiftCardCodeCollisionError extends Error {
     this.name = "GiftCardCodeCollisionError";
   }
 }
+
+export class GiftCardConcurrentUpdateError extends Error {
+  constructor() {
+    super("Concurrent update detected; retry the operation");
+    this.name = "GiftCardConcurrentUpdateError";
+  }
+}
