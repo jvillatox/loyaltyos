@@ -28,7 +28,7 @@
     "@loyaltyos/config-eslint": "workspace:*",
     "@loyaltyos/config-prettier": "workspace:*",
     "@types/node": "^20.14.2",
-    "fastify": "^4.28.0",
+    "fastify": "^5.8.5",
     "typescript": "^5.5.2",
     "vitest": "^1.6.0"
   }
