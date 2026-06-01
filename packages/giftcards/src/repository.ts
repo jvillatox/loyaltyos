@@ -308,13 +308,13 @@ export function createRepository(prisma: PrismaClient) {
       return { active: cards.length, outstandingBalance };
     },
 
-    async sumOutstandingBalances(): Promise<
-      { programId: string; currency: string; total: number }[]
-    > {
-      // Aggregate by (programId, currency) across all batches to avoid last-write-wins per batch
+    async sumOutstandingBalances(
+      programId: string,
+    ): Promise<{ programId: string; currency: string; total: number }[]> {
       const rows = await prisma.giftCard.findMany({
         where: {
           status: { in: ["active", "partially_redeemed"] as never },
+          batch: { programId },
         },
         select: { balance: true, currency: true, batch: { select: { programId: true } } },
       });

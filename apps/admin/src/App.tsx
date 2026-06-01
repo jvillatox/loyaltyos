@@ -58,7 +58,7 @@ export function App(): JSX.Element {
         <Route path="/giftcards" element={<BatchesListPage />} />
         <Route path="/giftcards/batches/new" element={<BatchWizardPage />} />
         <Route path="/giftcards/batches/:id" element={<BatchDetailPage />} />
-        <Route path="/giftcards/cards/:code" element={<CardDetailPage />} />
+        <Route path="/giftcards/cards/:id" element={<CardDetailPage />} />
         <Route path="/giftcards/terms" element={<TermsListPage />} />
         <Route path="/giftcards/terms/new" element={<TermsEditorPage />} />
         <Route path="/giftcards/terms/:id" element={<TermsEditorPage />} />

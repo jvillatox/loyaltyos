@@ -46,12 +46,18 @@ const cancelBodySchema = z.object({
   code: z.string().min(1),
 });
 
-const transactionsBodySchema = z.object({
-  code: z.string().min(1),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
-  type: z.enum(["activate", "redeem", "refund", "cancel", "expire"]).optional(),
-});
+const transactionsBodySchema = z
+  .object({
+    // @deprecated: use cardId instead — code leaks to browser history (V12-4.1)
+    code: z.string().min(1).optional(),
+    cardId: z.string().min(1).optional(),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+    type: z.enum(["activate", "redeem", "refund", "cancel", "expire"]).optional(),
+  })
+  .refine((d) => d.code !== undefined || d.cardId !== undefined, {
+    message: "Either code or cardId is required",
+  });
 
 const lookupBodySchema = z.object({
   code: z.string().min(1),
@@ -386,19 +392,38 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   app.post(`${prefix}/transactions`, { preHandler: [requireAdmin] }, async (request, reply) => {
     const body = transactionsBodySchema.parse(request.body);
-    const normalized = normalizeCode(body.code);
 
-    // R2: Tenant-scoped lookup — reject codes from other programs
-    const card = await prisma.giftCard.findFirst({
-      where: { code: normalized, batch: { programId: request.programId } },
-    });
-    if (!card) {
-      return reply.status(404).send({
-        error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },
+    let cardId: string;
+    if (body.cardId) {
+      // V12-4.1: Lookup by opaque id — no code in URL/browser history
+      const card = await prisma.giftCard.findFirst({
+        where: { id: body.cardId, batch: { programId: request.programId } },
+      });
+      if (!card) {
+        return reply.status(404).send({
+          error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },
+        });
+      }
+      cardId = card.id;
+    } else if (body.code) {
+      // @deprecated: code-based lookup retained for backwards compatibility (V12-4.1)
+      const normalized = normalizeCode(body.code);
+      const card = await prisma.giftCard.findFirst({
+        where: { code: normalized, batch: { programId: request.programId } },
+      });
+      if (!card) {
+        return reply.status(404).send({
+          error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },
+        });
+      }
+      cardId = card.id;
+    } else {
+      return reply.status(400).send({
+        error: { code: "VALIDATION_ERROR", message: "Either code or cardId is required" },
       });
     }
 
-    const result = await giftCardService.getTransactions(card.id, {
+    const result = await giftCardService.getTransactions(cardId, {
       page: body.page,
       pageSize: body.pageSize,
       type: body.type,
@@ -449,6 +474,33 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
     const card = await prisma.giftCard.findFirst({
       where: { code: normalized, batch: { programId: request.programId } },
+      select: {
+        id: true,
+        code: true,
+        batchId: true,
+        initialAmount: true,
+        balance: true,
+        currency: true,
+        expirationDate: true,
+        status: true,
+        activatedAt: true,
+        lastRedemptionAt: true,
+      },
+    });
+    if (!card) {
+      return reply.status(404).send({
+        error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },
+      });
+    }
+    return reply.send({ data: card });
+  });
+
+  // ── Card by id (opaque — no code in URL) ── V12-4.1
+
+  app.get(`${prefix}/cards/:id`, { preHandler: [requireAdmin] }, async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const card = await prisma.giftCard.findFirst({
+      where: { id, batch: { programId: request.programId } },
       select: {
         id: true,
         code: true,
@@ -557,7 +609,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
   app.get(`${prefix}/metrics`, { preHandler: [requireAdmin] }, async (request, reply) => {
     const [metrics, balances] = await Promise.all([
       giftCardService.getMetrics(request.programId),
-      giftCardService.getOutstandingBalances(),
+      giftCardService.getOutstandingBalances(request.programId),
     ]);
     return reply.send({ data: { ...metrics, outstandingBalances: balances } });
   });

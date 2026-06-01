@@ -50,10 +50,11 @@ const STATUS_COLORS: Record<string, string> = {
 export function CardDetailPage(): JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { code } = useParams<{ code: string }>();
-  const cardCode = code ?? "";
+  const { id } = useParams<{ id: string }>();
+  const cardId = id ?? "";
   const queryClient = useQueryClient();
-  const [searchCode, setSearchCode] = useState(code ?? "");
+  const [searchCode, setSearchCode] = useState("");
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [txPage, setTxPage] = useState(1);
   const [showRedeemDialog, setShowRedeemDialog] = useState(false);
   const [showRefundDialog, setShowRefundDialog] = useState(false);
@@ -67,104 +68,118 @@ export function CardDetailPage(): JSX.Element {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: card, isLoading } = useQuery({
-    queryKey: ["giftcard-detail", code],
-    queryFn: () =>
-      fetchApi<GiftCard>("/admin/giftcards/lookup", {
-        method: "POST",
-        body: JSON.stringify({ code: cardCode }),
-      }),
-    enabled: !!code,
+    queryKey: ["giftcard-detail", cardId],
+    queryFn: () => fetchApi<GiftCard>(`/admin/giftcards/cards/${cardId}`),
+    enabled: !!id,
   });
 
   const { data: txData } = useQuery({
-    queryKey: ["giftcard-transactions", code, txPage],
+    queryKey: ["giftcard-transactions", cardId, txPage],
     queryFn: () =>
       fetchApi<PaginatedResponse<GiftCardTransaction>>("/admin/giftcards/transactions", {
         method: "POST",
         body: JSON.stringify({
-          code: cardCode,
+          cardId,
           page: txPage,
           pageSize: 20,
         }),
       }),
-    enabled: !!code && !!card,
+    enabled: !!id && !!card,
   });
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     const trimmed = searchCode.trim().toUpperCase();
     if (!trimmed) return;
-    navigate(`/giftcards/cards/${trimmed}`, { replace: true });
-  };
-
-  const handleRedeem = async () => {
-    setSubmitting(true);
-    setActionError(null);
+    setSearchError(null);
     try {
-      const key = crypto.randomUUID();
-      await fetchApi("/admin/giftcards/redeem", {
+      const found = await fetchApi<GiftCard>("/admin/giftcards/lookup", {
         method: "POST",
-        headers: { "Idempotency-Key": key },
-        body: JSON.stringify({
-          code: cardCode,
-          amount: redeemAmount,
-          ...(redeemMemberId ? { memberId: redeemMemberId } : {}),
-          ...(redeemOrderRef ? { orderRef: redeemOrderRef } : {}),
-        }),
+        body: JSON.stringify({ code: trimmed }),
       });
-      setShowRedeemDialog(false);
-      setRedeemAmount(0);
-      setRedeemMemberId("");
-      setRedeemOrderRef("");
-      void queryClient.invalidateQueries({ queryKey: ["giftcard-detail", code] });
-      void queryClient.invalidateQueries({ queryKey: ["giftcard-transactions", code] });
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Redeem failed");
-    } finally {
-      setSubmitting(false);
+      navigate(`/giftcards/cards/${found.id}`, { replace: true });
+    } catch {
+      setSearchError(t("giftcards.cardNotFound"));
     }
   };
 
-  const handleRefund = async () => {
+  const handleRedeem = () => {
+    if (!card) return;
     setSubmitting(true);
     setActionError(null);
-    try {
-      const key = crypto.randomUUID();
-      await fetchApi("/admin/giftcards/refund", {
-        method: "POST",
-        headers: { "Idempotency-Key": key },
-        body: JSON.stringify({
-          code: cardCode,
-          amount: refundAmount,
-          ...(refundReason ? { reason: refundReason } : {}),
-        }),
+    const key = crypto.randomUUID();
+    void fetchApi("/admin/giftcards/redeem", {
+      method: "POST",
+      headers: { "Idempotency-Key": key },
+      body: JSON.stringify({
+        code: card.code,
+        amount: redeemAmount,
+        ...(redeemMemberId ? { memberId: redeemMemberId } : {}),
+        ...(redeemOrderRef ? { orderRef: redeemOrderRef } : {}),
+      }),
+    })
+      .then(() => {
+        setShowRedeemDialog(false);
+        setRedeemAmount(0);
+        setRedeemMemberId("");
+        setRedeemOrderRef("");
+        void queryClient.invalidateQueries({ queryKey: ["giftcard-detail", cardId] });
+        void queryClient.invalidateQueries({ queryKey: ["giftcard-transactions", cardId] });
+      })
+      .catch((err: unknown) => {
+        setActionError(err instanceof Error ? err.message : "Redeem failed");
+      })
+      .finally(() => {
+        setSubmitting(false);
       });
-      setShowRefundDialog(false);
-      setRefundAmount(0);
-      setRefundReason("");
-      void queryClient.invalidateQueries({ queryKey: ["giftcard-detail", code] });
-      void queryClient.invalidateQueries({ queryKey: ["giftcard-transactions", code] });
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Refund failed");
-    } finally {
-      setSubmitting(false);
-    }
   };
 
-  const handleCancel = async () => {
+  const handleRefund = () => {
+    if (!card) return;
     setSubmitting(true);
     setActionError(null);
-    try {
-      await fetchApi("/admin/giftcards/cancel", {
-        method: "POST",
-        body: JSON.stringify({ code: cardCode }),
+    const key = crypto.randomUUID();
+    void fetchApi("/admin/giftcards/refund", {
+      method: "POST",
+      headers: { "Idempotency-Key": key },
+      body: JSON.stringify({
+        code: card.code,
+        amount: refundAmount,
+        ...(refundReason ? { reason: refundReason } : {}),
+      }),
+    })
+      .then(() => {
+        setShowRefundDialog(false);
+        setRefundAmount(0);
+        setRefundReason("");
+        void queryClient.invalidateQueries({ queryKey: ["giftcard-detail", cardId] });
+        void queryClient.invalidateQueries({ queryKey: ["giftcard-transactions", cardId] });
+      })
+      .catch((err: unknown) => {
+        setActionError(err instanceof Error ? err.message : "Refund failed");
+      })
+      .finally(() => {
+        setSubmitting(false);
       });
-      setShowCancelDialog(false);
-      void queryClient.invalidateQueries({ queryKey: ["giftcard-detail", code] });
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Cancel failed");
-    } finally {
-      setSubmitting(false);
-    }
+  };
+
+  const handleCancel = () => {
+    if (!card) return;
+    setSubmitting(true);
+    setActionError(null);
+    void fetchApi("/admin/giftcards/cancel", {
+      method: "POST",
+      body: JSON.stringify({ code: card.code }),
+    })
+      .then(() => {
+        setShowCancelDialog(false);
+        void queryClient.invalidateQueries({ queryKey: ["giftcard-detail", cardId] });
+      })
+      .catch((err: unknown) => {
+        setActionError(err instanceof Error ? err.message : "Cancel failed");
+      })
+      .finally(() => {
+        setSubmitting(false);
+      });
   };
 
   return (
@@ -185,7 +200,7 @@ export function CardDetailPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Search by code — navigates by opaque id */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex gap-2">
@@ -194,16 +209,24 @@ export function CardDetailPage(): JSX.Element {
               value={searchCode}
               onChange={(e) => {
                 setSearchCode(e.target.value.toUpperCase());
+                setSearchError(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleSearch();
+                if (e.key === "Enter") {
+                  void handleSearch();
+                }
               }}
             />
-            <Button onClick={handleSearch}>
+            <Button
+              onClick={() => {
+                void handleSearch();
+              }}
+            >
               <Search className="mr-1 h-4 w-4" />
               {t("giftcards.search")}
             </Button>
           </div>
+          {searchError && <p className="mt-2 text-sm text-destructive">{searchError}</p>}
         </CardContent>
       </Card>
 
@@ -223,7 +246,7 @@ export function CardDetailPage(): JSX.Element {
         </Card>
       ) : (
         <>
-          {/* Card detail */}
+          {/* Card detail — code displayed in body, never in URL */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -388,7 +411,9 @@ export function CardDetailPage(): JSX.Element {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("giftcards.redeem")}</DialogTitle>
-            <DialogDescription>{t("giftcards.redeemDesc", { code: code ?? "" })}</DialogDescription>
+            <DialogDescription>
+              {t("giftcards.redeemDesc", { code: card?.code ?? "" })}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -432,7 +457,7 @@ export function CardDetailPage(): JSX.Element {
             </Button>
             <Button
               onClick={() => {
-                void handleRedeem();
+                handleRedeem();
               }}
               disabled={submitting || redeemAmount <= 0}
             >
@@ -447,7 +472,9 @@ export function CardDetailPage(): JSX.Element {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("giftcards.refund")}</DialogTitle>
-            <DialogDescription>{t("giftcards.refundDesc", { code: code ?? "" })}</DialogDescription>
+            <DialogDescription>
+              {t("giftcards.refundDesc", { code: card?.code ?? "" })}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -482,7 +509,7 @@ export function CardDetailPage(): JSX.Element {
             </Button>
             <Button
               onClick={() => {
-                void handleRefund();
+                handleRefund();
               }}
               disabled={submitting || refundAmount <= 0}
             >
@@ -498,14 +525,14 @@ export function CardDetailPage(): JSX.Element {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("giftcards.cancelCard")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("giftcards.cancelCardDesc", { code: code ?? "" })}
+              {t("giftcards.cancelCardDesc", { code: card?.code ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                void handleCancel();
+                handleCancel();
               }}
               disabled={submitting}
             >

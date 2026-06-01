@@ -273,7 +273,7 @@ export function BatchDetailPage(): JSX.Element {
                       key={card.id}
                       className="cursor-pointer"
                       onClick={() => {
-                        navigate(`/giftcards/cards/${card.code}`);
+                        navigate(`/giftcards/cards/${card.id}`);
                       }}
                     >
                       <TableCell className="font-mono">{card.code}</TableCell>

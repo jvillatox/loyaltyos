@@ -630,9 +630,9 @@ export class GiftCardService {
     return this.repo.countCardsByStatus(programId);
   }
 
-  async getOutstandingBalances(): Promise<
-    { programId: string; currency: string; total: number }[]
-  > {
-    return this.repo.sumOutstandingBalances();
+  async getOutstandingBalances(
+    programId: string,
+  ): Promise<{ programId: string; currency: string; total: number }[]> {
+    return this.repo.sumOutstandingBalances(programId);
   }
 }
