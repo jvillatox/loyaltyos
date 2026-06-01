@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Percent, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, Gift, Percent, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchApi } from "@/lib/api-client";
-import type { DashboardStats } from "@/types";
+import type { DashboardStats, GiftCardMetrics } from "@/types";
 
 export function DashboardPage(): JSX.Element {
   const { t } = useTranslation();
@@ -16,12 +16,17 @@ export function DashboardPage(): JSX.Element {
     queryFn: () => fetchApi<DashboardStats>("/stats/dashboard"),
   });
 
+  const { data: gcMetrics } = useQuery({
+    queryKey: ["giftcard-metrics"],
+    queryFn: () => fetchApi<GiftCardMetrics>("/admin/giftcards/metrics"),
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">{t("dashboard.title")}</h1>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i}>
               <CardHeader className="pb-2">
                 <Skeleton className="h-4 w-24" />
@@ -71,7 +76,7 @@ export function DashboardPage(): JSX.Element {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">{t("dashboard.title")}</h1>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -121,6 +126,22 @@ export function DashboardPage(): JSX.Element {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{(data.redemptionRatio * 100).toFixed(1)}%</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {t("dashboard.giftCardsOutstanding")}
+            </CardTitle>
+            <Gift className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">
+              {gcMetrics
+                ? `${gcMetrics.activeCards.toLocaleString()} ${t("giftcards.cards").toLowerCase()}`
+                : "—"}
+            </p>
           </CardContent>
         </Card>
       </div>

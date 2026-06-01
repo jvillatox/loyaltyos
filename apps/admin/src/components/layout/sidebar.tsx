@@ -39,6 +39,7 @@ export function Sidebar(): JSX.Element {
     { to: "/tiers", label: t("navigation.tiers"), icon: BarChart3 },
     { to: "/rewards", label: t("navigation.rewards"), icon: Gift },
     { to: "/coalition", label: t("navigation.coalition"), icon: Link2 },
+    { to: "/giftcards", label: t("navigation.giftcards"), icon: Gift },
   ];
 
   function handleLocaleChange(locale: string): void {

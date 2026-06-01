@@ -53,6 +53,17 @@ const transactionsBodySchema = z.object({
   type: z.enum(["activate", "redeem", "refund", "cancel", "expire"]).optional(),
 });
 
+const lookupBodySchema = z.object({
+  code: z.string().min(1),
+});
+
+const adminRedeemBodySchema = z.object({
+  code: z.string().min(1),
+  amount: z.number().positive(),
+  memberId: z.string().optional(),
+  orderRef: z.string().optional(),
+});
+
 export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   const prefix = "/admin/giftcards";
 
@@ -428,6 +439,127 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
     const { id } = z.object({ id: z.string() }).parse(request.params);
     await giftCardService.deleteTermsTemplate(id);
     return reply.status(204).send();
+  });
+
+  // ── Card lookup (admin search) ─────────────
+
+  app.post(`${prefix}/lookup`, { preHandler: [requireAdmin] }, async (request, reply) => {
+    const body = lookupBodySchema.parse(request.body);
+    const normalized = normalizeCode(body.code);
+
+    const card = await prisma.giftCard.findFirst({
+      where: { code: normalized, batch: { programId: request.programId } },
+      select: {
+        id: true,
+        code: true,
+        batchId: true,
+        initialAmount: true,
+        balance: true,
+        currency: true,
+        expirationDate: true,
+        status: true,
+        activatedAt: true,
+        lastRedemptionAt: true,
+      },
+    });
+    if (!card) {
+      return reply.status(404).send({
+        error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },
+      });
+    }
+    return reply.send({ data: card });
+  });
+
+  // ── Admin redeem ──────────────────────────
+
+  app.post(`${prefix}/redeem`, { preHandler: [requireAdmin] }, async (request, reply) => {
+    const body = adminRedeemBodySchema.parse(request.body);
+
+    const idempotencyKey = request.headers["idempotency-key"] as string | undefined;
+    if (!idempotencyKey) {
+      return reply.status(400).send({
+        error: { code: "MISSING_IDEMPOTENCY_KEY", message: "Idempotency-Key header is required" },
+      });
+    }
+
+    const { getRedisConnection } = await import("../../lib/queue.js");
+    const { createRedisLocks } = await import("@loyaltyos/giftcards");
+    const redis = getRedisConnection();
+    if (!redis) {
+      return reply.status(500).send({
+        error: { code: "INTERNAL_ERROR", message: "Redis not available" },
+      });
+    }
+
+    const result = await giftCardService.redeem(
+      {
+        code: body.code,
+        amount: body.amount,
+        idempotencyKey,
+        memberId: body.memberId,
+        orderRef: body.orderRef,
+        createdById: request.adminId ?? undefined,
+        requestProgramId: request.programId,
+      },
+      createRedisLocks(redis),
+    );
+    return reply.send({ data: result });
+  });
+
+  // ── Batch cards list ──────────────────────
+
+  app.get(`${prefix}/batches/:id/cards`, { preHandler: [requireAdmin] }, async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const query = z
+      .object({
+        page: z.coerce.number().int().min(1).optional().default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+      })
+      .parse(request.query);
+
+    const batch = await prisma.giftCardBatch.findUnique({ where: { id } });
+    if (!batch || batch.programId !== request.programId) {
+      throw new GiftCardBatchNotFoundError(id);
+    }
+
+    const [cards, total] = await Promise.all([
+      prisma.giftCard.findMany({
+        where: { batchId: id },
+        select: {
+          id: true,
+          code: true,
+          balance: true,
+          initialAmount: true,
+          currency: true,
+          expirationDate: true,
+          status: true,
+        },
+        orderBy: { id: "asc" },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.giftCard.count({ where: { batchId: id } }),
+    ]);
+
+    return reply.send({
+      data: {
+        items: cards,
+        total,
+        page: query.page,
+        pageSize: query.pageSize,
+        totalPages: Math.ceil(total / query.pageSize),
+      },
+    });
+  });
+
+  // ── Metrics ───────────────────────────────
+
+  app.get(`${prefix}/metrics`, { preHandler: [requireAdmin] }, async (request, reply) => {
+    const [metrics, balances] = await Promise.all([
+      giftCardService.getMetrics(request.programId),
+      giftCardService.getOutstandingBalances(),
+    ]);
+    return reply.send({ data: { ...metrics, outstandingBalances: balances } });
   });
 
   done();

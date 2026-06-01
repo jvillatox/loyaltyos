@@ -163,3 +163,62 @@ export interface Segment {
 export interface SegmentMemberCount {
   count: number;
 }
+
+export interface GiftCardBatch {
+  id: string;
+  programId: string;
+  name: string;
+  quantity: number;
+  initialAmount: number;
+  currency: string;
+  prefix?: string;
+  expirationDate: string;
+  termsTemplateId: string;
+  status: string;
+  generatedCount: number;
+  createdById: string;
+  createdAt: string;
+}
+
+export interface GiftCard {
+  id: string;
+  code: string;
+  batchId: string;
+  initialAmount: number;
+  balance: number;
+  currency: string;
+  expirationDate: string;
+  status: string;
+  activatedAt?: string;
+  lastRedemptionAt?: string;
+}
+
+export interface GiftCardTransaction {
+  id: string;
+  giftCardId: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  memberId?: string;
+  orderRef?: string;
+  idempotencyKey?: string;
+  createdById?: string;
+  createdAt: string;
+}
+
+export interface TermsTemplate {
+  id: string;
+  programId: string;
+  name: string;
+  locale: string;
+  body: string;
+  version: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface GiftCardMetrics {
+  outstandingBalances: { programId: string; currency: string; total: number }[];
+  activeCards: number;
+  redeemedLast30d: number;
+}

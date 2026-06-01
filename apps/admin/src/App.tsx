@@ -12,6 +12,12 @@ import { CoalitionTransactionsPage } from "@/pages/coalition/transactions";
 import { CouponBulkGeneratePage } from "@/pages/coupon-bulk-generate";
 import { CouponsListPage } from "@/pages/coupons-list";
 import { DashboardPage } from "@/pages/dashboard";
+import { BatchDetailPage } from "@/pages/giftcards/batch-detail";
+import { BatchWizardPage } from "@/pages/giftcards/batch-wizard";
+import { BatchesListPage } from "@/pages/giftcards/batches-list";
+import { CardDetailPage } from "@/pages/giftcards/card-detail";
+import { TermsEditorPage } from "@/pages/giftcards/terms-editor";
+import { TermsListPage } from "@/pages/giftcards/terms-list";
 import { LoginPage } from "@/pages/login";
 import { MemberDetailPage } from "@/pages/member-detail";
 import { MembersListPage } from "@/pages/members-list";
@@ -49,6 +55,13 @@ export function App(): JSX.Element {
         <Route path="/coalition" element={<CoalitionConfigPage />} />
         <Route path="/coalition/transactions" element={<CoalitionTransactionsPage />} />
         <Route path="/coalition/members" element={<CoalitionLinkedMembersPage />} />
+        <Route path="/giftcards" element={<BatchesListPage />} />
+        <Route path="/giftcards/batches/new" element={<BatchWizardPage />} />
+        <Route path="/giftcards/batches/:id" element={<BatchDetailPage />} />
+        <Route path="/giftcards/cards/:code" element={<CardDetailPage />} />
+        <Route path="/giftcards/terms" element={<TermsListPage />} />
+        <Route path="/giftcards/terms/new" element={<TermsEditorPage />} />
+        <Route path="/giftcards/terms/:id" element={<TermsEditorPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
