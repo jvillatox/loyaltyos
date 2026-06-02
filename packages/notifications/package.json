@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@loyaltyos/core": "workspace:*",
-    "@prisma/client": "^5.15.0",
+    "@prisma/client": "^7.8.0",
     "handlebars": "^4.7.9",
     "nodemailer": "^8.0.7",
     "twilio": "^6.0.2",
