@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "accept-language-parser": "^1.5.0",
-    "i18next": "^23.11.5",
+    "i18next": "^26.3.0",
     "i18next-http-backend": "^2.5.2"
   },
   "devDependencies": {
