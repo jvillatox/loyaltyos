@@ -1,28 +1,30 @@
-# Stage 1: Build static assets
+# Stage 1: Prune monorepo to the minimal workspace for @loyaltyos/portal
+FROM node:20-alpine AS pruner
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+COPY . .
+RUN pnpm dlx turbo@2 prune --scope=@loyaltyos/portal --docker
+
+# Stage 2: Install dependencies and build static assets
 FROM node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
-# Copy root tsconfig (portal tsconfig extends ../../tsconfig.base.json)
-COPY tsconfig.base.json /tsconfig.base.json
+# Install all dependencies (including devDependencies for build)
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+RUN pnpm install --frozen-lockfile
 
-# Copy full source
-COPY apps/portal/ .
+# Copy source and build
+COPY --from=pruner /app/out/full/ .
+COPY --from=pruner /app/tsconfig.base.json ./tsconfig.base.json
+RUN pnpm turbo build --filter=@loyaltyos/portal
 
-# Remove workspace-only dependencies
-RUN sed -i '/@loyaltyos\/core/d' package.json && \
-    sed -i '/@loyaltyos\/config-eslint/d' package.json && \
-    sed -i '/@loyaltyos\/config-prettier/d' package.json
-
-RUN pnpm install --no-frozen-lockfile
-RUN pnpm add -D @types/node
-RUN pnpm build
-
-# Stage 2: Serve with nginx + brotli
+# Stage 3: Serve with nginx + brotli
 FROM fholzer/nginx-brotli:latest AS runtime
 RUN rm -rf /usr/share/nginx/html/*
 
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/apps/portal/dist /usr/share/nginx/html
 COPY apps/portal/nginx.conf /etc/nginx/conf.d/default.conf
 
 # curl needed for HEALTHCHECK
