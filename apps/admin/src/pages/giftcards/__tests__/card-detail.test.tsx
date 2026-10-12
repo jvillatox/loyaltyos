@@ -128,8 +128,8 @@ describe("V12-4.1 — card-detail uses opaque :id route", () => {
     render(<CardDetailPage />);
 
     // Type code in search box using fireEvent
-    const searchInputs = screen.getAllByPlaceholderText("giftcards.searchPlaceholder");
-    fireEvent.change(searchInputs[0], { target: { value: "ABCD-EFGH" } });
+    const searchInput = screen.getByPlaceholderText("giftcards.searchPlaceholder");
+    fireEvent.change(searchInput, { target: { value: "ABCD-EFGH" } });
 
     // Click search button
     const searchButton = screen.getByText("giftcards.search");
