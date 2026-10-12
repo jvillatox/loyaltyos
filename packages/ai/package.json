@@ -2,5 +2,19 @@
   "name": "@loyaltyos/ai",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "@loyaltyos/config-eslint": "workspace:*",
+    "@loyaltyos/config-prettier": "workspace:*",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.2"
+  },
   "description": "AI layer for LoyaltyOS — Cowork skill and shared utilities"
 }
