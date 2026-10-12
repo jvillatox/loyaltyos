@@ -359,9 +359,6 @@ importers:
 
   apps/portal:
     dependencies:
-      '@loyaltyos/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@loyaltyos/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
