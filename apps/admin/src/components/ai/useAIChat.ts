@@ -170,19 +170,15 @@ export function useAIChat() {
     setPendingConfirmation(null);
     setIsStreaming(true);
 
-    const assistantToolCallMessage: Message = {
-      role: "assistant",
-      content: "",
-      tool_calls: [toolCall],
-    };
-    const allMessages: Message[] = [...baseMessages, assistantToolCallMessage];
-
+    // The client never sends tool calls or their arguments back — it only
+    // references the persisted call by id. The server re-loads the saved call
+    // (from Redis) and executes those arguments.
     const controller = new AbortController();
     abortRef.current = controller;
     let continuedContent = "";
 
     try {
-      const stream = streamFromProxy(allMessages, controller.signal, [toolCall.id]);
+      const stream = streamFromProxy(baseMessages, controller.signal, [toolCall.id]);
 
       for await (const chunk of stream) {
         if (controller.signal.aborted) break;
