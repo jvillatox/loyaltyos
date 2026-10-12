@@ -117,6 +117,14 @@ COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/rewards/dist ./pac
 COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/rewards/package.json ./packages/rewards/
 COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/coalition/dist ./packages/coalition/dist
 COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/coalition/package.json ./packages/coalition/
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/ai/dist ./packages/ai/dist
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/ai/package.json ./packages/ai/
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/giftcards/dist ./packages/giftcards/dist
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/giftcards/package.json ./packages/giftcards/
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/telemetry/dist ./packages/telemetry/dist
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/telemetry/package.json ./packages/telemetry/
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/i18n/dist ./packages/i18n/dist
+COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/i18n/package.json ./packages/i18n/
 
 COPY apps/api/entrypoint.sh /entrypoint.sh
 USER root
