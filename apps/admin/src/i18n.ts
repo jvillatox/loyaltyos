@@ -1,6 +1,6 @@
 import enUS from "@loyaltyos/i18n/src/locales/en-US.json" with { type: "json" };
 import esMX from "@loyaltyos/i18n/src/locales/es-MX.json" with { type: "json" };
-import { createInstance } from "i18next";
+import { createInstance, type i18n as I18nInstance } from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 
@@ -14,7 +14,7 @@ export function persistLocale(locale: string): void {
   localStorage.setItem(LOCALE_STORAGE_KEY, locale);
 }
 
-const i18n = createInstance();
+const i18n: I18nInstance = createInstance();
 
 void i18n
   .use(LanguageDetector)
