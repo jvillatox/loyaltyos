@@ -57,6 +57,10 @@ services:
       APPRECIO_PRIVATE_TOKEN: ${APPRECIO_PRIVATE_TOKEN:-}
       APPRECIO_IDENTIFIER_TYPE: ${APPRECIO_IDENTIFIER_TYPE:-email}
       APPRECIO_TIMEOUT_MS: ${APPRECIO_TIMEOUT_MS:-10000}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-haiku-4-5}
+      AI_COMPANION_ENABLED: ${AI_COMPANION_ENABLED:-false}
+      APP_URL: ${APP_URL:-http://localhost:5173}
     depends_on:
       postgres:
         condition: service_healthy
