@@ -419,7 +419,12 @@ describe("POST /events with campaign integration", () => {
       balance: 0,
       pendingBalance: 0,
     });
-    mockPrisma.pointAccount.update.mockResolvedValue({});
+    // The ledger reads the new balance from the atomic update.
+    mockPrisma.pointAccount.update.mockResolvedValue({
+      id: "acc-1",
+      balance: 600,
+      programId: "prog-1",
+    });
     mockPrisma.pointTransaction.create.mockResolvedValue({
       id: "tx-1",
       amount: 100,
@@ -526,7 +531,11 @@ describe("POST /events with campaign integration", () => {
       balance: 0,
       pendingBalance: 0,
     });
-    mockPrisma.pointAccount.update.mockResolvedValue({});
+    mockPrisma.pointAccount.update.mockResolvedValue({
+      id: "acc-1",
+      balance: 500,
+      programId: "prog-1",
+    });
     mockPrisma.pointTransaction.create.mockResolvedValue({
       id: "tx-reg",
       amount: 500,

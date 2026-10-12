@@ -10,14 +10,19 @@ import {
 const mockPrisma = {
   pointAccount: {
     findFirst: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   pointTransaction: {
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
     count: vi.fn(),
   },
   pointRule: {
@@ -34,6 +39,10 @@ let PointsService: typeof import("../service.js").PointsService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  // Run interactive transactions against the same mock client.
+  mockPrisma.$transaction.mockImplementation((fn: (db: typeof mockPrisma) => unknown) =>
+    fn(mockPrisma),
+  );
   const mod = await import("../service.js");
   PointsService = mod.PointsService;
 });
@@ -62,6 +71,11 @@ describe("PointsService.earn", () => {
       source: "purchase",
       idempotencyKey: "ik-earn",
       createdAt: new Date(),
+    });
+    mockPrisma.pointAccount.update.mockResolvedValue({
+      id: "acc-1",
+      balance: 600,
+      programId: "prog-1",
     });
 
     const svc = new PointsService(prisma);
@@ -137,6 +151,11 @@ describe("PointsService.earn", () => {
       amount: 200,
       balanceAfter: 200,
     });
+    mockPrisma.pointAccount.update.mockResolvedValue({
+      id: "acc-1",
+      balance: 200,
+      programId: "prog-1",
+    });
 
     const svc = new PointsService(prisma);
     const result = await svc.earn({
@@ -173,6 +192,11 @@ describe("PointsService.earn", () => {
       amount: 50,
       balanceAfter: 50,
     });
+    mockPrisma.pointAccount.update.mockResolvedValue({
+      id: "acc-new",
+      balance: 50,
+      programId: "prog-1",
+    });
 
     const svc = new PointsService(prisma);
     const result = await svc.earn({
@@ -207,6 +231,8 @@ describe("PointsService.redeem", () => {
       amount: 200,
       balanceAfter: 300,
     });
+    mockPrisma.pointAccount.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pointAccount.findUniqueOrThrow.mockResolvedValue({ id: "acc-1", balance: 300 });
 
     const svc = new PointsService(prisma);
     const result = await svc.redeem({
@@ -234,6 +260,9 @@ describe("PointsService.redeem", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    // The balance-checked decrement matches no row.
+    mockPrisma.pointAccount.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.pointAccount.findUniqueOrThrow.mockResolvedValue({ id: "acc-1", balance: 50 });
 
     const svc = new PointsService(prisma);
     await expect(
@@ -315,6 +344,13 @@ describe("PointsService.reverse", () => {
       idempotencyKey: "reverse-tx-orig-admin-1",
       createdAt: new Date(),
     });
+    mockPrisma.pointTransaction.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pointTransaction.findUniqueOrThrow.mockResolvedValue(originalTx);
+    mockPrisma.pointAccount.update.mockResolvedValue({
+      id: "acc-1",
+      balance: 0,
+      programId: "prog-1",
+    });
 
     const svc = new PointsService(prisma);
     const result = await svc.reverse("tx-orig", "mistake", "admin-1");
@@ -351,9 +387,8 @@ describe("PointsService.reverse", () => {
       .mockResolvedValueOnce(null) // idempotency check
       .mockResolvedValueOnce(originalTx); // find by id
 
-    mockPrisma.pointTransaction.findFirst.mockResolvedValue({
-      id: "existing-reversal",
-    });
+    // Another reversal already claimed the original.
+    mockPrisma.pointTransaction.updateMany.mockResolvedValue({ count: 0 });
 
     const svc = new PointsService(prisma);
     await expect(svc.reverse("tx-orig", "reason", "admin-1")).rejects.toThrow(AlreadyReversedError);
