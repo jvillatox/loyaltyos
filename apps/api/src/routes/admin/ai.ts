@@ -3,30 +3,56 @@ import { buildSystemPrompt, buildTools, OpenRouterClient } from "@loyaltyos/ai";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
-// Tools that change state. The server owns this list: it is never driven by
-// the client, and mutating tools are never executed without explicit operator
-// confirmation (an id present in `confirmedToolCallIds`).
-const MUTATION_TOOLS = new Set(["create_campaign", "create_segment", "create_coupon"]);
+import { getRedisConnection } from "../../lib/queue.js";
 
-const toolCallSchema = z.object({
-  id: z.string(),
-  type: z.literal("function"),
-  function: z.object({
-    name: z.string(),
-    arguments: z.string(),
-  }),
-});
+// Tools that only read data — executed immediately, without operator
+// confirmation. This is a whitelist: any tool NOT listed here (mutating or
+// unknown) requires explicit operator confirmation. The server owns this list;
+// it is never driven by the client.
+export const READ_ONLY_TOOLS = new Set([
+  "get_member",
+  "list_members",
+  "get_member_history",
+  "list_campaigns",
+  "get_campaign_stats",
+  "preview_segment",
+  "get_dashboard_analytics",
+  "get_rewards_catalog",
+  "get_program_config",
+]);
+
+// Mutating tools. Not used by the runtime gate (which is deny-by-default via
+// READ_ONLY_TOOLS); kept explicit so the coverage test can assert every tool in
+// packages/ai is classified into exactly one of these two categories.
+export const MUTATION_TOOLS = new Set(["create_campaign", "create_segment", "create_coupon"]);
+
+// How long a pending mutation confirmation stays valid before it must be
+// re-requested. Prevents unbounded growth of orphaned confirmations.
+const CONFIRMATION_TTL_SECONDS = 10 * 60;
+
+interface PendingToolCall {
+  adminId: string;
+  programId: string;
+  name: string;
+  arguments: string;
+}
+
+function confirmationKey(toolCallId: string): string {
+  return `ai:confirm:${toolCallId}`;
+}
 
 // Client messages are restricted to the two roles the user/assistant actually
 // produce. `system` is rejected (the server owns the system prompt) and `tool`
 // is rejected (the server rebuilds all tool results server-side, so a client
-// cannot inject fabricated tool output).
+// cannot inject fabricated tool output). `tool_calls` is intentionally NOT in
+// this schema: a client cannot submit tool calls (or their arguments) directly.
+// Tool execution is driven entirely by what the server persisted at
+// `mutation_required` time, keyed by the confirmed toolCallId.
 const chatBodySchema = z.object({
   messages: z.array(
     z.object({
       role: z.enum(["user", "assistant"]),
       content: z.string(),
-      tool_calls: z.array(toolCallSchema).optional(),
     }),
   ),
   confirmedToolCallIds: z.array(z.string()).optional().default([]),
@@ -94,7 +120,6 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
       }
 
       const body = chatBodySchema.parse(request.body);
-      const confirmedSet = new Set(body.confirmedToolCallIds);
 
       const port = process.env.PORT_API ?? process.env.PORT ?? "3002";
       const baseUrl = `http://localhost:${String(port)}/api/v1`;
@@ -124,6 +149,66 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         appUrl: process.env.APP_URL ?? "http://localhost:5173",
       });
 
+      const redis = getRedisConnection();
+
+      // Phase 1 — confirmation round. The client only sends `confirmedToolCallIds`;
+      // it never sends tool calls or their arguments. For each confirmed id we
+      // atomically load-and-delete the call the server persisted earlier, verify
+      // it belongs to this admin+program session, and reconstruct the tool call
+      // from the SAVED arguments (never from the client). Any missing, expired,
+      // or mismatched confirmation rejects the whole request with 409 and
+      // executes nothing.
+      const confirmedCalls: ToolCall[] = [];
+      if (body.confirmedToolCallIds.length > 0) {
+        if (!redis) {
+          return reply.status(503).send({
+            error: {
+              code: "AI_CONFIRMATION_UNAVAILABLE",
+              message: "Redis is required to confirm mutating tool calls",
+            },
+          });
+        }
+
+        for (const id of body.confirmedToolCallIds) {
+          const stored = await redis.getdel(confirmationKey(id));
+          if (!stored) {
+            return reply.status(409).send({
+              error: {
+                code: "CONFIRMATION_INVALID",
+                message: "La confirmación no existe o ha expirado",
+              },
+            });
+          }
+
+          let pending: PendingToolCall;
+          try {
+            pending = JSON.parse(stored) as PendingToolCall;
+          } catch {
+            return reply.status(409).send({
+              error: {
+                code: "CONFIRMATION_INVALID",
+                message: "La confirmación no es válida",
+              },
+            });
+          }
+
+          if (pending.adminId !== request.adminId || pending.programId !== request.programId) {
+            return reply.status(409).send({
+              error: {
+                code: "CONFIRMATION_INVALID",
+                message: "La confirmación no pertenece a esta sesión",
+              },
+            });
+          }
+
+          confirmedCalls.push({
+            id,
+            type: "function",
+            function: { name: pending.name, arguments: pending.arguments },
+          });
+        }
+      }
+
       const raw = reply.raw;
       raw.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -138,23 +223,12 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         const MAX_ROUNDS = 5;
         let currentMessages: Message[] = [systemMessage, ...body.messages];
 
-        // Phase 1 — confirmation round: the client re-sends the assistant
-        // message carrying the tool calls the operator just confirmed. Execute
-        // them server-side first, then feed the results back to the model.
-        const lastMsg = currentMessages[currentMessages.length - 1];
-        const pendingCalls: ToolCall[] =
-          lastMsg?.role === "assistant" ? (lastMsg.tool_calls ?? []) : [];
-
-        if (pendingCalls.length > 0) {
+        // Reconstruct the assistant message (with tool_calls) and the tool
+        // results server-side so the model sees the context of what was
+        // confirmed and executed.
+        if (confirmedCalls.length > 0) {
           const toolResults: Message[] = [];
-          for (const toolCall of pendingCalls) {
-            if (!confirmedSet.has(toolCall.id)) {
-              raw.write(`data: ${JSON.stringify({ type: "mutation_required", toolCall })}\n\n`);
-              raw.write("data: [DONE]\n\n");
-              raw.end();
-              return;
-            }
-
+          for (const toolCall of confirmedCalls) {
             const result = await executeTool(toolCall, tools);
             toolResults.push({
               role: "tool",
@@ -169,11 +243,17 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
               )}\n\n`,
             );
           }
-          currentMessages = [...currentMessages, ...toolResults];
+          const assistantMessage: Message = {
+            role: "assistant",
+            content: "",
+            tool_calls: confirmedCalls,
+          };
+          currentMessages = [...currentMessages, assistantMessage, ...toolResults];
         }
 
-        // Phase 2 — stream from the model, executing read tools immediately and
-        // pausing on mutating tools until the operator confirms them.
+        // Phase 2 — stream from the model. Read-only tools execute immediately;
+        // mutating tools are persisted to Redis and pause until the operator
+        // confirms (the confirmation flows back through Phase 1).
         for (let round = 0; round < MAX_ROUNDS; round++) {
           let hasToolCalls = false;
           const toolResults: Message[] = [];
@@ -193,10 +273,31 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
                   const toolCall = chunk.toolCall;
                   hasToolCalls = true;
 
-                  if (
-                    MUTATION_TOOLS.has(toolCall.function.name) &&
-                    !confirmedSet.has(toolCall.id)
-                  ) {
+                  if (!READ_ONLY_TOOLS.has(toolCall.function.name)) {
+                    if (!redis) {
+                      raw.write(
+                        `data: ${JSON.stringify({
+                          type: "error",
+                          error: "Confirmación no disponible (Redis no configurado)",
+                        })}\n\n`,
+                      );
+                      raw.write("data: [DONE]\n\n");
+                      raw.end();
+                      return;
+                    }
+
+                    const pending: PendingToolCall = {
+                      adminId: request.adminId,
+                      programId: request.programId,
+                      name: toolCall.function.name,
+                      arguments: toolCall.function.arguments,
+                    };
+                    await redis.set(
+                      confirmationKey(toolCall.id),
+                      JSON.stringify(pending),
+                      "EX",
+                      CONFIRMATION_TTL_SECONDS,
+                    );
                     raw.write(
                       `data: ${JSON.stringify({ type: "mutation_required", toolCall })}\n\n`,
                     );
