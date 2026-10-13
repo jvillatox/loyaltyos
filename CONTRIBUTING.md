@@ -4,6 +4,8 @@ Thanks for your interest in contributing. LoyaltyOS is an open source customer l
 
 This document will be expanded as the project matures. For Phase 1, here's how to get started.
 
+All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Getting started
 
 1. **Fork** the repo and clone it locally.
