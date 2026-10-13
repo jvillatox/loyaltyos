@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import type { AuditActorType } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
@@ -17,6 +19,12 @@ declare module "fastify" {
   }
 }
 
+function safeTokenEqual(provided: string, expected: string): boolean {
+  const a = createHash("sha256").update(provided).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
 // eslint-disable-next-line @typescript-eslint/require-await
 async function authPluginImpl(app: FastifyInstance): Promise<void> {
   app.decorateRequest("programId", "");
@@ -25,15 +33,42 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
   app.decorateRequest("adminId", null);
   app.decorateRequest("actor", { type: "SYSTEM" as AuditActorType, id: "anonymous" });
 
-  app.addHook("preHandler", async (request) => {
+  app.addHook("preHandler", async (request, reply) => {
     // Replace shared default actor with a fresh per-request instance
     request.actor = { type: "SYSTEM" as AuditActorType, id: "anonymous" };
 
+    const path = request.url.split("?")[0] ?? "";
+
+    // Health/readiness checks are always public (exact match — no prefix).
+    if (path === "/healthz" || path === "/readyz") {
+      return;
+    }
+
+    // Metrics expose per-program business data (leaks across tenants), so they
+    // are token-gated in production and hidden entirely when no token is set.
+    if (path === "/metrics") {
+      const metricsToken = process.env.METRICS_TOKEN;
+      if (!metricsToken) {
+        if (process.env.NODE_ENV === "production") {
+          reply.callNotFound();
+          return;
+        }
+        return; // open in dev/test
+      }
+
+      const authHeader = request.headers.authorization;
+      const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+      if (bearer && safeTokenEqual(bearer, metricsToken)) {
+        return;
+      }
+      throw Object.assign(new Error("Invalid metrics token"), { statusCode: 401 });
+    }
+
     // Skip auth for public routes (magic link, admin login, etc.)
     if (
-      request.url.startsWith("/api/v1/auth/") ||
-      request.url.startsWith("/api/v1/admin/login") ||
-      request.url.startsWith("/api/v1/admin/logout")
+      path.startsWith("/api/v1/auth/") ||
+      path === "/api/v1/admin/login" ||
+      path === "/api/v1/admin/logout"
     ) {
       return;
     }
