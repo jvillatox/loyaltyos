@@ -1,19 +1,22 @@
 # Stage 1: Prune monorepo to the minimal workspace for @loyaltyos/api
-FROM node:20-alpine AS pruner
+FROM node:22-alpine AS pruner
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 COPY . .
 RUN pnpm dlx turbo@2 prune --scope=@loyaltyos/api --docker
 
 # Stage 2: Install dependencies and build
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
-# Install all dependencies (including devDependencies for build)
+# Install all dependencies (including devDependencies for build).
+# shamefully-hoist flattens node_modules so the esbuild bundle (a single
+# dist/index.js) can resolve transitive deps (prom-client, opossum, i18next)
+# at runtime despite pnpm's isolated linker.
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --config.shamefully-hoist=true
 
 # Copy source and build
 COPY --from=pruner /app/out/full/ .
@@ -32,7 +35,7 @@ RUN PRISMA_PKG_DIR=$(find node_modules/.pnpm -maxdepth 1 -name '@prisma+client@*
 # `prisma migrate deploy` at container startup (entrypoint.sh).
 RUN rm -rf node_modules && \
     node -e "const p=require('./package.json'); delete p.scripts.prepare; require('fs').writeFileSync('package.json',JSON.stringify(p,null,2))" && \
-    pnpm install --frozen-lockfile --prod --ignore-scripts
+    pnpm install --frozen-lockfile --prod --ignore-scripts --config.shamefully-hoist=true
 
 # Restore generated prisma client into the freshly installed @prisma/client
 RUN PRISMA_PKG_DIR=$(find node_modules/.pnpm -maxdepth 1 -name '@prisma+client@*' -type d | head -1) && \
@@ -84,8 +87,8 @@ RUN find node_modules -name '*.d.ts' -not -path '*@prisma/client*' -delete && \
     find node_modules -type d \( -name 'docs' -o -name 'examples' -o -name 'example' \) -exec rm -rf {} + 2>/dev/null || true
 
 # Stage 3: Runtime
-FROM node:20-alpine AS runtime
-RUN apk add --no-cache curl && \
+FROM node:22-alpine AS runtime
+RUN apk add --no-cache curl openssl && \
     addgroup -S loyaltyos && adduser -S loyaltyos -G loyaltyos
 
 USER loyaltyos
@@ -100,31 +103,8 @@ COPY --from=builder --chown=loyaltyos:loyaltyos /app/apps/api/package.json ./app
 COPY --from=builder --chown=loyaltyos:loyaltyos /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=loyaltyos:loyaltyos /app/apps/api/prisma ./apps/api/prisma
 
-# Copy built workspace packages (API depends on them at runtime)
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/core/dist ./packages/core/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/core/package.json ./packages/core/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/campaigns/dist ./packages/campaigns/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/campaigns/package.json ./packages/campaigns/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/coupons/dist ./packages/coupons/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/coupons/package.json ./packages/coupons/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/segments/dist ./packages/segments/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/segments/package.json ./packages/segments/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/notifications/dist ./packages/notifications/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/notifications/package.json ./packages/notifications/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/badges/dist ./packages/badges/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/badges/package.json ./packages/badges/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/rewards/dist ./packages/rewards/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/rewards/package.json ./packages/rewards/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/coalition/dist ./packages/coalition/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/coalition/package.json ./packages/coalition/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/ai/dist ./packages/ai/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/ai/package.json ./packages/ai/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/giftcards/dist ./packages/giftcards/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/giftcards/package.json ./packages/giftcards/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/telemetry/dist ./packages/telemetry/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/telemetry/package.json ./packages/telemetry/
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/i18n/dist ./packages/i18n/dist
-COPY --from=builder --chown=loyaltyos:loyaltyos /app/packages/i18n/package.json ./packages/i18n/
+# Workspace packages (@loyaltyos/*) are inlined into dist/index.js by esbuild,
+# so only the single bundled file is needed at runtime.
 
 COPY apps/api/entrypoint.sh /entrypoint.sh
 USER root

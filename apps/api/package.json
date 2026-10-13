@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "vitest run",
@@ -48,6 +48,7 @@
     "@loyaltyos/config-prettier": "workspace:*",
     "@types/supertest": "^6.0.2",
     "csv-stringify": "^6.5.0",
+    "esbuild": "^0.25.12",
     "exceljs": "^4.4.0",
     "prisma": "^5.15.0",
     "supertest": "^7.0.0",

@@ -304,6 +304,9 @@ importers:
       csv-stringify:
         specifier: ^6.5.0
         version: 6.7.0
+      esbuild:
+        specifier: ^0.25.12
+        version: 0.25.12
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
