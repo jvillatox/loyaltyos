@@ -1,0 +1,118 @@
+<svg
+  viewBox="0 0 956 220"
+  width="100%"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-labelledby="coalition-title coalition-desc"
+>
+  <title id="coalition-title">Coalition adapter flow diagram</title>
+  <desc id="coalition-desc">
+    A horizontal flow showing: Your storefront connects to the LoyaltyOS Points
+    Engine, which connects to the CoalitionAdapter, which connects to the active
+    Apprecio network node and two placeholder future network nodes.
+  </desc>
+
+  <defs>
+    <marker
+      id="arrow"
+      markerWidth="8"
+      markerHeight="6"
+      refX="6"
+      refY="3"
+      orient="auto"
+    >
+      <polygon
+        points="0 0,8 3,0 6"
+        fill="var(--border-strong)"
+      />
+    </marker>
+    <marker
+      id="arrow-accent"
+      markerWidth="8"
+      markerHeight="6"
+      refX="6"
+      refY="3"
+      orient="auto"
+    >
+      <polygon
+        points="0 0,8 3,0 6"
+        fill="var(--accent)"
+      />
+    </marker>
+  </defs>
+
+  <!-- Arrows -->
+  <line x1="200" y1="110" x2="242" y2="110"
+        stroke="var(--border-strong)" stroke-width="1"
+        marker-end="url(#arrow)" />
+  <line x1="408" y1="110" x2="450" y2="110"
+        stroke="var(--border-strong)" stroke-width="1"
+        marker-end="url(#arrow)" />
+  <line x1="616" y1="110" x2="658" y2="110"
+        stroke="var(--accent)" stroke-width="1.5"
+        marker-end="url(#arrow-accent)" />
+
+  <!-- Connector lines to future nodes -->
+  <line x1="824" y1="110" x2="872" y2="66"
+        stroke="var(--border)" stroke-width="1" stroke-dasharray="4 4" />
+  <line x1="824" y1="110" x2="872" y2="154"
+        stroke="var(--border)" stroke-width="1" stroke-dasharray="4 4" />
+
+  <!-- Node: Your storefront -->
+  <rect x="40" y="82" width="160" height="56" rx="8"
+        fill="var(--bg-elevated)" stroke="var(--border-strong)" stroke-width="1" />
+  <text x="120" y="110" text-anchor="middle" dominant-baseline="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="13" fill="var(--text-primary)">
+    Your storefront
+  </text>
+
+  <!-- Node: Points Engine -->
+  <rect x="248" y="82" width="160" height="56" rx="8"
+        fill="var(--bg-elevated)" stroke="var(--border-strong)" stroke-width="1" />
+  <text x="328" y="103" text-anchor="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="13" fill="var(--text-primary)">LoyaltyOS</text>
+  <text x="328" y="120" text-anchor="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="13" fill="var(--text-primary)">Points Engine</text>
+
+  <!-- Node: CoalitionAdapter -->
+  <rect x="456" y="82" width="160" height="56" rx="8"
+        fill="var(--bg-elevated)" stroke="var(--border-strong)" stroke-width="1" />
+  <text x="536" y="103" text-anchor="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="13" fill="var(--text-primary)">Coalition</text>
+  <text x="536" y="120" text-anchor="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="13" fill="var(--text-primary)">Adapter</text>
+
+  <!-- Node: Apprecio (active, highlighted) -->
+  <rect x="664" y="82" width="160" height="56" rx="8"
+        fill="var(--bg-elevated)"
+        stroke="var(--accent)" stroke-width="1.5"
+        filter="drop-shadow(0 0 8px var(--accent-glow))" />
+  <text x="744" y="110" text-anchor="middle" dominant-baseline="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="13" font-weight="500"
+        fill="var(--text-primary)">Apprecio</text>
+
+  <!-- Future network nodes (dashed) -->
+  <circle cx="904" cy="66" r="32"
+          fill="var(--bg-elevated)" stroke="var(--border)" stroke-width="1"
+          stroke-dasharray="4 4" />
+  <text x="904" y="66" text-anchor="middle" dominant-baseline="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="18" fill="var(--text-muted)">+</text>
+
+  <circle cx="904" cy="154" r="32"
+          fill="var(--bg-elevated)" stroke="var(--border)" stroke-width="1"
+          stroke-dasharray="4 4" />
+  <text x="904" y="154" text-anchor="middle" dominant-baseline="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="18" fill="var(--text-muted)">+</text>
+
+  <!-- Future networks label -->
+  <text x="904" y="24" text-anchor="middle"
+        font-family="var(--font-mono, monospace)" font-size="11" fill="var(--text-muted)">
+    future networks
+  </text>
+
+  <!-- Caption -->
+  <text x="478" y="210" text-anchor="middle"
+        font-family="var(--font-sans, sans-serif)" font-size="14" fill="var(--text-muted)">
+    One interface. One adapter shipped. More adapters pluggable.
+  </text>
+</svg>

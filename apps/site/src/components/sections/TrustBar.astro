@@ -1,0 +1,71 @@
+<div class="trust-bar" aria-hidden="true">
+  <div class="trust-bar__inner">
+    <span class="trust-bar__item">v1.0.0 shipped</span>
+    <span class="trust-bar__sep" aria-hidden="true">·</span>
+    <span class="trust-bar__item">MCP server in v1.1</span>
+    <span class="trust-bar__sep" aria-hidden="true">·</span>
+    <span class="trust-bar__item">MIT License</span>
+    <span class="trust-bar__sep" aria-hidden="true">·</span>
+    <span class="trust-bar__item">Node 20 · PostgreSQL 15 · Redis 7</span>
+    <span class="trust-bar__sep" aria-hidden="true">·</span>
+    <span class="trust-bar__item">Helm chart published</span>
+    <span class="trust-bar__sep" aria-hidden="true">·</span>
+    <span class="trust-bar__item">Docker images on GHCR</span>
+  </div>
+</div>
+
+<style>
+  .trust-bar {
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    height: 48px;
+    overflow-x: auto;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+  }
+  @media (max-width: 767px) {
+    .trust-bar {
+      scrollbar-width: none;
+    }
+    .trust-bar::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .trust-bar__inner {
+    max-width: var(--max-width);
+    margin-inline: auto;
+    padding-inline: var(--space-5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    width: 100%;
+  }
+  @media (min-width: 768px) {
+    .trust-bar__inner {
+      padding-inline: var(--space-6);
+    }
+  }
+  @media (max-width: 767px) {
+    .trust-bar__inner {
+      justify-content: flex-start;
+    }
+  }
+
+  .trust-bar__item {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .trust-bar__sep {
+    color: var(--border-strong);
+    flex-shrink: 0;
+  }
+</style>

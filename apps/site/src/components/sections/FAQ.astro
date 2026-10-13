@@ -1,0 +1,138 @@
+---
+import EyebrowLabel from "../ui/EyebrowLabel.astro";
+
+const faqs = [
+  {
+    q: "Is LoyaltyOS production-ready?",
+    a: "Yes. v1.0.0 shipped on 2026-05-24 with full CI, a published Helm chart, signed Docker images on GHCR, OpenTelemetry tracing, and Prometheus metrics. The points ledger is immutable and idempotency-key-protected at the API edge.",
+  },
+  {
+    q: "Do I have to use Puntos Apprecio?",
+    a: "No. The coalition adapter is entirely optional. If you don't enable it, LoyaltyOS works as a standalone single-brand loyalty platform. If you do enable it, you get accumulation, redemption, and point conversion against the Apprecio network out of the box.",
+  },
+  {
+    q: "What's the license?",
+    a: "MIT. Use it commercially, fork it, embed it in your own product — no restrictions, no usage fees.",
+  },
+  {
+    q: "Can I run this on my own infrastructure?",
+    a: "Yes. Self-hosting is the default path. We publish a Helm chart for Kubernetes, Docker images on GHCR for everything else, and a Docker Compose file for local development or single-VM deployments.",
+  },
+  {
+    q: "How do I extend it?",
+    a: "Every package in the monorepo is independently importable. Write a new CoalitionAdapter, a custom rewards fulfillment hook, or a new notification channel, register it in your config, and ship. The architecture is built around interfaces, not plugins-as-an-afterthought.",
+  },
+  {
+    q: "Do I have to use the AI layer?",
+    a: "No. The MCP server, the Cowork skill, and the admin companion are all optional packages. The core platform — API, admin, widget, points ledger — works exactly the same whether or not you ever attach an LLM. If you do enable the AI layer, you pick which pieces: just the MCP server for agent control, just the companion for in-admin chat, or all three.",
+  },
+  {
+    q: "When I use the AI layer, where does my data go?",
+    a: "The MCP server runs on your infrastructure and only talks to your own LoyaltyOS API. No member data is sent to any third party. The admin companion uses OpenRouter as a model gateway, which means whatever model you select (Claude, GPT-4o, Gemini, a self-hosted Ollama endpoint) is the only external surface — and you control which model that is. For air-gapped deployments, point the companion at a local model and the MCP server stays entirely on-prem.",
+  },
+];
+---
+
+<section class="section" id="faq">
+  <div class="faq__inner">
+    <EyebrowLabel>FAQ</EyebrowLabel>
+    <h2 class="section-title faq__h2">Questions you probably have.</h2>
+
+    <div class="faq__list">
+      {faqs.map((faq) => (
+        <details class="faq-item">
+          <summary class="faq-item__question">
+            <span>{faq.q}</span>
+            <span class="faq-item__icon" aria-hidden="true">+</span>
+          </summary>
+          <div class="faq-item__answer">
+            <p>{faq.a}</p>
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: left;
+  }
+
+  .faq__h2 {
+    margin-top: var(--space-4);
+    text-align: center;
+  }
+
+  .faq__list {
+    width: 100%;
+    max-width: 792px;
+    margin-top: var(--space-10);
+  }
+
+  .faq-item {
+    border-bottom: 1px solid var(--border);
+  }
+  .faq-item:first-child {
+    border-top: 1px solid var(--border);
+  }
+
+  .faq-item__question {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-6) 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    list-style: none;
+  }
+  .faq-item__question::-webkit-details-marker {
+    display: none;
+  }
+  .faq-item__question::marker {
+    display: none;
+    content: "";
+  }
+
+  .faq-item__icon {
+    font-size: 1.25rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    margin-left: var(--space-4);
+    transition: transform 200ms ease;
+  }
+  details[open] .faq-item__icon {
+    transform: rotate(45deg);
+  }
+
+  .faq-item__answer {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 300ms ease;
+  }
+  details[open] .faq-item__answer {
+    max-height: 600px;
+  }
+
+  .faq-item__answer p {
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0;
+    padding-bottom: var(--space-6);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .faq-item__icon,
+    .faq-item__answer {
+      transition: none;
+    }
+  }
+</style>

@@ -1,0 +1,50 @@
+---
+import EyebrowLabel from "../ui/EyebrowLabel.astro";
+---
+
+<section class="section" id="why">
+  <div class="problem__inner">
+    <EyebrowLabel>Why LoyaltyOS</EyebrowLabel>
+    <h2 class="section-title problem__h2">
+      Loyalty software shouldn't be a black box.
+    </h2>
+    <div class="problem__body">
+      <p class="section-body">
+        Most loyalty platforms lock your customer data behind opaque SaaS
+        pricing, charge per active member, and treat coalition programs as a
+        roadmap promise. When a campaign breaks at midnight on Black Friday, you
+        file a ticket and wait.
+      </p>
+      <p class="section-body">
+        LoyaltyOS flips that. Every points ledger entry lives in your Postgres.
+        Every campaign rule lives in your repo. Every adapter — including the
+        one for Puntos Apprecio — is open code you can read, fork, and extend.
+        And every operation is exposed as an MCP tool, so your team can run the
+        program from Claude, ChatGPT, or any agent they already use. Your
+        loyalty program is infrastructure you own.
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .problem__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .problem__h2 {
+    margin-top: var(--space-4);
+    max-width: 792px;
+  }
+
+  .problem__body {
+    max-width: 588px;
+    margin-top: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+</style>

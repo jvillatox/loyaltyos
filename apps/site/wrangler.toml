@@ -1,0 +1,15 @@
+# Cloudflare Pages deployment for loyalty-os.com
+# Docs: https://developers.cloudflare.com/pages/platform/functions/wrangler-configuration/
+
+name = "loyalty-os-site"
+compatibility_date = "2026-05-25"
+
+# Build config (set in Cloudflare Dashboard or via wrangler):
+#   Build command:   pnpm build
+#   Build output dir: dist
+#   Node.js version:  20
+
+# No Functions needed — static site only.
+
+[env.production]
+# Custom domain: loyalty-os.com
