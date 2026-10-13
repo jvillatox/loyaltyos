@@ -27,11 +27,19 @@ helm install loyaltyos loyaltyos/loyaltyos \\
     label: "Issue your first points",
     shortLabel: "API",
     lang: "bash",
-    description: "Once it's up, hit the API.",
-    code: `curl -X POST http://localhost:4000/v1/points/accrue \\
-  -H "Authorization: Bearer $TOKEN" \\
+    description: "Create a member, then issue points through a purchase event.",
+    code: `# 1. Create a member
+curl -X POST http://localhost:3002/api/v1/members \\
+  -H "X-API-Key: $LOYALTYOS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"externalId":"c_123","email":"ana@example.com"}'
+
+# 2. Issue points via a purchase event
+curl -X POST http://localhost:3002/api/v1/events \\
+  -H "X-API-Key: $LOYALTYOS_API_KEY" \\
   -H "Idempotency-Key: $(uuidgen)" \\
-  -d '{"customerId":"c_123","amount":150,"reason":"purchase"}'`,
+  -H "Content-Type: application/json" \\
+  -d '{"type":"purchase","memberId":"<member-id>","payload":{"amount":150}}'`,
   },
   {
     id: "mcp",
@@ -46,7 +54,7 @@ helm install loyaltyos loyaltyos/loyaltyos \\
       "command": "npx",
       "args": ["-y", "@loyaltyos/mcp-server"],
       "env": {
-        "LOYALTYOS_API_URL": "http://localhost:4000",
+        "LOYALTYOS_API_URL": "http://localhost:3002",
         "LOYALTYOS_API_KEY": "sk_live_..."
       }
     }
