@@ -28,6 +28,8 @@ jobs:
           echo "JWT_SECRET=$(openssl rand -hex 64)" >> infra/docker/.env.production
           echo "API_KEY_SALT=$(openssl rand -hex 32)" >> infra/docker/.env.production
           echo "KMS_MASTER_KEY=$(openssl rand -hex 32)" >> infra/docker/.env.production
+          echo "GIFTCARD_HMAC_SECRET=$(openssl rand -hex 32)" >> infra/docker/.env.production
+          echo "METRICS_TOKEN=$(openssl rand -hex 32)" >> infra/docker/.env.production
 
       - name: Start services
         run: |
@@ -44,9 +46,19 @@ jobs:
         run: |
           curl -fsS --retry 10 --retry-delay 3 --retry-connrefused http://localhost:3002/healthz
 
-      - name: Smoke test — API metrics
+      - name: Smoke test — API metrics (token required)
         run: |
-          curl -fsS http://localhost:3002/metrics | grep -q "loyaltyos_"
+          # Without a bearer token, /metrics must be rejected (401)
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3002/metrics)
+          test "$status" = "401"
+          # With the correct bearer token, /metrics must return scrapable metrics
+          METRICS_TOKEN=$(grep '^METRICS_TOKEN=' infra/docker/.env.production | cut -d= -f2-)
+          curl -fsS -H "Authorization: Bearer $METRICS_TOKEN" http://localhost:3002/metrics | grep -q "loyaltyos_"
+
+      - name: Smoke test — AI chat requires admin auth
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3002/api/v1/admin/ai/chat -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"hi"}]}')
+          test "$status" = "401"
 
       - name: Smoke test — Admin serves SPA
         run: |

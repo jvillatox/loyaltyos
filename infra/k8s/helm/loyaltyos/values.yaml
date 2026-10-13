@@ -30,6 +30,10 @@ api:
   enabled: true
   # -- Number of API replicas
   replicaCount: 2
+  # -- Name of an existing Secret to use instead of creating one inline.
+  # When set, the chart does NOT create a Secret; the referenced Secret must
+  # contain the keys below (see api.env). Recommended for GitOps/ESO setups.
+  existingSecret: ""
 
   image:
     # -- Image repository (without registry prefix)
@@ -70,10 +74,17 @@ api:
     PORT_API: "3002"
     LOG_LEVEL: info
     CORS_ORIGIN: ""
-    # Secrets — set via values or ExternalSecrets
+    # Secrets — provided inline below, via api.existingSecret, or via ExternalSecrets.
+    # Leave empty to define them through api.existingSecret instead of committing them here.
     JWT_SECRET: ""
     API_KEY_SALT: ""
     KMS_MASTER_KEY: ""
+    # HMAC secret for gift-card codes. Required in production (API refuses to boot
+    # if empty or set to "dev-secret"). Generate with: openssl rand -hex 32
+    GIFTCARD_HMAC_SECRET: ""
+    # Bearer token for scraping /metrics. Empty hides /metrics in production.
+    # Generate with: openssl rand -hex 32
+    METRICS_TOKEN: ""
     # Email (Resend)
     RESEND_API_KEY: ""
     # SMS (Twilio)

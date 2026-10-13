@@ -17,6 +17,11 @@ spec:
       path: /metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+      {{- if .Values.api.env.METRICS_TOKEN }}
+      bearerTokenSecret:
+        name: {{ include "loyaltyos.apiSecretName" . }}
+        key: METRICS_TOKEN
+      {{- end }}
       {{- with .Values.monitoring.serviceMonitor.metricRelabelings }}
       metricRelabelings:
         {{- toYaml . | nindent 8 }}
