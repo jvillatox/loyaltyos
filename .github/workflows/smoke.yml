@@ -34,9 +34,12 @@ jobs:
       - name: Start services
         run: |
           docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.production up -d --build
-          # Wait for healthy containers
-          for i in $(seq 1 30); do
-            if docker compose -f infra/docker/docker-compose.prod.yml ps | grep -q "healthy"; then
+          # Wait for the API to finish `prisma migrate deploy` and bind port 3002.
+          # `depends_on` only gates the API on postgres/redis health; the API
+          # still runs migrations before listening, so poll /healthz directly.
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3002/healthz >/dev/null 2>&1; then
+              echo "API ready (after ~$((i * 2))s)"
               break
             fi
             sleep 2
@@ -44,7 +47,7 @@ jobs:
 
       - name: Smoke test — API health
         run: |
-          curl -fsS --retry 10 --retry-delay 3 --retry-connrefused http://localhost:3002/healthz
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors http://localhost:3002/healthz
 
       - name: Smoke test — API metrics (token required)
         run: |
@@ -71,4 +74,4 @@ jobs:
       - name: Show logs on failure
         if: failure()
         run: |
-          docker compose -f infra/docker/docker-compose.prod.yml logs --tail=200
+          docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.production logs --tail=200
