@@ -47,7 +47,7 @@ spec:
             - configMapRef:
                 name: {{ include "loyaltyos.fullname" . }}-api-config
             - secretRef:
-                name: {{ include "loyaltyos.fullname" . }}-api-secret
+                name: {{ include "loyaltyos.apiSecretName" . }}
           resources:
             {{- toYaml .Values.bullmqWorker.resources | nindent 12 }}
       {{- with .Values.bullmqWorker.nodeSelector }}

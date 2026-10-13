@@ -46,7 +46,7 @@ spec:
             - configMapRef:
                 name: {{ include "loyaltyos.fullname" . }}-api-config
             - secretRef:
-                name: {{ include "loyaltyos.fullname" . }}-api-secret
+                name: {{ include "loyaltyos.apiSecretName" . }}
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
       {{- with .Values.migrations.nodeSelector }}

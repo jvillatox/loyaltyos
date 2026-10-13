@@ -163,6 +163,14 @@ Create the REDIS_URL from either external config or the redis sub-chart
 {{- end }}
 
 {{/*
+Name of the API secret — either an existing secret supplied by the operator
+or the chart-managed Secret created from .Values.api.env.
+*/}}
+{{- define "loyaltyos.apiSecretName" -}}
+{{- .Values.api.existingSecret | default (printf "%s-api-secret" (include "loyaltyos.fullname" .)) }}
+{{- end }}
+
+{{/*
 Image registry helper
 */}}
 {{- define "loyaltyos.image" -}}

@@ -51,7 +51,7 @@ spec:
             - configMapRef:
                 name: {{ include "loyaltyos.fullname" . }}-api-config
             - secretRef:
-                name: {{ include "loyaltyos.fullname" . }}-api-secret
+                name: {{ include "loyaltyos.apiSecretName" . }}
           {{- if .Values.api.coalition.providers }}
           env:
             {{- range $i, $p := .Values.api.coalition.providers }}
