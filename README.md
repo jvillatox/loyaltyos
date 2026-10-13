@@ -410,4 +410,6 @@ If LoyaltyOS helps your business, consider [sponsoring the project](https://gith
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The MIT license covers the code only; the names
+and logos "LoyaltyOS", "Apprecio", and "Puntos Apprecio" are not licensed.
+See [TRADEMARKS](TRADEMARKS.md).
