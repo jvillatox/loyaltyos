@@ -1,0 +1,17 @@
+---
+export interface Props {
+  mono?: boolean;
+  class?: string;
+}
+
+const { mono = true, class: className } = Astro.props;
+const fontClass = mono
+  ? "font-mono text-[0.8125rem] font-medium tracking-[0.02em]"
+  : "font-sans text-[0.8125rem] font-medium";
+---
+
+<span
+  class={`inline-flex items-center rounded-full border border-solid border-[var(--border)] bg-[var(--bg-elevated)] px-[10px] py-[4px] text-[var(--text-muted)] ${fontClass} motion-safe:transition-[border-color,color] motion-safe:duration-150 motion-safe:ease-[var(--ease)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)] ${className ?? ""}`.trim()}
+>
+  <slot />
+</span>

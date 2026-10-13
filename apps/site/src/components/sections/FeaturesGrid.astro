@@ -1,0 +1,98 @@
+---
+import FeatureCard from "../ui/FeatureCard.astro";
+import { TrendingUp, Zap, Tag, Award, Layout, PieChart, Share2, Cpu } from "lucide-static";
+
+const features = [
+  {
+    title: "Points engine with immutable ledger",
+    body: "Every accrual, redemption, and adjustment is appended to an audit-grade ledger. Idempotency keys protect against duplicate events at the API edge.",
+    icon: TrendingUp,
+  },
+  {
+    title: "Campaigns & rules engine",
+    body: "Time-bounded campaigns with multiplier, threshold, and tiered logic. Scheduled with BullMQ. Targeted with segments. Versioned alongside your code.",
+    icon: Zap,
+  },
+  {
+    title: "Coupons & promo codes",
+    body: "Generate single-use or bulk codes. Constrain by segment, channel, or expiry. Redeemable through the API or the drop-in widget.",
+    icon: Tag,
+  },
+  {
+    title: "Badges, tiers & rewards catalog",
+    body: "Status tiers, unlockable badges, and a rewards catalog — with tier-transition events your stack can act on.",
+    icon: Award,
+  },
+  {
+    title: "Customer portal + drop-in widget",
+    body: "A Lit-based Web Component you embed in any storefront. A React admin UI for ops teams. No iframes, no vendor branding.",
+    icon: Layout,
+  },
+  {
+    title: "Segments & analytics",
+    body: "Slice your member base by behavior, tier, or coalition activity. Built-in cohort and retention dashboards. Same metrics surface as Prometheus loyaltyos_* series for your existing observability stack.",
+    icon: PieChart,
+  },
+  {
+    title: "Native coalition adapter",
+    body: "A CoalitionAdapter interface with a production-grade ApprecioAdapter. Accrue, redeem, and convert points across the Puntos Apprecio network.",
+    icon: Share2,
+    pill: true,
+  },
+  {
+    title: "AI-native control plane",
+    body: "An MCP server exposes ~22 tools across every domain. A Cowork skill ships 5 loyalty workflows out of the box. An OpenRouter-powered companion lives inside the admin UI.",
+    icon: Cpu,
+    pill: true,
+  },
+];
+---
+
+<section class="section" id="features">
+  <div class="features__inner">
+    <h2 class="section-title features__h2">Everything you need to run a loyalty program.</h2>
+    <div class="features-grid">
+      {
+        features.map((f) => (
+          <FeatureCard
+            title={f.title}
+            body={f.body}
+            iconName={f.icon}
+            pill={f.pill ?? false}
+          />
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .features__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .features__h2 {
+    max-width: 792px;
+    margin-bottom: var(--space-12);
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+    width: 100%;
+    max-width: var(--max-width);
+  }
+  @media (min-width: 768px) {
+    .features-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 1024px) {
+    .features-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>
