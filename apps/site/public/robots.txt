@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://loyalty-os.com/sitemap.xml
