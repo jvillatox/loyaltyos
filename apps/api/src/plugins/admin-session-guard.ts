@@ -16,18 +16,21 @@ async function adminSessionGuardImpl(app: FastifyInstance): Promise<void> {
   // Deny-by-default: every /api/v1/admin/* route (except the three above)
   // requires an authenticated admin session. API keys — including SERVER-scope
   // internal keys — do NOT grant admin access.
-  app.addHook("preHandler", (request) => {
+  app.addHook("preHandler", (request, _reply, done) => {
     const path = request.url.split("?")[0] ?? "";
 
     if (!path.startsWith("/api/v1/admin/")) {
+      done();
       return;
     }
     if (ADMIN_PUBLIC_PATHS.has(path)) {
+      done();
       return;
     }
     if (request.adminId == null) {
       throw new LoyaltyError("FORBIDDEN", 403);
     }
+    done();
   });
 }
 
