@@ -8,6 +8,7 @@ import { prisma } from "../db.js";
 import type { AuditActor } from "../lib/audit.js";
 import { adminLucia } from "../lib/auth/admin-lucia.js";
 import { lucia } from "../lib/auth/lucia.js";
+import { LoyaltyError } from "../lib/errors.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -37,7 +38,9 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
     // Replace shared default actor with a fresh per-request instance
     request.actor = { type: "SYSTEM" as AuditActorType, id: "anonymous" };
 
-    const path = request.url.split("?")[0] ?? "";
+    // Resolved (decoded) route path, not the raw URL — `request.url` preserves
+    // %xx encoding, which would let an encoded path skip the whitelist below.
+    const path = request.routeOptions.url ?? "";
 
     // Health/readiness checks are always public (exact match — no prefix).
     if (path === "/healthz" || path === "/readyz") {
@@ -50,8 +53,15 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
       const metricsToken = process.env.METRICS_TOKEN;
       if (!metricsToken) {
         if (process.env.NODE_ENV === "production") {
-          reply.callNotFound();
-          return;
+          // Hide /metrics behind a 404. Sending directly (instead of
+          // reply.callNotFound()) avoids re-entering this preHandler hook with
+          // the 404 route context, where `routeOptions.url` is undefined and the
+          // request would fall through to the API-key check and return 401.
+          return reply.code(404).send({
+            message: `Route ${request.method}:${request.url} not found`,
+            error: "Not Found",
+            statusCode: 404,
+          });
         }
         return; // open in dev/test
       }
@@ -131,7 +141,12 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
       data: { lastUsedAt: new Date() },
     });
 
-    request.programId = programId ?? key.programId;
+    // The key is scoped to its own program. A client must not switch tenants by
+    // sending a different X-Program-Id than the key's programId.
+    if (programId && programId !== key.programId) {
+      throw new LoyaltyError("FORBIDDEN", 403);
+    }
+    request.programId = key.programId;
     request.apiKeyScope = key.scope;
     request.actor = { type: "API_KEY", id: key.id };
   });

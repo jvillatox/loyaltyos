@@ -212,6 +212,29 @@ describe("deny-by-default on /admin routes", () => {
   }
 });
 
+describe("encoding bypass is closed (guard uses resolved route, not raw URL)", () => {
+  // %xx-encoded path segments that decode to `/api/v1/admin/campaigns`. Before
+  // the guard used `request.routeOptions.url`, these slipped past the
+  // `request.url.startsWith("/api/v1/admin/")` check and returned 200.
+  const encodedPaths = [
+    "/api/v1/%61dmin/campaigns",
+    "/api/v1/ad%6din/campaigns",
+    "/api/v1/%61dmin/%63ampaigns",
+    "/api/v1/admin/campaign%73",
+  ];
+
+  for (const path of encodedPaths) {
+    it(`GET ${path} rejects a CLIENT key (403)`, async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: path,
+        headers: { "x-api-key": clientKeyValue, "x-program-id": PROGRAM_A },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+  }
+});
+
 describe("cross-tenant isolation (programId from AdminUser)", () => {
   it("admin of program A cannot read program B's campaigns via X-Program-Id", async () => {
     const bCampaign = await prisma.campaign.create({
@@ -245,5 +268,35 @@ describe("cross-tenant isolation (programId from AdminUser)", () => {
     expect(created!.programId).toBe(PROGRAM_A);
     expect(created!.programId).not.toBe(programBId);
     createdIds.push(created!.id);
+  });
+});
+
+describe("cross-tenant isolation (API key scope)", () => {
+  it("a program-A key cannot POST /events with X-Program-Id = program B", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/events",
+      headers: { "x-api-key": clientKeyValue, "x-program-id": programBId },
+      payload: { type: "purchase" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("a program-A key cannot GET /members with X-Program-Id = program B", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/members",
+      headers: { "x-api-key": clientKeyValue, "x-program-id": programBId },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("a program-A key with a matching X-Program-Id is not rejected", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/members",
+      headers: { "x-api-key": clientKeyValue, "x-program-id": PROGRAM_A },
+    });
+    expect(res.statusCode).not.toBe(403);
   });
 });

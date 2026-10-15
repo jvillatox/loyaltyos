@@ -17,9 +17,14 @@ async function adminSessionGuardImpl(app: FastifyInstance): Promise<void> {
   // requires an authenticated admin session. API keys — including SERVER-scope
   // internal keys — do NOT grant admin access.
   app.addHook("preHandler", (request, _reply, done) => {
-    const path = request.url.split("?")[0] ?? "";
+    // Decide on the *resolved* route path, not the raw request URL. find-my-way
+    // decodes %xx before matching, so `request.url` still holds encoded segments
+    // (e.g. `/api/v1/%61dmin/...`) while `routeOptions.url` holds the decoded
+    // route pattern. Using the raw URL would let an encoded path bypass the guard.
+    // `routeOptions.url` is `undefined` for unmatched (404) requests.
+    const path: string | undefined = request.routeOptions.url;
 
-    if (!path.startsWith("/api/v1/admin/")) {
+    if (!path?.startsWith("/api/v1/admin/")) {
       done();
       return;
     }
@@ -28,7 +33,8 @@ async function adminSessionGuardImpl(app: FastifyInstance): Promise<void> {
       return;
     }
     if (request.adminId == null) {
-      throw new LoyaltyError("FORBIDDEN", 403);
+      done(new LoyaltyError("FORBIDDEN", 403));
+      return;
     }
     done();
   });
