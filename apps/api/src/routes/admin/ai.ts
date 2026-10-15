@@ -58,18 +58,29 @@ const chatBodySchema = z.object({
   confirmedToolCallIds: z.array(z.string()).optional().default([]),
 });
 
-function createLoopbackFetch(apiKey: string, programId: string): typeof globalThis.fetch {
-  return async (url, init) => {
-    return fetch(url, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey,
-        "X-Program-Id": programId,
-        ...init?.headers,
-      },
+// Loopback that replays the request in-process (app.inject) carrying the
+// operator's admin session cookie. Tools therefore run with the identity of the
+// admin who made the AI request — not a shared internal API key, which the
+// admin-session guard rejects (403) on every /admin route.
+export function createInjectLoopbackFetch(
+  app: FastifyInstance,
+  cookie: string,
+): typeof globalThis.fetch {
+  return (async (url: string, init?: RequestInit) => {
+    const parsed = new URL(url);
+    const method = (init?.method ?? "GET") as "GET" | "POST";
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    const body = typeof init?.body === "string" ? init.body : undefined;
+
+    const res = await app.inject({
+      method,
+      url: `${parsed.pathname}${parsed.search}`,
+      headers: { cookie, ...headers },
+      payload: body ? (JSON.parse(body) as Record<string, unknown>) : undefined,
     });
-  };
+
+    return new Response(res.body, { status: res.statusCode });
+  }) as typeof globalThis.fetch;
 }
 
 async function executeTool(
@@ -111,9 +122,8 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         });
       }
 
-      const apiKey = process.env.LOYALTYOS_API_KEY;
       const openrouterKey = process.env.OPENROUTER_API_KEY;
-      if (!apiKey || !openrouterKey) {
+      if (!openrouterKey) {
         return reply.status(503).send({
           error: { code: "AI_NOT_CONFIGURED", message: "AI companion is not configured" },
         });
@@ -121,11 +131,8 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
 
       const body = chatBodySchema.parse(request.body);
 
-      const port = process.env.PORT_API ?? process.env.PORT ?? "3002";
-      const baseUrl = `http://localhost:${String(port)}/api/v1`;
-
-      const loopbackFetch = createLoopbackFetch(apiKey, request.programId);
-      const tools = buildTools({ fetch: loopbackFetch, baseUrl });
+      const loopbackFetch = createInjectLoopbackFetch(app, request.headers.cookie ?? "");
+      const tools = buildTools({ fetch: loopbackFetch, baseUrl: "http://localhost/api/v1" });
       const toolDefs = tools.map((t: ToolDef) => ({
         name: t.name,
         description: t.description,
