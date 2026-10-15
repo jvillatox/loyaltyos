@@ -91,7 +91,6 @@ beforeEach(async () => {
   vi.clearAllMocks();
 
   vi.stubEnv("AI_COMPANION_ENABLED", "true");
-  vi.stubEnv("LOYALTYOS_API_KEY", "test-internal-key");
   vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key");
 
   mockPrisma.apiKey.findUnique.mockResolvedValue(adminKey());
@@ -324,8 +323,7 @@ describe("POST /admin/ai/chat", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("returns 503 when API keys are not configured", async () => {
-    vi.stubEnv("LOYALTYOS_API_KEY", "");
+  it("returns 503 when the OpenRouter key is not configured", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "");
 
     const res = await app.inject({
