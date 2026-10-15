@@ -99,6 +99,7 @@ beforeEach(async () => {
   // Add onRequest hook at root level to set programId for tests
   // (auth plugin hooks are encapsulated, so we add a root-level hook)
   app.addHook("onRequest", async (request) => {
+    request.adminId = "admin-1";
     request.programId = (request.headers["x-program-id"] as string) || "prog-1";
     request.apiKeyScope = (request.headers["x-api-scope"] as string) || "admin";
   });

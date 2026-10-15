@@ -80,15 +80,19 @@ beforeEach(async () => {
 
   app = await buildApp({ logger: false });
 
-  // Auth posture override — must be preHandler to run AFTER the auth plugin,
-  // which also uses preHandler and would otherwise overwrite onRequest values.
-  app.addHook("preHandler", async (request) => {
+  // adminId must be set in onRequest so the admin-session guard (a preHandler
+  // registered during buildApp) sees it before it runs.
+  app.addHook("onRequest", async (request) => {
     const scope = (request.headers["x-api-scope"] as string) || "SERVER";
     const adminId = request.headers["x-admin-id"] as string | null;
+    request.adminId = adminId || (scope === "SERVER" ? "admin-1" : null);
+  });
 
+  // programId/apiKeyScope override must run AFTER the auth plugin's preHandler.
+  app.addHook("preHandler", async (request) => {
+    const scope = (request.headers["x-api-scope"] as string) || "SERVER";
     request.programId = (request.headers["x-program-id"] as string) || "prog-1";
     request.apiKeyScope = scope;
-    request.adminId = adminId || (scope === "SERVER" ? "admin-1" : null);
   });
 });
 

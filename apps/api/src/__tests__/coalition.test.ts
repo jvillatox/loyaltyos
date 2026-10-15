@@ -64,6 +64,7 @@ beforeEach(async () => {
   app = await buildApp({ logger: false });
 
   app.addHook("onRequest", async (request) => {
+    request.adminId = "admin-1";
     request.programId = (request.headers["x-program-id"] as string) || "prog-1";
     request.apiKeyScope = (request.headers["x-api-scope"] as string) || "admin";
   });
