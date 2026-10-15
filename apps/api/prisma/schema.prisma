@@ -696,7 +696,7 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  user Member @relation(fields: [userId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -766,6 +766,7 @@ enum AuditAction {
 enum AuditActorType {
   ADMIN_USER
   API_KEY
+  MEMBER
   SYSTEM
 }
 

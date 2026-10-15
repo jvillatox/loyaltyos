@@ -108,7 +108,7 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
           request.memberId = user.id;
           request.programId = user.programId;
           request.apiKeyScope = "MEMBER";
-          request.actor = { type: "ADMIN_USER", id: user.id };
+          request.actor = { type: "MEMBER", id: user.id };
           return;
         }
       }
