@@ -5,7 +5,6 @@ import { z } from "zod";
 import { prisma } from "../../db.js";
 import { audit } from "../../lib/audit.js";
 import { giftCardService } from "../../lib/giftcard-setup.js";
-import { requireAdmin } from "../../plugins/require-admin.js";
 
 // ── Zod schemas ──────────────────────────────────
 
@@ -75,7 +74,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Batches ──────────────────────────────────
 
-  app.post(`${prefix}/batches`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.post(`${prefix}/batches`, async (request, reply) => {
     const body = createBatchRouteSchema.parse(request.body);
     const batch = await giftCardService.createBatch({
       ...body,
@@ -85,7 +84,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
     return reply.status(201).send({ data: batch });
   });
 
-  app.get(`${prefix}/batches`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.get(`${prefix}/batches`, async (request, reply) => {
     const query = z
       .object({
         page: z.coerce.number().int().min(1).optional().default(1),
@@ -100,27 +99,22 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
     return reply.send({ data: result });
   });
 
-  app.get(`${prefix}/batches/:id`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.get(`${prefix}/batches/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const batch = await giftCardService.getBatch(id);
     return reply.send({ data: batch });
   });
 
-  app.post(
-    `${prefix}/batches/:id/cancel`,
-    { preHandler: [requireAdmin] },
-    async (request, reply) => {
-      const { id } = z.object({ id: z.string() }).parse(request.params);
-      const batch = await giftCardService.cancelBatch(id);
-      return reply.send({ data: batch });
-    },
-  );
+  app.post(`${prefix}/batches/:id/cancel`, async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const batch = await giftCardService.cancelBatch(id);
+    return reply.send({ data: batch });
+  });
 
   // I.1: CSV/XLSX export endpoint
   app.get(
     `${prefix}/batches/:id/export`,
     {
-      preHandler: [requireAdmin],
       config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
@@ -330,7 +324,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Refund (moved from public routes — A.1) ──
 
-  app.post(`${prefix}/refund`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.post(`${prefix}/refund`, async (request, reply) => {
     const body = refundBodySchema.parse(request.body);
 
     const idempotencyKey = request.headers["idempotency-key"] as string | undefined;
@@ -365,7 +359,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Cancel card (moved from public routes — A.1) ──
 
-  app.post(`${prefix}/cancel`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.post(`${prefix}/cancel`, async (request, reply) => {
     const body = cancelBodySchema.parse(request.body);
 
     const { getRedisConnection } = await import("../../lib/queue.js");
@@ -390,7 +384,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Transactions (moved from public routes — A.1) ──
 
-  app.post(`${prefix}/transactions`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.post(`${prefix}/transactions`, async (request, reply) => {
     const body = transactionsBodySchema.parse(request.body);
 
     let cardId: string;
@@ -433,7 +427,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Terms templates ──────────────────────────
 
-  app.post(`${prefix}/terms`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.post(`${prefix}/terms`, async (request, reply) => {
     const body = createTermsRouteSchema.parse(request.body);
     const template = await giftCardService.createTermsTemplate({
       ...body,
@@ -442,25 +436,25 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
     return reply.status(201).send({ data: template });
   });
 
-  app.get(`${prefix}/terms`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.get(`${prefix}/terms`, async (request, reply) => {
     const templates = await giftCardService.listTermsTemplates(request.programId);
     return reply.send({ data: templates });
   });
 
-  app.get(`${prefix}/terms/:id`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.get(`${prefix}/terms/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const template = await giftCardService.getTermsTemplate(id);
     return reply.send({ data: template });
   });
 
-  app.patch(`${prefix}/terms/:id`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.patch(`${prefix}/terms/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateTermsSchema.parse(request.body);
     const template = await giftCardService.updateTermsTemplate(id, body);
     return reply.send({ data: template });
   });
 
-  app.delete(`${prefix}/terms/:id`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.delete(`${prefix}/terms/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     await giftCardService.deleteTermsTemplate(id);
     return reply.status(204).send();
@@ -468,7 +462,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Card lookup (admin search) ─────────────
 
-  app.post(`${prefix}/lookup`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.post(`${prefix}/lookup`, async (request, reply) => {
     const body = lookupBodySchema.parse(request.body);
     const normalized = normalizeCode(body.code);
 
@@ -497,7 +491,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Card by id (opaque — no code in URL) ── V12-4.1
 
-  app.get(`${prefix}/cards/:id`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.get(`${prefix}/cards/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const card = await prisma.giftCard.findFirst({
       where: { id, batch: { programId: request.programId } },
@@ -524,7 +518,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Admin redeem ──────────────────────────
 
-  app.post(`${prefix}/redeem`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.post(`${prefix}/redeem`, async (request, reply) => {
     const body = adminRedeemBodySchema.parse(request.body);
 
     const idempotencyKey = request.headers["idempotency-key"] as string | undefined;
@@ -560,7 +554,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Batch cards list ──────────────────────
 
-  app.get(`${prefix}/batches/:id/cards`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.get(`${prefix}/batches/:id/cards`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const query = z
       .object({
@@ -606,7 +600,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // ── Metrics ───────────────────────────────
 
-  app.get(`${prefix}/metrics`, { preHandler: [requireAdmin] }, async (request, reply) => {
+  app.get(`${prefix}/metrics`, async (request, reply) => {
     const [metrics, balances] = await Promise.all([
       giftCardService.getMetrics(request.programId),
       giftCardService.getOutstandingBalances(request.programId),

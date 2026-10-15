@@ -16,6 +16,7 @@ import Fastify from "fastify";
 import { prisma } from "./db.js";
 import { getBusinessMetricsRegistry } from "./lib/business-metrics.js";
 import { errorHandler } from "./lib/error-handler.js";
+import { adminSessionGuard } from "./plugins/admin-session-guard.js";
 import { authPlugin } from "./plugins/auth.js";
 import { adminAiRoutes } from "./routes/admin/ai.js";
 import { adminAuthRoutes } from "./routes/admin/auth.js";
@@ -168,6 +169,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
 
   // Custom plugins
   await app.register(authPlugin);
+  await app.register(adminSessionGuard);
 
   // Protected routes (after auth plugin)
   await app.register(healthRoutes, { prefix: "/" });
