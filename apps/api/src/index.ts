@@ -4,6 +4,7 @@ import { initTracing } from "@loyaltyos/telemetry";
 await initTracing("loyaltyos-api");
 
 import { buildApp, getBullMQMetrics, prisma } from "./app.js";
+import { assertNoDefaultApiKey } from "./lib/boot-guards.js";
 import { getBusinessMetrics } from "./lib/business-metrics.js";
 import {
   scheduleGiftCardExpiration,
@@ -18,6 +19,14 @@ import {
 import { startNotificationsWorker } from "./workers/notifications.js";
 
 const app = await buildApp();
+
+// Production boot guard — refuse to start while the seeded dev-key is active.
+try {
+  await assertNoDefaultApiKey();
+} catch (err) {
+  console.error(`FATAL: ${(err as Error).message}`);
+  process.exit(1);
+}
 
 // Start
 const port = Number(process.env.PORT_API) || 3000;

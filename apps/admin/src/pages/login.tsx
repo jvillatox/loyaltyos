@@ -1,23 +1,24 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { adminLogin, isAdminAuthenticated } from "@/lib/api-client";
+import { useAdminAuth } from "@/lib/auth-context";
 
 export function LoginPage(): JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { admin, login } = useAdminAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (isAdminAuthenticated()) {
-    navigate("/", { replace: true });
+  if (admin) {
+    return <Navigate to="/" replace />;
   }
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
@@ -26,7 +27,7 @@ export function LoginPage(): JSX.Element {
     setLoading(true);
 
     try {
-      const result = await adminLogin(email, password);
+      const result = await login(email, password);
       if (result.ok) {
         navigate("/", { replace: true });
       } else {
