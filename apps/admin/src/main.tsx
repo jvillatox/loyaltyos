@@ -8,6 +8,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import i18n from "./i18n";
+import { AdminAuthProvider } from "./lib/auth-context";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,7 +29,9 @@ createRoot(rootElement).render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <BrowserRouter>
-          <App />
+          <AdminAuthProvider>
+            <App />
+          </AdminAuthProvider>
         </BrowserRouter>
       </I18nextProvider>
     </QueryClientProvider>

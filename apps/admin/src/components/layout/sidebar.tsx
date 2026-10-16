@@ -23,11 +23,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { persistLocale } from "@/i18n";
-import { adminLogout, isAdminAuthenticated } from "@/lib/api-client";
+import { useAdminAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 export function Sidebar(): JSX.Element {
   const { t, i18n } = useTranslation();
+  const { admin, logout } = useAdminAuth();
 
   const links = [
     { to: "/", label: t("navigation.dashboard"), icon: LayoutDashboard, end: true },
@@ -85,12 +86,12 @@ export function Sidebar(): JSX.Element {
             </SelectContent>
           </Select>
         </div>
-        {isAdminAuthenticated() && (
+        {admin && (
           <Button
             variant="ghost"
             className="w-full justify-start gap-3 px-3 text-sm text-muted-foreground hover:text-accent-foreground"
             onClick={() => {
-              void adminLogout();
+              void logout();
             }}
           >
             <LogOut className="h-4 w-4" />

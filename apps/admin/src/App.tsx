@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router-dom";
 
+import { RequireAuth } from "@/components/auth/require-auth";
 import { AppLayout } from "@/components/layout/app-layout";
 import { BadgeEditorPage } from "@/pages/badge-editor";
 import { BadgesListPage } from "@/pages/badges-list";
@@ -32,7 +33,13 @@ export function App(): JSX.Element {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route element={<AppLayout />}>
+      <Route
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<DashboardPage />} />
         <Route path="/members" element={<MembersListPage />} />
         <Route path="/members/:id" element={<MemberDetailPage />} />
