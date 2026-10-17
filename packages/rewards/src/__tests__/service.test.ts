@@ -21,19 +21,28 @@ const mockPrisma = vi.hoisted(() => ({
   },
   pointAccount: {
     findFirst: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   pointTransaction: {
     findUnique: vi.fn(),
     create: vi.fn(),
   },
+  $transaction: vi.fn(),
 }));
 
 let RewardsService: typeof import("../service.js").RewardsService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  // PointsService runs its ledger writes in an interactive transaction.
+  mockPrisma.$transaction.mockImplementation((fn: (db: typeof mockPrisma) => unknown) =>
+    fn(mockPrisma),
+  );
+  mockPrisma.pointAccount.updateMany.mockResolvedValue({ count: 1 });
+  mockPrisma.pointAccount.findUniqueOrThrow.mockResolvedValue({ id: "acc-1", balance: 500 });
   const mod = await import("../service.js");
   RewardsService = mod.RewardsService;
 });

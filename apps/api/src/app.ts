@@ -18,7 +18,6 @@ import { getBusinessMetricsRegistry } from "./lib/business-metrics.js";
 import { errorHandler } from "./lib/error-handler.js";
 import { adminSessionGuard } from "./plugins/admin-session-guard.js";
 import { authPlugin } from "./plugins/auth.js";
-import { adminAiRoutes } from "./routes/admin/ai.js";
 import { adminAuthRoutes } from "./routes/admin/auth.js";
 import { adminBadgesRoutes } from "./routes/admin/badges.js";
 import { adminCampaignsRoutes } from "./routes/admin/campaigns.js";
@@ -187,7 +186,6 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   await app.register(giftCardsRoutes, { prefix: "/api/v1" });
   await app.register(rewardsRoutes, { prefix: "/api/v1" });
   await app.register(adminRewardsRoutes, { prefix: "/api/v1" });
-  await app.register(adminAiRoutes, { prefix: "/api/v1" });
   await app.register(coalitionRoutes, { prefix: "/api/v1" });
   await app.register(adminCoalitionRoutes, { prefix: "/api/v1" });
   await app.register(adminProgramsRoutes, { prefix: "/api/v1" });

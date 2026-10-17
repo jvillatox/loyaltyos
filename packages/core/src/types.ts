@@ -90,6 +90,13 @@ export class AlreadyReversedError extends Error {
   }
 }
 
+export class CannotReverseError extends Error {
+  constructor(txId: string) {
+    super(`Transaction ${txId} is itself a reversal and cannot be reversed`);
+    this.name = "CannotReverseError";
+  }
+}
+
 export interface EarnResult {
   transactionId: string;
   amount: number;
