@@ -2,6 +2,41 @@ apiVersion: v1
 entries:
   loyaltyos:
   - apiVersion: v2
+    appVersion: 1.1.0
+    created: "2026-10-18T06:13:44.132796138Z"
+    dependencies:
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.x
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 20.x
+    description: LoyaltyOS — Open source customer loyalty platform with native coalition
+      support
+    digest: e718a80218c5d215b3d9dddc144bf8e96d99f35406126c1457b5ae5c07fd1b2c
+    home: https://github.com/jvillatox/loyaltyos
+    icon: https://raw.githubusercontent.com/jvillatox/loyaltyos/main/docs-site/static/img/logo.svg
+    keywords:
+    - loyalty
+    - points
+    - coalition
+    - rewards
+    - coupons
+    - gamification
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: jvillatox
+      url: https://github.com/jvillatox
+    name: loyaltyos
+    sources:
+    - https://github.com/jvillatox/loyaltyos
+    type: application
+    urls:
+    - https://github.com/jvillatox/loyaltyos/releases/download/loyaltyos-1.1.0/loyaltyos-1.1.0.tgz
+    version: 1.1.0
+  - apiVersion: v2
     appVersion: 1.0.0
     created: "2026-05-24T10:21:48.649115105Z"
     dependencies:
@@ -36,4 +71,4 @@ entries:
     urls:
     - https://github.com/jvillatox/loyaltyos/releases/download/loyaltyos-1.0.0/loyaltyos-1.0.0.tgz
     version: 1.0.0
-generated: "2026-05-24T10:21:48.64912497Z"
+generated: "2026-10-18T06:13:44.132805883Z"
