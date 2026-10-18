@@ -5,6 +5,59 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-18
+
+> **Security release.** All deployments of v1.0.x should upgrade. See advisory GHSA-98hf-vcvp-p8j6.
+
+### Security
+
+- **Admin routes now require an admin session (deny-by-default).** API keys — including SERVER-scope keys — no longer grant access to `/admin/*`.
+- **API keys can no longer switch tenants** via `X-Program-Id`; a mismatched header returns 403.
+- **Admin UI authenticates with the session cookie only.** Earlier builds embedded an API key (`dev-key`, SERVER-scope in the seed) in the public admin bundle.
+- **Production boot guard:** the API refuses to start while the seeded `dev-key` is active.
+- **`/metrics` is token-gated** via `METRICS_TOKEN`.
+- **AI companion tools run with the operator's admin session**, not a shared API key.
+- **Member actions are recorded as `MEMBER`** (previously `ADMIN_USER`) in the audit log.
+
+### Added
+
+- **Admin AI Companion** (off by default, `AI_COMPANION_ENABLED`): read-only tools run directly; any mutating tool requires a server-side, single-use confirmation.
+- **Gift cards:** batch generation, redemption, terms templates, admin UI, CSV/XLSX export.
+- **i18n:** admin (es-MX/en-US), portal, widget, API errors and notifications.
+
+### Fixed
+
+- **The API Docker image now boots.** Images published for v1.0.x built but failed at startup.
+- **Member magic-link login** no longer returns 500.
+- **Admin session persists across page reloads.**
+- Docker builds for admin and portal (missing workspace dependencies).
+
+### Changed
+
+- API is bundled with esbuild; base image `node:22-alpine`; CI on Node 22 (Node 20 is EOL).
+
+### Breaking changes
+
+- API keys no longer access `/admin/*`.
+- `X-Program-Id` different from the key's program → 403.
+- `/metrics` requires `METRICS_TOKEN` (returns 404 in production when unset).
+- `GIFTCARD_HMAC_SECRET` is required in production.
+- `VITE_API_KEY` and `VITE_PROGRAM_ID` were removed from the admin build.
+
+### Upgrade notes
+
+1. Run database migrations (`prisma migrate deploy`): adds `MEMBER` to `AuditActorType`.
+2. Set `GIFTCARD_HMAC_SECRET` and (to scrape metrics) `METRICS_TOKEN`; configure Prometheus to send `Authorization: Bearer <METRICS_TOKEN>`.
+3. Deactivate or rotate the `dev-key` API key if it exists, and rotate any key that was used in an admin build.
+4. Rebuild the admin UI without `VITE_API_KEY` / `VITE_PROGRAM_ID`.
+5. Review the audit log for `/admin/*` actions performed by `API_KEY` actors (see the advisory).
+
+### Known limitations
+
+- **Admin roles are not enforced yet** (`SUPER_ADMIN` / `OPERATOR` / `ANALYST`): every admin has the same permissions (#32).
+- **MCP server:** its admin tools call routes that do not exist in the API and do not work in this release (#48).
+- Points ledger concurrency fixes from #29 are not included in this release.
+
 ## [1.0.0] - 2026-05-21 — Initial Public Release
 
 ### Core Platform
