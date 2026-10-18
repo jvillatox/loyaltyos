@@ -47,11 +47,11 @@ jobs:
       KMS_MASTER_KEY: 0000000000000000000000000000000000000000000000000000000000000001
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -94,11 +94,11 @@ jobs:
             dockerfile: apps/portal/Dockerfile
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -106,7 +106,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/loyaltyos-${{ matrix.image.name }}
           tags: |
@@ -115,7 +115,7 @@ jobs:
             type=sha,format=short
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.image.dockerfile }}
@@ -130,15 +130,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test
+    # Best-effort publish: only attempt it when an npm token is configured.
+    # The @loyaltyos scope is not registered on npm yet, so a fresh scope
+    # returns E404 and must not fail the release. To enable publishing, claim
+    # the @loyaltyos scope on npmjs.org (create the org or package) and give
+    # NPM_TOKEN write access to it, then drop the `continue-on-error` below.
+    if: ${{ secrets.NPM_TOKEN != '' }}
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -149,12 +155,8 @@ jobs:
       - run: pnpm --filter @loyaltyos/widget build
 
       - name: Publish to npm
-        if: env.NODE_AUTH_TOKEN != ''
+        continue-on-error: true
         run: pnpm --filter @loyaltyos/widget publish --access public --no-git-checks
-
-      - name: Skip npm publish
-        if: env.NODE_AUTH_TOKEN == ''
-        run: echo "Skipping npm publish — NPM_TOKEN secret not configured"
 
   helm-lint:
     name: Helm Lint
@@ -163,9 +165,9 @@ jobs:
     needs: test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v3.17.0
 
@@ -188,11 +190,11 @@ jobs:
       pages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v3.17.0
 
@@ -232,7 +234,7 @@ jobs:
             git checkout main
           fi
 
-      - uses: helm/chart-releaser-action@v1.6.0
+      - uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: infra/k8s/helm
         env:
@@ -245,7 +247,7 @@ jobs:
     needs: [docker, helm-lint]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -271,7 +273,7 @@ jobs:
             echo '```'
           } > /tmp/release-body.md
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           body_path: /tmp/release-body.md
           generate_release_notes: true
@@ -281,6 +283,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [helm-publish, github-release]
+    permissions:
+      actions: write
     steps:
       - name: Trigger docs workflow
         run: |
