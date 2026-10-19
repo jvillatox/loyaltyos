@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { GiftCard, GiftCardBatch, PaginatedResponse } from "@/types";
 
@@ -54,6 +55,7 @@ export function BatchDetailPage(): JSX.Element {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const pageSize = 20;
+  const canIssue = usePermission("giftcards.financial");
 
   const { data: batch, isLoading } = useQuery({
     queryKey: ["giftcard-batch", batchId],
@@ -169,7 +171,7 @@ export function BatchDetailPage(): JSX.Element {
             <Download className="mr-1 h-4 w-4" />
             {downloading === "xlsx" ? t("common.loading") : t("giftcards.exportXlsx")}
           </Button>
-          {!isTerminal && (
+          {canIssue && !isTerminal && (
             <Button
               variant="destructive"
               size="sm"

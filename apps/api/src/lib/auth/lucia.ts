@@ -20,6 +20,11 @@ export const lucia = new Lucia(adapter, {
     email: dbUser.email,
     firstName: dbUser.firstName,
     lastName: dbUser.lastName,
+    // Admin-only fields, null for members. Returned here so the single global
+    // `User` type carries them; the admin Lucia instance reads them from an
+    // AdminUser row via the shared `DatabaseUserAttributes` interface.
+    name: dbUser.name ?? null,
+    role: dbUser.role ?? null,
     programId: dbUser.programId,
   }),
 });

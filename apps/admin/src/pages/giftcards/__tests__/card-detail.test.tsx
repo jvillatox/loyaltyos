@@ -20,6 +20,10 @@ vi.mock("@/lib/api-client", () => ({
   fetchApi: mockFetchApi,
 }));
 
+vi.mock("@/lib/access", () => ({
+  usePermission: () => true,
+}));
+
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({
     queryKey,

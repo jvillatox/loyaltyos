@@ -32,6 +32,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -99,6 +100,7 @@ export function CoalitionConfigPage(): JSX.Element {
   const [showPrivateToken, setShowPrivateToken] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<string>("MX");
   const [healthcheckResult, setHealthcheckResult] = useState<HealthcheckResult | null>(null);
+  const canWrite = usePermission("coalition.write");
 
   const { data: config } = useQuery({
     queryKey: ["coalition-config"],
@@ -529,14 +531,16 @@ export function CoalitionConfigPage(): JSX.Element {
 
         {/* Actions */}
         <div className="flex items-center gap-4">
-          <Button type="submit" disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? (
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save Configuration
-          </Button>
+          {canWrite && (
+            <Button type="submit" disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save Configuration
+            </Button>
+          )}
 
           <Button
             type="button"

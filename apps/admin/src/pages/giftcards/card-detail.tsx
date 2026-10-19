@@ -37,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { GiftCard, GiftCardTransaction, PaginatedResponse } from "@/types";
 
@@ -66,6 +67,7 @@ export function CardDetailPage(): JSX.Element {
   const [refundReason, setRefundReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const canIssue = usePermission("giftcards.financial");
 
   const { data: card, isLoading } = useQuery({
     queryKey: ["giftcard-detail", cardId],
@@ -291,7 +293,7 @@ export function CardDetailPage(): JSX.Element {
               {actionError && <p className="mt-4 text-sm text-destructive">{actionError}</p>}
 
               <div className="mt-4 flex gap-2">
-                {card.status === "active" && (
+                {canIssue && card.status === "active" && (
                   <>
                     <Button
                       onClick={() => {

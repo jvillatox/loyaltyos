@@ -1,0 +1,22 @@
+{
+  "name": "@loyaltyos/permissions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@loyaltyos/config-eslint": "workspace:*",
+    "@loyaltyos/config-prettier": "workspace:*",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.2",
+    "vitest": "^1.6.0"
+  },
+  "description": "Shared admin RBAC model for LoyaltyOS — roles, permissions, and the can() helper"
+}

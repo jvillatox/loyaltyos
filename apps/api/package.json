@@ -13,7 +13,8 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "admin:create": "tsx src/admin-create.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
@@ -30,6 +31,7 @@
     "@loyaltyos/giftcards": "workspace:*",
     "@loyaltyos/i18n": "workspace:*",
     "@loyaltyos/notifications": "workspace:*",
+    "@loyaltyos/permissions": "workspace:*",
     "@loyaltyos/rewards": "workspace:*",
     "@loyaltyos/segments": "workspace:*",
     "@loyaltyos/telemetry": "workspace:*",

@@ -147,7 +147,9 @@
     "giftcards": "Gift Cards",
     "signOut": "Sign out",
     "pageNotFound": "Page not found",
-    "backToDashboard": "Back to Dashboard"
+    "backToDashboard": "Back to Dashboard",
+    "forbiddenTitle": "No permission",
+    "forbiddenDescription": "You don't have permission to view this page."
   },
   "widget": {
     "signInPrompt": "Sign in to view your loyalty rewards",

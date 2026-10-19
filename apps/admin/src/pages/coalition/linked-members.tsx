@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 
 interface CoalitionAccount {
@@ -44,6 +45,7 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [unlinkTarget, setUnlinkTarget] = useState<CoalitionAccount | null>(null);
+  const canWrite = usePermission("coalition.write");
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ["coalition-linked-accounts", search, page],
@@ -135,16 +137,18 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
                     {format(new Date(acc.createdAt), "MMM d, yyyy")}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setUnlinkTarget(acc);
-                      }}
-                    >
-                      <Unlink className="mr-1 h-3 w-3" />
-                      Unlink
-                    </Button>
+                    {canWrite && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setUnlinkTarget(acc);
+                        }}
+                      >
+                        <Unlink className="mr-1 h-3 w-3" />
+                        Unlink
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

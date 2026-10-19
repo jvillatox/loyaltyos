@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router-dom";
 
 import { RequireAuth } from "@/components/auth/require-auth";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { AppLayout } from "@/components/layout/app-layout";
 import { BadgeEditorPage } from "@/pages/badge-editor";
 import { BadgesListPage } from "@/pages/badges-list";
@@ -13,6 +14,7 @@ import { CoalitionTransactionsPage } from "@/pages/coalition/transactions";
 import { CouponBulkGeneratePage } from "@/pages/coupon-bulk-generate";
 import { CouponsListPage } from "@/pages/coupons-list";
 import { DashboardPage } from "@/pages/dashboard";
+import { ForbiddenPage } from "@/pages/forbidden";
 import { BatchDetailPage } from "@/pages/giftcards/batch-detail";
 import { BatchWizardPage } from "@/pages/giftcards/batch-wizard";
 import { BatchesListPage } from "@/pages/giftcards/batches-list";
@@ -41,34 +43,119 @@ export function App(): JSX.Element {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="/forbidden" element={<ForbiddenPage />} />
         <Route path="/members" element={<MembersListPage />} />
         <Route path="/members/:id" element={<MemberDetailPage />} />
         <Route path="/campaigns" element={<CampaignsListPage />} />
-        <Route path="/campaigns/new" element={<CampaignBuilderPage />} />
-        <Route path="/campaigns/:id/edit" element={<CampaignBuilderPage />} />
+        <Route
+          path="/campaigns/new"
+          element={
+            <RequirePermission permission="campaigns.write">
+              <CampaignBuilderPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/campaigns/:id/edit"
+          element={
+            <RequirePermission permission="campaigns.write">
+              <CampaignBuilderPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/coupons" element={<CouponsListPage />} />
-        <Route path="/coupons/generate" element={<CouponBulkGeneratePage />} />
+        <Route
+          path="/coupons/generate"
+          element={
+            <RequirePermission permission="coupons.write">
+              <CouponBulkGeneratePage />
+            </RequirePermission>
+          }
+        />
         <Route path="/segments" element={<SegmentsListPage />} />
-        <Route path="/segments/new" element={<SegmentBuilderPage />} />
-        <Route path="/segments/:id/edit" element={<SegmentBuilderPage />} />
+        <Route
+          path="/segments/new"
+          element={
+            <RequirePermission permission="segments.write">
+              <SegmentBuilderPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/segments/:id/edit"
+          element={
+            <RequirePermission permission="segments.write">
+              <SegmentBuilderPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/badges" element={<BadgesListPage />} />
-        <Route path="/badges/new" element={<BadgeEditorPage />} />
-        <Route path="/badges/:id/edit" element={<BadgeEditorPage />} />
+        <Route
+          path="/badges/new"
+          element={
+            <RequirePermission permission="badges.write">
+              <BadgeEditorPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/badges/:id/edit"
+          element={
+            <RequirePermission permission="badges.write">
+              <BadgeEditorPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/tiers" element={<TiersListPage />} />
         <Route path="/rewards" element={<RewardsListPage />} />
-        <Route path="/rewards/new" element={<RewardsEditorPage />} />
-        <Route path="/rewards/:id/edit" element={<RewardsEditorPage />} />
+        <Route
+          path="/rewards/new"
+          element={
+            <RequirePermission permission="rewards.write">
+              <RewardsEditorPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/rewards/:id/edit"
+          element={
+            <RequirePermission permission="rewards.write">
+              <RewardsEditorPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/rewards/:id/redemptions" element={<RewardsRedemptionsPage />} />
         <Route path="/coalition" element={<CoalitionConfigPage />} />
         <Route path="/coalition/transactions" element={<CoalitionTransactionsPage />} />
         <Route path="/coalition/members" element={<CoalitionLinkedMembersPage />} />
         <Route path="/giftcards" element={<BatchesListPage />} />
-        <Route path="/giftcards/batches/new" element={<BatchWizardPage />} />
+        <Route
+          path="/giftcards/batches/new"
+          element={
+            <RequirePermission permission="giftcards.financial">
+              <BatchWizardPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/giftcards/batches/:id" element={<BatchDetailPage />} />
         <Route path="/giftcards/cards/:id" element={<CardDetailPage />} />
         <Route path="/giftcards/terms" element={<TermsListPage />} />
-        <Route path="/giftcards/terms/new" element={<TermsEditorPage />} />
-        <Route path="/giftcards/terms/:id" element={<TermsEditorPage />} />
+        <Route
+          path="/giftcards/terms/new"
+          element={
+            <RequirePermission permission="giftcardTerms.write">
+              <TermsEditorPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/giftcards/terms/:id"
+          element={
+            <RequirePermission permission="giftcardTerms.write">
+              <TermsEditorPage />
+            </RequirePermission>
+          }
+        />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

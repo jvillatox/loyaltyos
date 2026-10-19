@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { PaginatedResponse, Segment } from "@/types";
 
@@ -33,6 +34,7 @@ export function SegmentsListPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const pageSize = 20;
+  const canWrite = usePermission("segments.write");
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["segments", page, typeFilter],
@@ -53,14 +55,16 @@ export function SegmentsListPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{t("segments.title")}</h1>
-        <Button
-          onClick={() => {
-            navigate("/segments/new");
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("segments.createSegment")}
-        </Button>
+        {canWrite && (
+          <Button
+            onClick={() => {
+              navigate("/segments/new");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("segments.createSegment")}
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -126,27 +130,29 @@ export function SegmentsListPage(): JSX.Element {
                         {new Date(s.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              navigate(`/segments/${s.id}/edit`);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive"
-                            onClick={() => {
-                              void handleDelete(s.id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        {canWrite && (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                navigate(`/segments/${s.id}/edit`);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={() => {
+                                void handleDelete(s.id);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

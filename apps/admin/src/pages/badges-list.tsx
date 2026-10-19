@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { PaginatedResponse } from "@/types";
 
@@ -43,6 +44,7 @@ export function BadgesListPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const pageSize = 20;
+  const canWrite = usePermission("badges.write");
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["badges", page, typeFilter],
@@ -74,14 +76,16 @@ export function BadgesListPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{t("badges.title")}</h1>
-        <Button
-          onClick={() => {
-            navigate("/badges/new");
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("badges.createBadge")}
-        </Button>
+        {canWrite && (
+          <Button
+            onClick={() => {
+              navigate("/badges/new");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("badges.createBadge")}
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -152,26 +156,28 @@ export function BadgesListPage(): JSX.Element {
                         </UIBadge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              navigate(`/badges/${badge.id}/edit`);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              void handleDelete(badge.id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                        {canWrite && (
+                          <div className="flex gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                navigate(`/badges/${badge.id}/edit`);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                void handleDelete(badge.id);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

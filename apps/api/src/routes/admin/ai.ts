@@ -1,5 +1,6 @@
 import type { Message, ToolCall, ToolDef } from "@loyaltyos/ai";
 import { buildSystemPrompt, buildTools, OpenRouterClient } from "@loyaltyos/ai";
+import type { AdminRole } from "@loyaltyos/permissions";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
@@ -39,6 +40,21 @@ interface PendingToolCall {
 
 function confirmationKey(toolCallId: string): string {
   return `ai:confirm:${toolCallId}`;
+}
+
+// The tools the model may be offered, narrowed by role. ANALYST sees read-only
+// tools only; OPERATOR and SUPER_ADMIN see the full set. This gates only the
+// *offered* definitions — the actual security boundary is `requireRole`, which
+// re-checks every tool's HTTP call through the admin-session loopback (an
+// ANALYST who somehow forces a mutating tool still gets a 403 from the route).
+export function toolDefsForRole(
+  role: AdminRole | null | undefined,
+  toolDefs: { name: string; description: string; parameters: Record<string, unknown> }[],
+): { name: string; description: string; parameters: Record<string, unknown> }[] {
+  if (role === "ANALYST") {
+    return toolDefs.filter((t) => READ_ONLY_TOOLS.has(t.name));
+  }
+  return toolDefs;
 }
 
 // Client messages are restricted to the two roles the user/assistant actually
@@ -138,6 +154,7 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         description: t.description,
         parameters: t.parameters,
       }));
+      const visibleToolDefs = toolDefsForRole(request.adminRole, toolDefs);
 
       const systemPrompt = buildSystemPrompt({
         name: "LoyaltyOS",
@@ -266,7 +283,7 @@ export function adminAiRoutes(app: FastifyInstance, _opts: unknown, done: () => 
           const toolResults: Message[] = [];
           const pendingToolCalls: ToolCall[] = [];
 
-          const stream = client.streamChat(currentMessages, toolDefs);
+          const stream = client.streamChat(currentMessages, visibleToolDefs);
 
           for await (const chunk of stream) {
             switch (chunk.type) {

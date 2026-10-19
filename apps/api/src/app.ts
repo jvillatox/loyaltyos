@@ -16,6 +16,7 @@ import Fastify from "fastify";
 import { prisma } from "./db.js";
 import { getBusinessMetricsRegistry } from "./lib/business-metrics.js";
 import { errorHandler } from "./lib/error-handler.js";
+import { adminRbacPlugin } from "./plugins/admin-rbac.js";
 import { adminSessionGuard } from "./plugins/admin-session-guard.js";
 import { authPlugin } from "./plugins/auth.js";
 import { adminAiRoutes } from "./routes/admin/ai.js";
@@ -46,6 +47,17 @@ interface BullMQMetricsExport {
   bullmqJobCounter: { inc: (labels: Record<string, string>) => void };
 }
 
+export interface RouteCatalogEntry {
+  method: string;
+  url: string;
+}
+
+declare module "fastify" {
+  interface FastifyInstance {
+    routeCatalog: RouteCatalogEntry[];
+  }
+}
+
 let metricsExports: BullMQMetricsExport | null = null;
 
 export function getBullMQMetrics(): BullMQMetricsExport | null {
@@ -66,6 +78,17 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
         }
       : false,
     genReqId: () => crypto.randomUUID(),
+  });
+
+  // Catalog of every registered route (method + resolved url). Exposed so the
+  // RBAC tests can assert that each `/api/v1/admin/*` route has a permission
+  // entry — a route added without one would otherwise slip past deny-by-default.
+  app.decorate("routeCatalog", [] as RouteCatalogEntry[]);
+  app.addHook("onRoute", (route) => {
+    const methods = Array.isArray(route.method) ? route.method : [route.method];
+    for (const method of methods) {
+      app.routeCatalog.push({ method, url: route.url });
+    }
   });
 
   // Metrics (before plugins to capture all traffic)
@@ -170,6 +193,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   // Custom plugins
   await app.register(authPlugin);
   await app.register(adminSessionGuard);
+  await app.register(adminRbacPlugin);
 
   // Protected routes (after auth plugin)
   await app.register(healthRoutes, { prefix: "/" });

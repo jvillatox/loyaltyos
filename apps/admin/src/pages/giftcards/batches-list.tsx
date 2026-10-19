@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { GiftCardBatch, PaginatedResponse } from "@/types";
 
@@ -46,6 +47,7 @@ export function BatchesListPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const pageSize = 20;
+  const canIssue = usePermission("giftcards.financial");
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["giftcard-batches", page, statusFilter],
@@ -73,14 +75,16 @@ export function BatchesListPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{t("giftcards.title")}</h1>
-        <Button
-          onClick={() => {
-            navigate("/giftcards/batches/new");
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("giftcards.createBatch")}
-        </Button>
+        {canIssue && (
+          <Button
+            onClick={() => {
+              navigate("/giftcards/batches/new");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("giftcards.createBatch")}
+          </Button>
+        )}
       </div>
 
       <Card>
