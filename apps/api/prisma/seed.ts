@@ -74,6 +74,29 @@ async function main(): Promise<void> {
     },
   });
   console.log(`Created admin user: ${admin.email}`);
+
+  // Demo users for the other two roles (RBAC).
+  const operator = await prisma.adminUser.create({
+    data: {
+      email: "operator@loyaltyos.dev",
+      name: "Operator Demo",
+      role: "OPERATOR",
+      passwordHash: hashedPassword,
+      programId: program.id,
+    },
+  });
+  const analyst = await prisma.adminUser.create({
+    data: {
+      email: "analyst@loyaltyos.dev",
+      name: "Analyst Demo",
+      role: "ANALYST",
+      passwordHash: hashedPassword,
+      programId: program.id,
+    },
+  });
+  console.log(
+    `Created admin users: ${admin.email} (SUPER_ADMIN), ${operator.email} (OPERATOR), ${analyst.email} (ANALYST)`,
+  );
   console.log(`Admin password:      ${adminPassword} (change in production!)`);
 
   // === Tiers ===

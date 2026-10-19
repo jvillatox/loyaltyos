@@ -1,5 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
+import type { AdminRole } from "@loyaltyos/permissions";
+import { isAdminRole } from "@loyaltyos/permissions";
 import type { AuditActorType } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
@@ -16,6 +18,7 @@ declare module "fastify" {
     apiKeyScope: string;
     memberId: string | null;
     adminId: string | null;
+    adminRole: AdminRole | null;
     actor: AuditActor;
   }
 }
@@ -32,6 +35,7 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
   app.decorateRequest("apiKeyScope", "");
   app.decorateRequest("memberId", null);
   app.decorateRequest("adminId", null);
+  app.decorateRequest("adminRole", null);
   app.decorateRequest("actor", { type: "SYSTEM" as AuditActorType, id: "anonymous" });
 
   app.addHook("preHandler", async (request, reply) => {
@@ -91,6 +95,8 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
         const { user: adminUser } = await adminLucia.validateSession(adminSessionId);
         if (adminUser) {
           request.adminId = adminUser.id;
+          request.adminRole =
+            adminUser.role != null && isAdminRole(adminUser.role) ? adminUser.role : null;
           request.programId = adminUser.programId;
           request.apiKeyScope = "SERVER";
           request.actor = { type: "ADMIN_USER", id: adminUser.id };

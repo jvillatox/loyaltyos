@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { Campaign, PaginatedResponse } from "@/types";
@@ -32,6 +33,7 @@ export function CampaignsListPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const canWrite = usePermission("campaigns.write");
 
   const typeLabels: Record<string, string> = {
     BONUS_POINTS: t("campaigns.typeLabels.BONUS_POINTS"),
@@ -65,14 +67,16 @@ export function CampaignsListPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{t("campaigns.title")}</h1>
-        <Button
-          onClick={() => {
-            navigate("/campaigns/new");
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("campaigns.createCampaign")}
-        </Button>
+        {canWrite && (
+          <Button
+            onClick={() => {
+              navigate("/campaigns/new");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("campaigns.createCampaign")}
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -132,52 +136,54 @@ export function CampaignsListPage(): JSX.Element {
                         {c.endsAt ? new Date(c.endsAt).toLocaleDateString() : "—"}
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              ···
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                navigate(`/campaigns/${c.id}/edit`);
-                              }}
-                            >
-                              <Pencil className="mr-2 h-4 w-4" />
-                              {t("common.edit")}
-                            </DropdownMenuItem>
-                            {!c.isActive && (
+                        {canWrite && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                ···
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
                               <DropdownMenuItem
                                 onClick={() => {
-                                  void handleLifecycle(c.id, "activate");
+                                  navigate(`/campaigns/${c.id}/edit`);
                                 }}
                               >
-                                <Play className="mr-2 h-4 w-4" />
-                                Activate
+                                <Pencil className="mr-2 h-4 w-4" />
+                                {t("common.edit")}
                               </DropdownMenuItem>
-                            )}
-                            {c.isActive && (
+                              {!c.isActive && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    void handleLifecycle(c.id, "activate");
+                                  }}
+                                >
+                                  <Play className="mr-2 h-4 w-4" />
+                                  Activate
+                                </DropdownMenuItem>
+                              )}
+                              {c.isActive && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    void handleLifecycle(c.id, "pause");
+                                  }}
+                                >
+                                  <Pause className="mr-2 h-4 w-4" />
+                                  Pause
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
+                                className="text-destructive"
                                 onClick={() => {
-                                  void handleLifecycle(c.id, "pause");
+                                  void handleLifecycle(c.id, "archive");
                                 }}
                               >
-                                <Pause className="mr-2 h-4 w-4" />
-                                Pause
+                                <Archive className="mr-2 h-4 w-4" />
+                                Archive
                               </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => {
-                                void handleLifecycle(c.id, "archive");
-                              }}
-                            >
-                              <Archive className="mr-2 h-4 w-4" />
-                              Archive
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

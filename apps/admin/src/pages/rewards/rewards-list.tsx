@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 
 interface Reward {
@@ -54,6 +55,7 @@ export function RewardsListPage(): JSX.Element {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const navigate = useNavigate();
+  const canWrite = usePermission("rewards.write");
 
   const { data, isLoading } = useQuery<RewardsResponse>({
     queryKey: ["rewards", page, search],
@@ -70,12 +72,14 @@ export function RewardsListPage(): JSX.Element {
           <h1 className="text-2xl font-bold">Rewards</h1>
           <p className="text-sm text-muted-foreground">Manage your rewards catalog</p>
         </div>
-        <Button asChild>
-          <Link to="/rewards/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Reward
-          </Link>
-        </Button>
+        {canWrite && (
+          <Button asChild>
+            <Link to="/rewards/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Reward
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
@@ -118,6 +122,7 @@ export function RewardsListPage(): JSX.Element {
       ) : view === "table" ? (
         <RewardsTable
           rewards={data?.items ?? []}
+          canWrite={canWrite}
           onEdit={(id) => {
             navigate(`/rewards/${id}/edit`);
           }}
@@ -125,6 +130,7 @@ export function RewardsListPage(): JSX.Element {
       ) : (
         <RewardsGrid
           rewards={data?.items ?? []}
+          canWrite={canWrite}
           onEdit={(id) => {
             navigate(`/rewards/${id}/edit`);
           }}
@@ -166,9 +172,11 @@ export function RewardsListPage(): JSX.Element {
 
 function RewardsTable({
   rewards,
+  canWrite,
   onEdit,
 }: {
   rewards: Reward[];
+  canWrite: boolean;
   onEdit: (id: string) => void;
 }): JSX.Element {
   return (
@@ -213,15 +221,17 @@ function RewardsTable({
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        onEdit(r.id);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    {canWrite && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          onEdit(r.id);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" asChild>
                       <Link to={`/rewards/${r.id}/redemptions`}>
                         <List className="h-4 w-4" />
@@ -240,9 +250,11 @@ function RewardsTable({
 
 function RewardsGrid({
   rewards,
+  canWrite,
   onEdit,
 }: {
   rewards: Reward[];
+  canWrite: boolean;
   onEdit: (id: string) => void;
 }): JSX.Element {
   if (rewards.length === 0) {
@@ -277,16 +289,18 @@ function RewardsGrid({
               <p className="mt-2 text-xs text-muted-foreground">Stock: {r.stock}</p>
             )}
             <div className="mt-3 flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  onEdit(r.id);
-                }}
-              >
-                <Pencil className="mr-1 h-3 w-3" />
-                Edit
-              </Button>
+              {canWrite && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onEdit(r.id);
+                  }}
+                >
+                  <Pencil className="mr-1 h-3 w-3" />
+                  Edit
+                </Button>
+              )}
               <Button variant="outline" size="sm" asChild>
                 <Link to={`/rewards/${r.id}/redemptions`}>
                   <List className="mr-1 h-3 w-3" />

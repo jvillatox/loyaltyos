@@ -147,7 +147,9 @@
     "giftcards": "Tarjetas de Regalo",
     "signOut": "Cerrar sesión",
     "pageNotFound": "Página no encontrada",
-    "backToDashboard": "Volver al Dashboard"
+    "backToDashboard": "Volver al Dashboard",
+    "forbiddenTitle": "Sin permiso",
+    "forbiddenDescription": "No tienes permiso para ver esta página."
   },
   "widget": {
     "signInPrompt": "Inicia sesión para ver tus recompensas",

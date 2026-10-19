@@ -5,6 +5,22 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **Admin roles are now enforced.** `SUPER_ADMIN`, `OPERATOR`, and `ANALYST` permissions are applied to every `/admin/*` route from a single deny-by-default map. `ANALYST` is read-only on non-admin routes (members, events) and is only offered read-only AI tools. Denied requests are recorded in the audit log. (#32)
+
+### Added
+
+- **`@loyaltyos/permissions`** — the shared role/permission model consumed by both the API and the admin UI, so the two cannot drift.
+- **`admin:create` CLI** — provision an admin with a role (`pnpm --filter @loyaltyos/api admin:create --email --role --program`).
+- The admin UI hides nav items, routes, and mutating controls the current role may not use.
+
+### Changed
+
+- Seed now creates `operator@loyaltyos.dev` (OPERATOR) and `analyst@loyaltyos.dev` (ANALYST) alongside the super admin.
+
 ## [1.1.0] - 2026-10-18
 
 > **Security release.** All deployments of v1.0.x should upgrade. See advisory GHSA-98hf-vcvp-p8j6.
@@ -54,7 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known limitations
 
-- **Admin roles are not enforced yet** (`SUPER_ADMIN` / `OPERATOR` / `ANALYST`): every admin has the same permissions (#32).
 - **MCP server:** its admin tools call routes that do not exist in the API and do not work in this release (#48).
 - Points ledger concurrency fixes from #29 are not included in this release.
 

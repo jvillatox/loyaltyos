@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { Balance, Member, PaginatedResponse, PointTransaction } from "@/types";
 
@@ -59,6 +60,7 @@ export function MemberDetailPage(): JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [adjustError, setAdjustError] = useState<string | null>(null);
   const [adjusting, setAdjusting] = useState(false);
+  const canWrite = usePermission("members.write");
 
   const {
     register,
@@ -240,56 +242,58 @@ export function MemberDetailPage(): JSX.Element {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Adjust Points</CardTitle>
-            <CardDescription>Manually add or remove points for this member.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="w-full">Adjust Points</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void handleSubmit(onSubmit)();
-                  }}
-                >
-                  <DialogHeader>
-                    <DialogTitle>Adjust Points</DialogTitle>
-                    <DialogDescription>
-                      Enter a positive amount to add points or negative to deduct.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div>
-                      <Label htmlFor="amount">Amount</Label>
-                      <Input id="amount" type="number" {...register("amount")} />
-                      {errors.amount && (
-                        <p className="mt-1 text-sm text-destructive">{errors.amount.message}</p>
-                      )}
+        {canWrite && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Adjust Points</CardTitle>
+              <CardDescription>Manually add or remove points for this member.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full">Adjust Points</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleSubmit(onSubmit)();
+                    }}
+                  >
+                    <DialogHeader>
+                      <DialogTitle>Adjust Points</DialogTitle>
+                      <DialogDescription>
+                        Enter a positive amount to add points or negative to deduct.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div>
+                        <Label htmlFor="amount">Amount</Label>
+                        <Input id="amount" type="number" {...register("amount")} />
+                        {errors.amount && (
+                          <p className="mt-1 text-sm text-destructive">{errors.amount.message}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="reason">Reason</Label>
+                        <Input id="reason" {...register("reason")} />
+                        {errors.reason && (
+                          <p className="mt-1 text-sm text-destructive">{errors.reason.message}</p>
+                        )}
+                      </div>
+                      {adjustError && <p className="text-sm text-destructive">{adjustError}</p>}
                     </div>
-                    <div>
-                      <Label htmlFor="reason">Reason</Label>
-                      <Input id="reason" {...register("reason")} />
-                      {errors.reason && (
-                        <p className="mt-1 text-sm text-destructive">{errors.reason.message}</p>
-                      )}
-                    </div>
-                    {adjustError && <p className="text-sm text-destructive">{adjustError}</p>}
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" disabled={adjusting}>
-                      {adjusting ? "Submitting..." : "Submit"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </CardContent>
-        </Card>
+                    <DialogFooter>
+                      <Button type="submit" disabled={adjusting}>
+                        {adjusting ? "Submitting..." : "Submit"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Transactions */}

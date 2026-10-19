@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { Coupon, PaginatedResponse } from "@/types";
 
@@ -42,6 +43,7 @@ export function CouponsListPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [modeFilter, setModeFilter] = useState<string>("all");
   const pageSize = 20;
+  const canWrite = usePermission("coupons.write");
 
   const modeLabels: Record<string, string> = {
     SHARED: "Shared",
@@ -68,14 +70,16 @@ export function CouponsListPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{t("coupons.title")}</h1>
-        <Button
-          onClick={() => {
-            navigate("/coupons/generate");
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("coupons.generateCoupon")}
-        </Button>
+        {canWrite && (
+          <Button
+            onClick={() => {
+              navigate("/coupons/generate");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("coupons.generateCoupon")}
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -149,16 +153,18 @@ export function CouponsListPage(): JSX.Element {
                         {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : "Never"}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive"
-                          onClick={() => {
-                            void handleDelete(c.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canWrite && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            onClick={() => {
+                              void handleDelete(c.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

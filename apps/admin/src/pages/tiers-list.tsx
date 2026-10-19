@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 
 interface TierItem {
@@ -39,6 +40,7 @@ export function TiersListPage(): JSX.Element {
     color: "#94a3b8",
     benefits: "{}",
   });
+  const canWrite = usePermission("tiers.write");
 
   const {
     data: tiers,
@@ -112,16 +114,18 @@ export function TiersListPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{t("tiers.title")}</h1>
-        <Button
-          onClick={() => {
-            setNewTier(true);
-            setFormData({ name: "", minPoints: 0, color: "#94a3b8", benefits: "{}" });
-          }}
-          disabled={newTier}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          New Tier
-        </Button>
+        {canWrite && (
+          <Button
+            onClick={() => {
+              setNewTier(true);
+              setFormData({ name: "", minPoints: 0, color: "#94a3b8", benefits: "{}" });
+            }}
+            disabled={newTier}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Tier
+          </Button>
+        )}
       </div>
 
       {!isLoading && tiers && tiers.length > 0 && (
@@ -260,59 +264,61 @@ export function TiersListPage(): JSX.Element {
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        {editingId === tier.id ? (
+                      {canWrite && (
+                        <div className="flex gap-1">
+                          {editingId === tier.id ? (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                void handleUpdate(tier.id);
+                              }}
+                            >
+                              <Save className="h-3 w-3" />
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  openEditor(tier);
+                                }}
+                              >
+                                <span className="text-xs">{t("common.edit")}</span>
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  void handleDelete(tier.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </>
+                          )}
                           <Button
-                            size="sm"
+                            size="icon"
+                            variant="ghost"
+                            disabled={i === 0}
                             onClick={() => {
-                              void handleUpdate(tier.id);
+                              void handleReorder(i, "up");
                             }}
                           >
-                            <Save className="h-3 w-3" />
+                            <ArrowUp className="h-4 w-4" />
                           </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => {
-                                openEditor(tier);
-                              }}
-                            >
-                              <span className="text-xs">{t("common.edit")}</span>
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => {
-                                void handleDelete(tier.id);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </>
-                        )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={i === 0}
-                          onClick={() => {
-                            void handleReorder(i, "up");
-                          }}
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={i === tiers.length - 1}
-                          onClick={() => {
-                            void handleReorder(i, "down");
-                          }}
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                      </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            disabled={i === tiers.length - 1}
+                            onClick={() => {
+                              void handleReorder(i, "down");
+                            }}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

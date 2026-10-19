@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import type { TermsTemplate } from "@/types";
 
@@ -41,6 +42,7 @@ export function TermsListPage(): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<TermsTemplate | null>(null);
+  const canWrite = usePermission("giftcardTerms.write");
 
   const {
     data: templates,
@@ -90,14 +92,16 @@ export function TermsListPage(): JSX.Element {
           </Button>
           <h1 className="text-3xl font-bold">{t("giftcards.termsTemplates")}</h1>
         </div>
-        <Button
-          onClick={() => {
-            navigate("/giftcards/terms/new");
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("giftcards.newTermsTemplate")}
-        </Button>
+        {canWrite && (
+          <Button
+            onClick={() => {
+              navigate("/giftcards/terms/new");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("giftcards.newTermsTemplate")}
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -136,37 +140,45 @@ export function TermsListPage(): JSX.Element {
                       </TableCell>
                       <TableCell>v{tpl.version}</TableCell>
                       <TableCell>
-                        <Switch
-                          checked={tpl.isActive}
-                          onCheckedChange={() => {
-                            void handleToggle(tpl);
-                          }}
-                        />
+                        {canWrite ? (
+                          <Switch
+                            checked={tpl.isActive}
+                            onCheckedChange={() => {
+                              void handleToggle(tpl);
+                            }}
+                          />
+                        ) : (
+                          <Badge variant={tpl.isActive ? "default" : "outline"}>
+                            {tpl.isActive ? t("common.active") : t("common.inactive")}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(tpl.createdAt), "PP")}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              navigate(`/giftcards/terms/${tpl.id}`);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setDeleteTarget(tpl);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                        {canWrite && (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                navigate(`/giftcards/terms/${tpl.id}`);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setDeleteTarget(tpl);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   )),

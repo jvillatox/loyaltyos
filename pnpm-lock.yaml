@@ -65,6 +65,9 @@ importers:
       '@loyaltyos/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@loyaltyos/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -255,6 +258,9 @@ importers:
       '@loyaltyos/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
+      '@loyaltyos/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@loyaltyos/rewards':
         specifier: workspace:*
         version: link:../../packages/rewards
@@ -792,6 +798,24 @@ importers:
       typescript:
         specifier: ^5.5.2
         version: 5.9.3
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@25.8.0)(jsdom@24.1.3)(lightningcss@1.32.0)(terser@5.48.0)
+
+  packages/permissions:
+    devDependencies:
+      '@loyaltyos/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@loyaltyos/config-prettier':
+        specifier: workspace:*
+        version: link:../config-prettier
+      eslint:
+        specifier: ^8.57.0
+        version: 8.57.1
+      typescript:
+        specifier: ^5.5.2
+        version: 5.6.3
       vitest:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@25.8.0)(jsdom@24.1.3)(lightningcss@1.32.0)(terser@5.48.0)
