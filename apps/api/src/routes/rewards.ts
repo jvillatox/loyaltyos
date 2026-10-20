@@ -9,7 +9,7 @@ export function rewardsRoutes(app: FastifyInstance, _opts: unknown, done: () => 
   // GET /rewards — public catalog with filters
   app.get("/rewards", async (request, reply) => {
     const query = rewardListQuerySchema.parse(request.query);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const result = await rewards.list(programId, query);
     return reply.send({ data: result });
   });

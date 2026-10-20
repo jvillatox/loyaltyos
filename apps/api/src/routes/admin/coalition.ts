@@ -1,8 +1,15 @@
+import type { CoalitionConfigRow } from "@loyaltyos/coalition";
 import { encrypt, getMasterKey } from "@loyaltyos/coalition";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { coalitionService } from "../../lib/coalition-setup.js";
+
+// Credentials are write-only: never echo encryptedCredentials back over the API.
+function toSafeConfig(config: CoalitionConfigRow) {
+  const { encryptedCredentials, ...safe } = config;
+  return { ...safe, hasCredentials: Boolean(encryptedCredentials) };
+}
 
 // ── Schemas ────────────────────────────────────────────────────────
 
@@ -29,7 +36,7 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
 
   app.post("/admin/coalition/link", async (request, reply) => {
     const body = linkSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const account = await coalitionService.linkExternalAccount({
       memberId: body.memberId,
@@ -44,7 +51,7 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
 
   app.delete("/admin/coalition/link/:memberId", async (request, reply) => {
     const { memberId } = z.object({ memberId: z.string() }).parse(request.params);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     await coalitionService.unlinkExternalAccount(memberId, programId);
 
@@ -54,7 +61,7 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
   // ═══ List Linked Accounts ═══
 
   app.get("/admin/coalition/links", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const query = z
       .object({
@@ -72,7 +79,7 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
   // ═══ Adapter Capabilities ═══
 
   app.get("/admin/coalition/capabilities", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const capabilities = await coalitionService.getAdapterCapabilities(programId);
 
@@ -82,7 +89,7 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
   // ═══ Transactions ═══
 
   app.get("/admin/coalition/transactions", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const query = z
       .object({
@@ -103,7 +110,7 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
   // ═══ Reconciliation ═══
 
   app.post("/admin/coalition/reconciliation", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     // Find pending/failed transactions for manual review
     const pending = await coalitionService.listTransactions(programId, {
@@ -136,22 +143,19 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
   // ═══ Config ═══
 
   app.get("/admin/coalition/config", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const config = await coalitionService.getConfig(programId);
 
-    // Credentials are write-only (PUT, SUPER_ADMIN): never echo them back over
-    // the API. Replace with a boolean so the UI can show whether they are set.
     if (!config) {
       return reply.send({ data: null });
     }
-    const { encryptedCredentials, ...safe } = config;
-    return reply.send({ data: { ...safe, hasCredentials: Boolean(encryptedCredentials) } });
+    return reply.send({ data: toSafeConfig(config) });
   });
 
   app.put("/admin/coalition/config", async (request, reply) => {
     const body = configSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const masterKey = getMasterKey();
     const encryptedCredentials = encrypt(JSON.stringify(body.credentials), masterKey);
@@ -168,13 +172,13 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
       minConversionPoints: body.minConversionPoints,
     });
 
-    return reply.status(200).send({ data: config });
+    return reply.status(200).send({ data: toSafeConfig(config) });
   });
 
   // ═══ Healthcheck ═══
 
   app.post("/admin/coalition/healthcheck", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const result = await coalitionService.healthcheck(programId);
 

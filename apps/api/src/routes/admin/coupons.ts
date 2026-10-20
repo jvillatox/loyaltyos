@@ -1,9 +1,16 @@
-import { CouponsService } from "@loyaltyos/coupons";
+import { CouponsService, maskCode } from "@loyaltyos/coupons";
+import type { AdminRole } from "@loyaltyos/permissions";
+import { can } from "@loyaltyos/permissions";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../db.js";
 import { adaptCouponsMetrics, getBusinessMetrics } from "../../lib/business-metrics.js";
+
+/** A coupon code is bearer value: mask it unless the caller may reveal codes. */
+function maskIfNeeded(role: AdminRole | null, code: string): string {
+  return can(role, "coupons.codes.reveal") ? code : maskCode(code);
+}
 
 const coupons = new CouponsService(prisma, adaptCouponsMetrics(getBusinessMetrics()));
 
@@ -60,7 +67,7 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // POST /admin/coupons — Create coupon
   app.post("/admin/coupons", async (request, reply) => {
     const body = createSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const coupon = await coupons.create({
       ...body,
       programId,
@@ -71,7 +78,7 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // POST /admin/coupons/generate — Generate bulk codes
   app.post("/admin/coupons/generate", async (request, reply) => {
     const body = generateSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const codes = await coupons.generateCodes({
       ...body,
       programId,
@@ -97,9 +104,17 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
       })
       .parse(request.query);
 
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const result = await coupons.list(programId, query);
-    return reply.send({ data: result });
+    return reply.send({
+      data: {
+        ...result,
+        items: result.items.map((coupon) => ({
+          ...coupon,
+          code: maskIfNeeded(request.adminRole, coupon.code),
+        })),
+      },
+    });
   });
 
   // GET /admin/coupons/:id — Get coupon by id
@@ -107,7 +122,9 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
     const { id } = z.object({ id: z.string() }).parse(request.params);
 
     const coupon = await coupons.getById(id);
-    return reply.send({ data: coupon });
+    return reply.send({
+      data: { ...coupon, code: maskIfNeeded(request.adminRole, coupon.code) },
+    });
   });
 
   // PATCH /admin/coupons/:id — Update coupon
@@ -129,7 +146,9 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   app.get("/admin/coupons/:id/stats", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const stats = await coupons.stats(id);
-    return reply.send({ data: stats });
+    return reply.send({
+      data: { ...stats, code: maskIfNeeded(request.adminRole, stats.code) },
+    });
   });
 
   done();

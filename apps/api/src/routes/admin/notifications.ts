@@ -45,11 +45,8 @@ const webhookUpdateBody = z.object({
   isActive: z.boolean().optional(),
 });
 
-function getProgramId(request: {
-  programId: string;
-  headers: Record<string, string | string[] | undefined>;
-}): string {
-  return request.programId || (request.headers["x-program-id"] as string) || "";
+function getProgramId(request: { programId: string }): string {
+  return request.programId;
 }
 
 // ── Routes ───────────────────────────────────────────────────

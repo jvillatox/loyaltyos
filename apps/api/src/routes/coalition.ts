@@ -50,7 +50,7 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
       }
 
       const body = accumulateSchema.parse(request.body);
-      const programId = request.programId || (request.headers["x-program-id"] as string);
+      const programId = request.programId;
 
       const result = await coalitionService.accumulate({
         programId,
@@ -79,7 +79,7 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
       }
 
       const body = redeemSchema.parse(request.body);
-      const programId = request.programId || (request.headers["x-program-id"] as string);
+      const programId = request.programId;
 
       const result = await coalitionService.redeem({
         programId,
@@ -108,7 +108,7 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
       }
 
       const body = convertSchema.parse(request.body);
-      const programId = request.programId || (request.headers["x-program-id"] as string);
+      const programId = request.programId;
 
       const result = await coalitionService.convert({
         programId,
@@ -143,7 +143,7 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
 
   app.get("/members/:id/coalition/balance", async (request, reply) => {
     const { id: memberId } = z.object({ id: z.string() }).parse(request.params);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const balance = await getCachedExternalBalance(programId, memberId, () =>
       coalitionService.getExternalBalance(memberId, programId),
@@ -156,7 +156,7 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
 
   app.get("/members/:id/coalition/history", async (request, reply) => {
     const { id: memberId } = z.object({ id: z.string() }).parse(request.params);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
 
     const query = z
       .object({

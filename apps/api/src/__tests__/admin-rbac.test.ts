@@ -1,5 +1,6 @@
 import { buildTools } from "@loyaltyos/ai";
 import { hashPassword } from "@loyaltyos/core";
+import { maskCode as maskCouponCode } from "@loyaltyos/coupons";
 import { maskCode } from "@loyaltyos/giftcards";
 import { ADMIN_ROLES, can } from "@loyaltyos/permissions";
 import type { AdminRole, Permission } from "@loyaltyos/permissions";
@@ -31,6 +32,8 @@ const termsTemplateId = `tt_rbac_${suffix}`;
 const giftCardBatchId = `gcb_rbac_${suffix}`;
 const giftCardId = `gc_rbac_${suffix}`;
 const giftCardCode = `RBAC${suffix}`;
+const couponId = `cp_rbac_${suffix}`;
+const couponCode = `COUPON${suffix}`;
 const cookies = {} as Record<AdminRole, string>;
 const adminEmails = {} as Record<AdminRole, string>;
 const adminIds = {} as Record<AdminRole, string>;
@@ -109,6 +112,16 @@ beforeAll(async () => {
       provider: "GENERIC",
       endpoint: "https://example.com",
       encryptedCredentials: "encrypted-secret-blob",
+    },
+  });
+  await prisma.coupon.create({
+    data: {
+      id: couponId,
+      programId,
+      code: couponCode,
+      mode: "SHARED",
+      discountType: "PERCENTAGE",
+      discountValue: 10,
     },
   });
 });
@@ -322,6 +335,69 @@ describe("gift card codes: reveal is SUPER_ADMIN-only and masking is server-side
   });
 });
 
+describe("coupon codes: only OPERATOR+ may reveal, ANALYST is masked", () => {
+  it("ANALYST sees a masked code in the coupon list", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/coupons",
+      headers: { cookie: cookies.ANALYST },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as {
+      data: { items: Array<{ id: string; code: string }> };
+    };
+    const coupon = data.items.find((c) => c.id === couponId);
+    expect(coupon?.code).toBe(maskCouponCode(couponCode));
+    expect(coupon?.code).not.toBe(couponCode);
+  });
+
+  it("ANALYST sees a masked code in coupon detail", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/coupons/${couponId}`,
+      headers: { cookie: cookies.ANALYST },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as { data: { code: string } };
+    expect(data.code).toBe(maskCouponCode(couponCode));
+    expect(data.code).not.toBe(couponCode);
+  });
+
+  it("ANALYST sees a masked code in coupon stats", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/coupons/${couponId}/stats`,
+      headers: { cookie: cookies.ANALYST },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as { data: { code: string } };
+    expect(data.code).toBe(maskCouponCode(couponCode));
+    expect(data.code).not.toBe(couponCode);
+  });
+
+  it("OPERATOR sees the full code in coupon detail", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/coupons/${couponId}`,
+      headers: { cookie: cookies.OPERATOR },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as { data: { code: string } };
+    expect(data.code).toBe(couponCode);
+  });
+
+  it("SUPER_ADMIN sees the full code in coupon detail", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/coupons/${couponId}`,
+      headers: { cookie: cookies.SUPER_ADMIN },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as { data: { code: string } };
+    expect(data.code).toBe(couponCode);
+  });
+});
+
 describe("coalition config: credentials are write-only", () => {
   it("GET /admin/coalition/config returns hasCredentials, never encryptedCredentials", async () => {
     const res = await app.inject({
@@ -336,5 +412,27 @@ describe("coalition config: credentials are write-only", () => {
     expect(data.hasCredentials).toBe(true);
     expect(data.encryptedCredentials).toBeUndefined();
     expect(res.body).not.toContain("encrypted-secret-blob");
+  });
+
+  it("PUT /admin/coalition/config returns hasCredentials, never encryptedCredentials", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/coalition/config",
+      headers: { cookie: cookies.SUPER_ADMIN },
+      payload: {
+        provider: "GENERIC",
+        endpoint: "https://example.com",
+        credentials: { publicToken: "pub", privateToken: "priv" },
+        conversionRate: 1,
+        minConversionPoints: 500,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as {
+      data: { hasCredentials: boolean; encryptedCredentials?: string };
+    };
+    expect(data.hasCredentials).toBe(true);
+    expect(data.encryptedCredentials).toBeUndefined();
+    expect(res.body).not.toContain("encryptedCredentials");
   });
 });

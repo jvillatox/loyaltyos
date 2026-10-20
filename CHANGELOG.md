@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Admin roles are now enforced.** `SUPER_ADMIN`, `OPERATOR`, and `ANALYST` permissions are applied to every `/admin/*` route from a single deny-by-default map. `ANALYST` is read-only on non-admin routes (members, events) and is only offered read-only AI tools. Denied requests are recorded in the audit log. (#32)
 - **Gift card codes are only revealed to `SUPER_ADMIN`.** `OPERATOR`/`ANALYST` see the last four characters only (server-side masking) and cannot export batch codes; the export route now requires the `giftcards.codes.reveal` permission.
-- **Coalition credentials are write-only.** `GET /admin/coalition/config` no longer returns `encryptedCredentials`; it returns `hasCredentials` instead.
+- **Coupon codes are masked for `ANALYST`.** `SUPER_ADMIN` and `OPERATOR` see full codes (`coupons.codes.reveal`); `ANALYST` sees only the last four characters in the list, detail, and stats endpoints.
+- **Coalition credentials are write-only.** `GET` and `PUT /admin/coalition/config` no longer return `encryptedCredentials`; they return `hasCredentials` instead.
+- **Admin routes no longer trust `X-Program-Id`.** The program is always taken from the authenticated session or API key, removing the header-based tenant-switch fallback.
 
 ### Added
 

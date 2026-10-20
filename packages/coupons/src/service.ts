@@ -30,6 +30,15 @@ function generateCode(prefix: string, length: number): string {
   return code;
 }
 
+/**
+ * Masks a coupon code so only its last 4 characters are visible. A coupon code
+ * is bearer value, so callers without the `coupons.codes.reveal` permission
+ * must never see the full string.
+ */
+export function maskCode(code: string): string {
+  return code.slice(0, -4).replace(/./g, "•") + code.slice(-4);
+}
+
 export interface CouponsServiceMetrics {
   recordRedeem(programId: string, discountAmount: number): void;
   recordCreate(programId: string): void;
