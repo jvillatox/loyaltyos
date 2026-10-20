@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **Admin roles are now enforced.** `SUPER_ADMIN`, `OPERATOR`, and `ANALYST` permissions are applied to every `/admin/*` route from a single deny-by-default map. `ANALYST` is read-only on non-admin routes (members, events) and is only offered read-only AI tools. Denied requests are recorded in the audit log. (#32)
+- **Gift card codes are only revealed to `SUPER_ADMIN`.** `OPERATOR`/`ANALYST` see the last four characters only (server-side masking) and cannot export batch codes; the export route now requires the `giftcards.codes.reveal` permission.
+- **Coalition credentials are write-only.** `GET /admin/coalition/config` no longer returns `encryptedCredentials`; it returns `hasCredentials` instead.
 
 ### Added
 

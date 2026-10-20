@@ -71,7 +71,7 @@ interface CoalitionConfig {
   programId: string;
   provider: string;
   endpoint: string;
-  encryptedCredentials: string;
+  hasCredentials: boolean;
   conversionRate: number;
   accumulationEnabled: boolean;
   redemptionEnabled: boolean;
@@ -207,6 +207,11 @@ export function CoalitionConfigPage(): JSX.Element {
             Configure external coalition provider settings and credentials.
           </p>
         </div>
+        {config && (
+          <Badge variant={config.hasCredentials ? "default" : "secondary"}>
+            {config.hasCredentials ? "Credentials configured" : "No credentials set"}
+          </Badge>
+        )}
       </div>
 
       {/* Capabilities Banner */}

@@ -56,6 +56,7 @@ export function BatchDetailPage(): JSX.Element {
   const [downloading, setDownloading] = useState<string | null>(null);
   const pageSize = 20;
   const canIssue = usePermission("giftcards.financial");
+  const canRevealCodes = usePermission("giftcards.codes.reveal");
 
   const { data: batch, isLoading } = useQuery({
     queryKey: ["giftcard-batch", batchId],
@@ -149,28 +150,32 @@ export function BatchDetailPage(): JSX.Element {
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={downloading !== null}
-            onClick={() => {
-              handleExport("csv");
-            }}
-          >
-            <Download className="mr-1 h-4 w-4" />
-            {downloading === "csv" ? t("common.loading") : t("giftcards.exportCsv")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={downloading !== null}
-            onClick={() => {
-              handleExport("xlsx");
-            }}
-          >
-            <Download className="mr-1 h-4 w-4" />
-            {downloading === "xlsx" ? t("common.loading") : t("giftcards.exportXlsx")}
-          </Button>
+          {canRevealCodes && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={downloading !== null}
+                onClick={() => {
+                  handleExport("csv");
+                }}
+              >
+                <Download className="mr-1 h-4 w-4" />
+                {downloading === "csv" ? t("common.loading") : t("giftcards.exportCsv")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={downloading !== null}
+                onClick={() => {
+                  handleExport("xlsx");
+                }}
+              >
+                <Download className="mr-1 h-4 w-4" />
+                {downloading === "xlsx" ? t("common.loading") : t("giftcards.exportXlsx")}
+              </Button>
+            </>
+          )}
           {canIssue && !isTerminal && (
             <Button
               variant="destructive"

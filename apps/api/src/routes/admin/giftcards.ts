@@ -1,10 +1,17 @@
-import { GiftCardBatchNotFoundError, normalizeCode } from "@loyaltyos/giftcards";
+import { GiftCardBatchNotFoundError, maskCode, normalizeCode } from "@loyaltyos/giftcards";
+import type { AdminRole } from "@loyaltyos/permissions";
+import { can } from "@loyaltyos/permissions";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../db.js";
 import { audit } from "../../lib/audit.js";
 import { giftCardService } from "../../lib/giftcard-setup.js";
+
+/** A gift card code is bearer value: mask it unless the caller may reveal codes. */
+function maskIfNeeded(role: AdminRole | null, code: string): string {
+  return can(role, "giftcards.codes.reveal") ? code : maskCode(code);
+}
 
 // ── Zod schemas ──────────────────────────────────
 
@@ -486,7 +493,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
         error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },
       });
     }
-    return reply.send({ data: card });
+    return reply.send({ data: { ...card, code: maskIfNeeded(request.adminRole, card.code) } });
   });
 
   // ── Card by id (opaque — no code in URL) ── V12-4.1
@@ -513,7 +520,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
         error: { code: "GIFT_CARD_NOT_FOUND", message: "Gift card not found" },
       });
     }
-    return reply.send({ data: card });
+    return reply.send({ data: { ...card, code: maskIfNeeded(request.adminRole, card.code) } });
   });
 
   // ── Admin redeem ──────────────────────────
@@ -589,7 +596,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
     return reply.send({
       data: {
-        items: cards,
+        items: cards.map((card) => ({ ...card, code: maskIfNeeded(request.adminRole, card.code) })),
         total,
         page: query.page,
         pageSize: query.pageSize,

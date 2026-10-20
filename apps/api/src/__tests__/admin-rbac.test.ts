@@ -1,5 +1,6 @@
 import { buildTools } from "@loyaltyos/ai";
 import { hashPassword } from "@loyaltyos/core";
+import { maskCode } from "@loyaltyos/giftcards";
 import { ADMIN_ROLES, can } from "@loyaltyos/permissions";
 import type { AdminRole, Permission } from "@loyaltyos/permissions";
 import type { PrismaClient } from "@prisma/client";
@@ -26,14 +27,19 @@ let prisma: PrismaClient;
 
 const suffix = Date.now().toString();
 const programId = `prog_rbac_${suffix}`;
+const termsTemplateId = `tt_rbac_${suffix}`;
+const giftCardBatchId = `gcb_rbac_${suffix}`;
+const giftCardId = `gc_rbac_${suffix}`;
+const giftCardCode = `RBAC${suffix}`;
 const cookies = {} as Record<AdminRole, string>;
 const adminEmails = {} as Record<AdminRole, string>;
+const adminIds = {} as Record<AdminRole, string>;
 
 async function loginAs(role: AdminRole): Promise<string> {
   const email = `rbac-${role.toLowerCase()}-${suffix}@loyaltyos.dev`;
   adminEmails[role] = email;
   const password = `pw-${suffix}`;
-  await prisma.adminUser.create({
+  const admin = await prisma.adminUser.create({
     data: {
       email,
       name: `RBAC ${role}`,
@@ -42,6 +48,7 @@ async function loginAs(role: AdminRole): Promise<string> {
       programId,
     },
   });
+  adminIds[role] = admin.id;
   const login = await app.inject({
     method: "POST",
     url: "/api/v1/admin/login",
@@ -61,9 +68,58 @@ beforeAll(async () => {
   for (const role of ADMIN_ROLES) {
     cookies[role] = await loginAs(role);
   }
+
+  const superAdminId = adminIds.SUPER_ADMIN;
+  if (!superAdminId) {
+    throw new Error("SUPER_ADMIN id missing after login");
+  }
+
+  await prisma.termsTemplate.create({
+    data: { id: termsTemplateId, programId, name: `Terms ${suffix}`, body: "terms" },
+  });
+  await prisma.giftCardBatch.create({
+    data: {
+      id: giftCardBatchId,
+      programId,
+      name: `Batch ${suffix}`,
+      quantity: 1,
+      initialAmount: 100,
+      currency: "USD",
+      expirationDate: new Date(Date.now() + 86_400_000),
+      termsTemplateId,
+      status: "ready",
+      createdById: superAdminId,
+    },
+  });
+  await prisma.giftCard.create({
+    data: {
+      id: giftCardId,
+      code: giftCardCode,
+      batchId: giftCardBatchId,
+      initialAmount: 100,
+      balance: 50,
+      currency: "USD",
+      expirationDate: new Date(Date.now() + 86_400_000),
+      status: "active",
+    },
+  });
+  await prisma.coalitionConfig.create({
+    data: {
+      programId,
+      provider: "GENERIC",
+      endpoint: "https://example.com",
+      encryptedCredentials: "encrypted-secret-blob",
+    },
+  });
 });
 
 afterAll(async () => {
+  // Gift card rows reference an admin (createdById) and a terms template, so
+  // they must be removed before the admins/terms they point at.
+  await prisma.giftCard.deleteMany({ where: { batchId: giftCardBatchId } }).catch(() => {});
+  await prisma.giftCardBatch.deleteMany({ where: { id: giftCardBatchId } }).catch(() => {});
+  await prisma.termsTemplate.deleteMany({ where: { id: termsTemplateId } }).catch(() => {});
+
   for (const role of ADMIN_ROLES) {
     const email = adminEmails[role];
     if (email) {
@@ -74,6 +130,7 @@ afterAll(async () => {
       }
     }
   }
+  await prisma.coalitionConfig.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.auditLog.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.coupon.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.event.deleteMany({ where: { programId } }).catch(() => {});
@@ -199,5 +256,85 @@ describe("AI companion: an ANALYST cannot force a mutating tool", () => {
     const created = JSON.parse(result) as { id: string; programId: string };
     expect(created.id).toBeTruthy();
     expect(created.programId).toBe(programId);
+  });
+});
+
+describe("gift card codes: reveal is SUPER_ADMIN-only and masking is server-side", () => {
+  // The route-catalog test above already proves OPERATOR and ANALYST get 403 on
+  // the export route (it maps to giftcards.codes.reveal). Here we assert the
+  // SUPER_ADMIN side: the export streams and carries the full code.
+  it("SUPER_ADMIN can export batch codes (200)", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/giftcards/batches/${giftCardBatchId}/export?format=csv`,
+      headers: { cookie: cookies.SUPER_ADMIN },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain(giftCardCode);
+  });
+
+  it("ANALYST sees a masked code in card detail", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/giftcards/cards/${giftCardId}`,
+      headers: { cookie: cookies.ANALYST },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as { data: { code: string } };
+    expect(data.code).toBe(maskCode(giftCardCode));
+    expect(data.code).not.toBe(giftCardCode);
+  });
+
+  it("OPERATOR sees a masked code in the batch card list", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/giftcards/batches/${giftCardBatchId}/cards`,
+      headers: { cookie: cookies.OPERATOR },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { data: { items: Array<{ code: string }> } };
+    expect(body.data.items).toHaveLength(1);
+    expect(body.data.items[0]?.code).toBe(maskCode(giftCardCode));
+    expect(body.data.items[0]?.code).not.toBe(giftCardCode);
+  });
+
+  it("OPERATOR sees a masked code from lookup", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/giftcards/lookup",
+      headers: { cookie: cookies.OPERATOR },
+      payload: { code: giftCardCode },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as { data: { code: string } };
+    expect(data.code).toBe(maskCode(giftCardCode));
+  });
+
+  it("SUPER_ADMIN sees the full code in card detail", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/giftcards/cards/${giftCardId}`,
+      headers: { cookie: cookies.SUPER_ADMIN },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as { data: { code: string } };
+    expect(data.code).toBe(giftCardCode);
+  });
+});
+
+describe("coalition config: credentials are write-only", () => {
+  it("GET /admin/coalition/config returns hasCredentials, never encryptedCredentials", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/coalition/config",
+      headers: { cookie: cookies.SUPER_ADMIN },
+    });
+    expect(res.statusCode).toBe(200);
+    const { data } = JSON.parse(res.body) as {
+      data: { hasCredentials: boolean; encryptedCredentials?: string };
+    };
+    expect(data.hasCredentials).toBe(true);
+    expect(data.encryptedCredentials).toBeUndefined();
+    expect(res.body).not.toContain("encrypted-secret-blob");
   });
 });
