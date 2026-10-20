@@ -43,7 +43,14 @@ export type { Repository } from "./repository.js";
 export { createRepository } from "./repository.js";
 
 // Code generation
-export { ALPHABET, formatCode, generateCode, normalizeCode, validateChecksum } from "./code.js";
+export {
+  ALPHABET,
+  formatCode,
+  generateCode,
+  maskCode,
+  normalizeCode,
+  validateChecksum,
+} from "./code.js";
 
 // Locks
 export type { LockResult, RedisLockFn } from "./locks.js";

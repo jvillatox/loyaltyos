@@ -140,7 +140,13 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
 
     const config = await coalitionService.getConfig(programId);
 
-    return reply.send({ data: config });
+    // Credentials are write-only (PUT, SUPER_ADMIN): never echo them back over
+    // the API. Replace with a boolean so the UI can show whether they are set.
+    if (!config) {
+      return reply.send({ data: null });
+    }
+    const { encryptedCredentials, ...safe } = config;
+    return reply.send({ data: { ...safe, hasCredentials: Boolean(encryptedCredentials) } });
   });
 
   app.put("/admin/coalition/config", async (request, reply) => {

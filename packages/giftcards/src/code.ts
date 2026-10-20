@@ -50,6 +50,18 @@ export function formatCode(code: string): string {
   return segments.join("-");
 }
 
+/**
+ * Masks a code so only its last 4 characters are visible, e.g.
+ * "••••-••••-••••-AB12". A gift card code is bearer value, so callers without
+ * the `giftcards.codes.reveal` permission must never see the full string.
+ */
+export function maskCode(code: string): string {
+  const normalized = normalizeCode(code);
+  const visible = normalized.slice(-4);
+  const hidden = normalized.slice(0, -4).replace(/./g, "•");
+  return formatCode(hidden + visible);
+}
+
 function generateRandomString(length: number): string {
   const bytes = crypto.randomBytes(length);
   let result = "";

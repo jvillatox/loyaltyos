@@ -30,6 +30,7 @@ export type Permission =
   | "giftcardTerms.write"
   | "webhooks.manage"
   | "giftcards.financial"
+  | "giftcards.codes.reveal"
   | "coalition.write"
   | "program.write"
   | "ai.chat";
@@ -51,6 +52,7 @@ export const PERMISSIONS: Record<Permission, readonly AdminRole[]> = {
   "giftcardTerms.write": OPERATOR_PLUS,
   "webhooks.manage": SUPER_ADMIN_ONLY,
   "giftcards.financial": SUPER_ADMIN_ONLY,
+  "giftcards.codes.reveal": SUPER_ADMIN_ONLY,
   "coalition.write": SUPER_ADMIN_ONLY,
   "program.write": SUPER_ADMIN_ONLY,
   "ai.chat": ALL,

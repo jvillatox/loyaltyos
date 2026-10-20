@@ -99,7 +99,7 @@ const ADMIN_ROUTE_ENTRIES: readonly (readonly [HttpMethod, string, Permission])[
   ["GET", "/api/v1/admin/giftcards/batches", "read"],
   ["GET", "/api/v1/admin/giftcards/batches/:id", "read"],
   ["POST", "/api/v1/admin/giftcards/batches/:id/cancel", "giftcards.financial"],
-  ["GET", "/api/v1/admin/giftcards/batches/:id/export", "read"],
+  ["GET", "/api/v1/admin/giftcards/batches/:id/export", "giftcards.codes.reveal"],
   ["POST", "/api/v1/admin/giftcards/refund", "giftcards.financial"],
   ["POST", "/api/v1/admin/giftcards/cancel", "giftcards.financial"],
   ["POST", "/api/v1/admin/giftcards/transactions", "read"],
