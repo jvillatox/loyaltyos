@@ -78,7 +78,7 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
       }
 
       // Create event
-      const programId = request.programId || (request.headers["x-program-id"] as string);
+      const programId = request.programId;
       const event = await prisma.event.create({
         data: {
           programId,

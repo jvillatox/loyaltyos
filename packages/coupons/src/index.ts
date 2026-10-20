@@ -7,7 +7,7 @@ export {
   generateCodesSchema,
 } from "./schemas.js";
 export type { CouponsServiceMetrics } from "./service.js";
-export { CouponsService } from "./service.js";
+export { CouponsService, maskCode } from "./service.js";
 export type {
   CouponCreateInput,
   CouponDiscountType,

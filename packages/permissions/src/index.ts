@@ -22,6 +22,7 @@ export type Permission =
   | "members.write"
   | "campaigns.write"
   | "coupons.write"
+  | "coupons.codes.reveal"
   | "segments.write"
   | "badges.write"
   | "tiers.write"
@@ -44,6 +45,7 @@ export const PERMISSIONS: Record<Permission, readonly AdminRole[]> = {
   "members.write": OPERATOR_PLUS,
   "campaigns.write": OPERATOR_PLUS,
   "coupons.write": OPERATOR_PLUS,
+  "coupons.codes.reveal": OPERATOR_PLUS,
   "segments.write": OPERATOR_PLUS,
   "badges.write": OPERATOR_PLUS,
   "tiers.write": OPERATOR_PLUS,

@@ -33,7 +33,7 @@ export function adminBadgesRoutes(app: FastifyInstance, _opts: unknown, done: ()
   // POST /admin/badges — Create badge
   app.post("/admin/badges", async (request, reply) => {
     const body = createSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const badge = await badges.create({
       ...body,
       programId,
@@ -60,14 +60,14 @@ export function adminBadgesRoutes(app: FastifyInstance, _opts: unknown, done: ()
       })
       .parse(request.query);
 
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const result = await badges.list(programId, query);
     return reply.send({ data: result });
   });
 
   // GET /admin/badges/stats — Badge distribution stats
   app.get("/admin/badges/stats", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const stats = await badges.stats(programId);
     return reply.send({ data: stats });
   });

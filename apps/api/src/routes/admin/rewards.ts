@@ -14,7 +14,7 @@ const rewards = new RewardsService(prisma);
 export function adminRewardsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   // POST /admin/rewards — create a reward
   app.post("/admin/rewards", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const body = rewardCreateSchema.parse({ ...(request.body as object), programId });
     const reward = await rewards.create(body);
     return reply.status(201).send({ data: reward });
@@ -22,7 +22,7 @@ export function adminRewardsRoutes(app: FastifyInstance, _opts: unknown, done: (
 
   // GET /admin/rewards — list all rewards for a program
   app.get("/admin/rewards", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const query = z
       .object({
         category: z.string().optional(),

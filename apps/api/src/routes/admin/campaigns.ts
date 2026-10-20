@@ -54,7 +54,7 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
   // POST /admin/campaigns — Create campaign
   app.post("/admin/campaigns", async (request, reply) => {
     const body = createSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const campaign = await campaigns.create({
       ...body,
       programId,

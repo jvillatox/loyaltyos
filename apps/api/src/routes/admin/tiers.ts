@@ -32,21 +32,21 @@ export function adminTiersRoutes(app: FastifyInstance, _opts: unknown, done: () 
   // POST /admin/tiers — Create tier
   app.post("/admin/tiers", async (request, reply) => {
     const body = createSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const tier = await tiers.create({ ...body, programId });
     return reply.status(201).send({ data: tier });
   });
 
   // GET /admin/tiers — List tiers (ordered by rank)
   app.get("/admin/tiers", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const result = await tiers.list(programId);
     return reply.send({ data: result });
   });
 
   // GET /admin/tiers/stats — Tier distribution stats (pyramid)
   app.get("/admin/tiers/stats", async (request, reply) => {
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     const stats = await tiers.stats(programId);
     return reply.send({ data: stats });
   });
@@ -83,7 +83,7 @@ export function adminTiersRoutes(app: FastifyInstance, _opts: unknown, done: () 
   // PATCH /admin/tiers/reorder — Reorder tier ranks
   app.patch("/admin/tiers/reorder", async (request, reply) => {
     const body = reorderSchema.parse(request.body);
-    const programId = request.programId || (request.headers["x-program-id"] as string);
+    const programId = request.programId;
     await tiers.reorder(programId, body.tierIds);
     const result = await tiers.list(programId);
     return reply.send({ data: result });
