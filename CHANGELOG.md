@@ -5,25 +5,55 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-10-21
+
+### Added
+
+- **Admin roles are enforced across every `/admin/*` route.** Each role — `SUPER_ADMIN`, `OPERATOR`, `ANALYST` — gets a fixed capability set from a single deny-by-default map. Summarized:
+  - **ANALYST** — read-only (all `GET`/list/stats/count/estimate/preview), except gift-card code export, plus read-only AI tools.
+  - **OPERATOR** — everything `ANALYST` has, plus writes to members, campaigns, coupons (and coupon-code reveal), segments, badges, tiers, rewards, notification templates, and gift-card terms.
+  - **SUPER_ADMIN** — everything `OPERATOR` has, plus webhooks, gift-card financial operations and code reveal, coalition, and program settings. (#32)
+- **`@loyaltyos/permissions`** — the shared role/permission model consumed by both the API and the admin UI, so the two cannot drift.
+- **AI companion filtered by role** — `ANALYST` is offered read-only tools only; `OPERATOR` and `SUPER_ADMIN` see the full set.
+- **`admin:create` CLI** — provision an admin with a role (`pnpm --filter @loyaltyos/api admin:create --email --role --program`).
+- **Audit log records denied requests** as `ACCESS_DENIED`, capturing the role, method, and route.
 
 ### Security
 
-- **Admin roles are now enforced.** `SUPER_ADMIN`, `OPERATOR`, and `ANALYST` permissions are applied to every `/admin/*` route from a single deny-by-default map. `ANALYST` is read-only on non-admin routes (members, events) and is only offered read-only AI tools. Denied requests are recorded in the audit log. (#32)
 - **Gift card codes are only revealed to `SUPER_ADMIN`.** `OPERATOR`/`ANALYST` see the last four characters only (server-side masking) and cannot export batch codes; the export route now requires the `giftcards.codes.reveal` permission.
 - **Coupon codes are masked for `ANALYST`.** `SUPER_ADMIN` and `OPERATOR` see full codes (`coupons.codes.reveal`); `ANALYST` sees only the last four characters in the list, detail, and stats endpoints.
 - **Coalition credentials are write-only.** `GET` and `PUT /admin/coalition/config` no longer return `encryptedCredentials`; they return `hasCredentials` instead.
 - **Admin routes no longer trust `X-Program-Id`.** The program is always taken from the authenticated session or API key, removing the header-based tenant-switch fallback.
 
-### Added
-
-- **`@loyaltyos/permissions`** — the shared role/permission model consumed by both the API and the admin UI, so the two cannot drift.
-- **`admin:create` CLI** — provision an admin with a role (`pnpm --filter @loyaltyos/api admin:create --email --role --program`).
-- The admin UI hides nav items, routes, and mutating controls the current role may not use.
-
 ### Changed
 
-- Seed now creates `operator@loyaltyos.dev` (OPERATOR) and `analyst@loyaltyos.dev` (ANALYST) alongside the super admin.
+- The seed now creates `operator@loyaltyos.dev` (OPERATOR) and `analyst@loyaltyos.dev` (ANALYST) alongside the super admin.
+
+### Breaking changes
+
+- **Admin permissions are enforced by role.** Admins that are not `SUPER_ADMIN` lose access to gift-card financial operations, batch code export, coalition, program settings, and webhooks.
+- ANALYST sessions are read-only on non-admin routes too (e.g. `POST /events`, `POST /members` return 403).
+- Coupon codes are masked for ANALYST.
+
+### Upgrade notes
+
+> ⚠️ **Review every admin's role before upgrading.** The default role is `OPERATOR`: admins who are not `SUPER_ADMIN` lose access to gift-card financial operations, code export, coalition, program settings and webhooks.
+
+```sql
+-- list admins and their roles
+SELECT id, email, role FROM "AdminUser" ORDER BY role, email;
+-- promote an admin
+UPDATE "AdminUser" SET role = 'SUPER_ADMIN' WHERE email = 'admin@example.com';
+```
+
+Alternatively, create a new admin with a role: `pnpm --filter @loyaltyos/api admin:create --email <email> --role SUPER_ADMIN --program <programId>`.
+
+Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, GHSA-98hf-vcvp-p8j6).
+
+### Known limitations
+
+- **MCP server:** its admin tools call routes that do not exist in the API (#48).
+- Points ledger concurrency fixes from #29 are not included in this release.
 
 ## [1.1.0] - 2026-10-18
 
