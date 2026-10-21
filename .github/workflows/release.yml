@@ -135,7 +135,6 @@ jobs:
     # returns E404 and must not fail the release. To enable publishing, claim
     # the @loyaltyos scope on npmjs.org (create the org or package) and give
     # NPM_TOKEN write access to it, then drop the `continue-on-error` below.
-    if: ${{ secrets.NPM_TOKEN != '' }}
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -155,6 +154,7 @@ jobs:
       - run: pnpm --filter @loyaltyos/widget build
 
       - name: Publish to npm
+        if: ${{ env.NODE_AUTH_TOKEN != '' }}
         continue-on-error: true
         run: pnpm --filter @loyaltyos/widget publish --access public --no-git-checks
 
