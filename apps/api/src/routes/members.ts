@@ -1,3 +1,4 @@
+import { memberListQuerySchema, memberTransactionsQuerySchema } from "@loyaltyos/api-contract";
 import { BadgesService, TiersService } from "@loyaltyos/badges";
 import { PointsService } from "@loyaltyos/core";
 import type { Prisma } from "@prisma/client";
@@ -42,13 +43,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
   });
 
   app.get("/members", async (request, reply) => {
-    const query = z
-      .object({
-        page: z.coerce.number().int().min(1).optional().default(1),
-        pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
-        search: z.string().optional(),
-      })
-      .parse(request.query);
+    const query = memberListQuerySchema.parse(request.query);
 
     const where: Prisma.MemberWhereInput = {
       programId: request.programId,
@@ -248,12 +243,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
 
   app.get("/members/:id/transactions", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
-    const query = z
-      .object({
-        page: z.coerce.number().int().min(1).optional().default(1),
-        pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
-      })
-      .parse(request.query);
+    const query = memberTransactionsQuerySchema.parse(request.query);
 
     const result = await points.history(id, request.programId, {
       page: query.page,

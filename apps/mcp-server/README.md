@@ -4,6 +4,11 @@ MCP (Model Context Protocol) server that exposes LoyaltyOS functionality as AI t
 Lets Claude, OpenAI agents, and any MCP-compatible system manage a loyalty program
 programmatically.
 
+Every tool is declared against a shared route manifest (`@loyaltyos/api-contract`) so
+its method, path, permission, and request schema are verified to match the LoyaltyOS
+API. The contract test fails CI if a tool targets a route the API does not expose or
+sends a field the API ignores.
+
 ## Quick Start
 
 ```bash
@@ -22,14 +27,13 @@ cd apps/mcp-server && pnpm dev:sse
 
 ## Environment Variables
 
-| Variable             | Default                 | Description                                  |
-| -------------------- | ----------------------- | -------------------------------------------- |
-| `MCP_TRANSPORT`      | `stdio`                 | Transport mode: `stdio` or `sse`             |
-| `MCP_SERVER_PORT`    | `3010`                  | HTTP port when running in SSE mode           |
-| `MCP_API_KEY`        | —                       | API key that MCP clients use to authenticate |
-| `MCP_RATE_LIMIT_RPM` | `100`                   | Max tool calls per minute                    |
-| `LOYALTYOS_API_URL`  | `http://localhost:3002` | Internal URL to the LoyaltyOS REST API       |
-| `LOYALTYOS_API_KEY`  | —                       | API key to call the LoyaltyOS API            |
+| Variable             | Default                 | Description                            |
+| -------------------- | ----------------------- | -------------------------------------- |
+| `MCP_TRANSPORT`      | `stdio`                 | Transport mode: `stdio` or `sse`       |
+| `MCP_SERVER_PORT`    | `3010`                  | HTTP port when running in SSE mode     |
+| `MCP_RATE_LIMIT_RPM` | `100`                   | Max tool calls per minute              |
+| `LOYALTYOS_API_URL`  | `http://localhost:3002` | Internal URL to the LoyaltyOS REST API |
+| `LOYALTYOS_API_KEY`  | —                       | API key to call the LoyaltyOS API      |
 
 ## Claude Code Integration
 
@@ -66,77 +70,83 @@ Connect remote agents to `http://localhost:3010/mcp`.
 
 ### Members
 
-| Tool                    | Description                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------- |
-| `member_get`            | Get a member's full profile including tier, point balance, and activity summary |
-| `members_list`          | List members with optional filters (tier, inactivity, balance, search)          |
-| `member_points_history` | Get point transaction history for a member                                      |
-| `member_adjust_points`  | Manually adjust a member's point balance (requires audit note)                  |
-| `member_badges`         | Get all badges earned by a member, with optional progress tracking              |
+| Tool                    | Description                                                        |
+| ----------------------- | ------------------------------------------------------------------ |
+| `member_get`            | Get a member's profile by id (balance, tier, activity metadata)    |
+| `members_list`          | List members with optional search and pagination (page/pageSize)   |
+| `member_points_history` | Get a member's point transaction history, paginated                |
+| `member_badges`         | Get all badges earned by a member, including locked badge progress |
 
 ### Campaigns
 
-| Tool                | Description                                                                 |
-| ------------------- | --------------------------------------------------------------------------- |
-| `campaign_create`   | Create a campaign (bonus points, spend-and-get, frequency, milestone, etc.) |
-| `campaigns_list`    | List campaigns with optional status filter                                  |
-| `campaign_get`      | Get campaign details and performance stats                                  |
-| `campaign_activate` | Activate a draft or paused campaign                                         |
-| `campaign_pause`    | Pause an active campaign                                                    |
+| Tool                | Description                                                      |
+| ------------------- | ---------------------------------------------------------------- |
+| `campaign_create`   | Create a campaign (bonus points, spend-and-get, frequency, …)    |
+| `campaigns_list`    | List campaigns with optional pagination and active-status filter |
+| `campaign_get`      | Get a campaign's full configuration by id                        |
+| `campaign_activate` | Activate a draft or paused campaign (POST …/lifecycle)           |
+| `campaign_pause`    | Pause an active campaign (POST …/lifecycle)                      |
 
 ### Segments
 
-| Tool              | Description                                                             |
-| ----------------- | ----------------------------------------------------------------------- |
-| `segment_create`  | Create a dynamic customer segment based on behavioral and profile rules |
-| `segments_list`   | List all segments with current member counts                            |
-| `segment_preview` | Preview how many members match rules before creating a segment          |
-
-### Analytics
-
-| Tool                  | Description                                                           |
-| --------------------- | --------------------------------------------------------------------- |
-| `analytics_dashboard` | Get main program KPIs: active members, points issued, redemption rate |
-| `analytics_campaign`  | Get detailed performance metrics for a specific campaign              |
+| Tool              | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `segment_create`  | Create a static or dynamic customer segment                           |
+| `segments_list`   | List all segments with their current member counts                    |
+| `segment_preview` | Estimate how many members match rules (POST /admin/segments/estimate) |
 
 ### Coupons
 
-| Tool            | Description                                |
-| --------------- | ------------------------------------------ |
-| `coupon_create` | Create a coupon or batch of unique coupons |
+| Tool            | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `coupon_create` | Create a coupon (percentage, fixed, free product, …) |
 
 ### Rewards
 
-| Tool                      | Description                                              |
-| ------------------------- | -------------------------------------------------------- |
-| `rewards_catalog`         | Browse the loyalty rewards catalog with optional filters |
-| `reward_create`           | Add a new item to the rewards catalog                    |
-| `reward_redemption_stats` | Get redemption statistics for a reward or all rewards    |
+| Tool              | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `rewards_catalog` | List the rewards catalog with category/active/point-cost/tier filters |
+| `reward_create`   | Add a new item to the rewards catalog                                 |
 
-### Coalition
+### Gift cards
 
-| Tool                   | Description                                                             |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `coalition_balance`    | Get a member's balance in the external coalition system (e.g. Apprecio) |
-| `coalition_accumulate` | Send points to the coalition system on behalf of a member               |
-| `coalition_convert`    | Convert a member's LoyaltyOS points into coalition points               |
+| Tool                     | Description                                                             |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `giftcards_batch_status` | Get a gift card batch's status and details                              |
+| `giftcards_lookup`       | Look up a gift card by code (masked unless the caller may reveal codes) |
 
 ### Program
 
-| Tool                 | Description                                                                |
-| -------------------- | -------------------------------------------------------------------------- |
-| `program_config_get` | Get the current loyalty program configuration (tiers, rules, integrations) |
-| `webhooks_list`      | List configured webhooks for the loyalty program                           |
+| Tool                 | Description                                                               |
+| -------------------- | ------------------------------------------------------------------------- |
+| `program_config_get` | Get the program config (composes /admin/me → /admin/programs/:id + tiers) |
+| `webhooks_list`      | List configured webhooks for the loyalty program                          |
+
+## Removed tools
+
+The following tools were removed because they move money/points without a server-side
+confirmation step, or their target endpoint does not exist yet. They may return once
+the corresponding confirmation mechanism or endpoint is in place.
+
+| Removed tool              | Reason                                                                     |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `member_adjust_points`    | Mutates a member balance; blocked until a server-owned confirmation exists |
+| `giftcards_create_batch`  | Creates gift cards with value (`giftcards.financial`); needs confirmation  |
+| `giftcards_redeem`        | Redeems gift card value (`giftcards.financial`); needs confirmation        |
+| `coalition_accumulate`    | Sends points to an external coalition; needs confirmation                  |
+| `coalition_convert`       | Converts points across systems; needs confirmation                         |
+| `coalition_balance`       | No admin read endpoint exists to query an external coalition balance       |
+| `reward_redemption_stats` | Endpoint does not exist in the API                                         |
+| `analytics_dashboard`     | `/admin/stats/dashboard` is a new endpoint landing in a follow-up PR       |
+| `analytics_campaign`      | `/admin/campaigns/:id/stats` is a new endpoint landing in a follow-up PR   |
 
 ## MCP Resources
 
 The server exposes read-only resources that agents can browse as reference data:
 
-| Resource URI                   | Description                                           |
-| ------------------------------ | ----------------------------------------------------- |
-| `loyaltyos://program/overview` | Program summary: KPIs, active members, tier structure |
-| `loyaltyos://campaigns/active` | All currently running campaigns with rules and stats  |
-| `loyaltyos://tiers/config`     | Tier names, thresholds, and benefits in table format  |
+| Resource URI                   | Description                                         |
+| ------------------------------ | --------------------------------------------------- |
+| `loyaltyos://campaigns/active` | All currently active campaigns with type and budget |
 
 Resources return formatted markdown for easy reading by AI agents.
 
@@ -146,42 +156,28 @@ Resources return formatted markdown for easy reading by AI agents.
 
 ```
 Input:  { "memberId": "mem_abc123" }
-Output: { "id": "mem_abc123", "email": "alice@example.com", "name": "Alice", "tier": "gold", "pointBalance": 1500, ... }
+Output: { "data": { "id": "mem_abc123", "email": "alice@example.com", ... } }
 ```
 
 ### members_list
 
 ```
-Input:  { "tier": "gold", "inactiveDays": 30, "limit": 10 }
-Output: { "members": [...], "total": 42, "hasMore": true }
+Input:  { "search": "alice", "page": 1, "pageSize": 20 }
+Output: { "data": { "items": [...], "total": 42, "page": 1, "pageSize": 20 } }
 ```
 
 ### campaign_create
 
 ```
-Input:  { "name": "Double Points Weekend", "type": "bonus_points", "startDate": "2024-06-01T00:00:00Z", "rules": { "multiplier": 2 } }
-Output: { "campaignId": "cam_xyz", "status": "draft", "estimatedReach": 5000 }
+Input:  { "name": "Double Points Weekend", "type": "BONUS_POINTS", "multiplier": 2 }
+Output: { "data": { "id": "cam_xyz", "name": "Double Points Weekend", ... } }
 ```
 
 ### segment_preview
 
 ```
-Input:  { "rules": [{ "field": "inactiveDays", "operator": "gte", "value": 60 }] }
-Output: { "estimatedCount": 1250, "sampleMembers": [{ "id": "mem_1", "name": "Bob", ... }] }
-```
-
-### analytics_dashboard
-
-```
-Input:  { "period": "30d" }
-Output: { "activeMembers": 50000, "pointsIssued": 250000, "redemptionRate": 0.35, "topCampaigns": [...], "period": "30d" }
-```
-
-### coalition_convert
-
-```
-Input:  { "memberId": "mem_1", "ownPoints": 1000 }
-Output: { "deductedOwnPoints": 1000, "creditedCoalitionPoints": 1000, "conversionRate": 1.0, "newOwnBalance": 500, "newCoalitionBalance": 2500 }
+Input:  { "rules": { "all": [{ "field": "totalSpend", "gte": 100 }] } }
+Output: { "data": { "estimatedCount": 1250 } }
 ```
 
 ## Error Codes
@@ -207,11 +203,12 @@ Stdio mode (single client) does not apply rate limiting.
 
 ## Security
 
-- **API Key Authentication**: All MCP client connections must include a valid `MCP_API_KEY`
-  in the `Authorization: Bearer <key>` header (SSE mode) or as an env var (stdio mode).
-- **Rate Limiting**: Configurable via `MCP_RATE_LIMIT_RPM` (default: 100 requests per minute per API key).
-- **Audit Trail**: All mutations (`member_adjust_points`, `campaign_create`, etc.) require
-  descriptive notes and support idempotency keys for safe retries.
+- **API Key Authentication**: The MCP server calls the LoyaltyOS API with the
+  `LOYALTYOS_API_KEY` value in the `X-API-Key` header. The API key is scoped to a
+  single program, so the server cannot switch tenants.
+- **No client-side money movement**: tools that create or redeem value were removed
+  until a server-owned confirmation mechanism is in place.
+- **Rate Limiting**: Configurable via `MCP_RATE_LIMIT_RPM` (default: 100 requests per minute).
 
 ## Architecture
 

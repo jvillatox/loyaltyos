@@ -12,6 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@loyaltyos/api-contract": "workspace:*",
+    "@loyaltyos/permissions": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.8.0",
     "axios": "^1.7.7",
     "dotenv": "^16.4.5",

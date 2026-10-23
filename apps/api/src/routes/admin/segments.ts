@@ -1,3 +1,8 @@
+import {
+  segmentCreateBodySchema,
+  segmentEstimateBodySchema,
+  segmentRuleGroupSchema,
+} from "@loyaltyos/api-contract";
 import { SegmentsService } from "@loyaltyos/segments";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -6,45 +11,17 @@ import { prisma } from "../../db.js";
 
 const segments = new SegmentsService(prisma);
 
-const ruleConditionSchema = z.object({
-  field: z.string().min(1),
-  eq: z.unknown().optional(),
-  neq: z.unknown().optional(),
-  gt: z.number().optional(),
-  lt: z.number().optional(),
-  gte: z.number().optional(),
-  lte: z.number().optional(),
-  in: z.array(z.unknown()).optional(),
-  between: z.tuple([z.number(), z.number()]).optional(),
-  contains: z.string().optional(),
-});
-
-const ruleGroupSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.object({
-    all: z.array(z.union([ruleConditionSchema, ruleGroupSchema])).optional(),
-    any: z.array(z.union([ruleConditionSchema, ruleGroupSchema])).optional(),
-  }),
-);
-
-const createSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  type: z.enum(["STATIC", "DYNAMIC"]),
-  rules: ruleGroupSchema.optional(),
-  memberIds: z.array(z.string().min(1)).optional(),
-});
-
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
-  rules: ruleGroupSchema.optional(),
+  rules: segmentRuleGroupSchema.optional(),
   memberIds: z.array(z.string().min(1)).optional(),
 });
 
 export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   // POST /admin/segments — Create segment
   app.post("/admin/segments", async (request, reply) => {
-    const body = createSchema.parse(request.body);
+    const body = segmentCreateBodySchema.parse(request.body);
     const programId = request.programId;
     const segment = await segments.create({
       ...body,
@@ -79,7 +56,7 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
 
   // POST /admin/segments/estimate — Estimate segment member count before creation
   app.post("/admin/segments/estimate", async (request, reply) => {
-    const { rules } = z.object({ rules: ruleGroupSchema.optional() }).parse(request.body);
+    const { rules } = segmentEstimateBodySchema.parse(request.body);
     const programId = request.programId;
     const count = await segments.estimateCount(programId, rules as Record<string, unknown> | null);
     return reply.send({ data: { count } });
