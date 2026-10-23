@@ -10,7 +10,15 @@ interface ZodObjectWithShape {
   shape?: Record<string, z.ZodType<unknown>>;
 }
 interface McpServerInternals {
-  _registeredTools: Record<string, unknown>;
+  _registeredTools?: Record<string, unknown>;
+}
+
+function getRegisteredToolNames(server: unknown): string[] {
+  const tools = (server as McpServerInternals)._registeredTools;
+  if (!tools) {
+    throw new Error("MCP SDK internals changed: update getRegisteredToolNames()");
+  }
+  return Object.keys(tools);
 }
 
 function asShape(schema: z.ZodType<unknown>): Record<string, z.ZodType<unknown>> {
@@ -31,7 +39,7 @@ beforeAll(() => {
   const client = new LoyaltyOSClient("http://localhost:3002", "test-key");
   const server = createMcpServer(client);
   contracts = getContracts();
-  toolNames = Object.keys((server as unknown as McpServerInternals)._registeredTools);
+  toolNames = getRegisteredToolNames(server);
 });
 
 describe("MCP tool ↔ API contract", () => {
