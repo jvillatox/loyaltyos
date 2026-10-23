@@ -1,3 +1,8 @@
+import {
+  campaignCreateBodySchema,
+  campaignLifecycleSchema,
+  campaignListQuerySchema,
+} from "@loyaltyos/api-contract";
 import { CampaignsService } from "@loyaltyos/campaigns";
 import { PointsService } from "@loyaltyos/core";
 import type { Prisma } from "@prisma/client";
@@ -11,49 +16,12 @@ const pointsMetrics = adaptPointsMetrics(getBusinessMetrics());
 const points = new PointsService(prisma, pointsMetrics);
 const campaigns = new CampaignsService(prisma, points);
 
-const createSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  type: z.enum([
-    "BONUS_POINTS",
-    "SPEND_AND_GET",
-    "FREQUENCY",
-    "MILESTONE",
-    "REFERRAL",
-    "BIRTHDAY",
-    "ANNIVERSARY",
-    "FLASH_SALE",
-    "TIER_UPGRADE_BONUS",
-  ]),
-  conditions: z.record(z.unknown()).optional(),
-  multiplier: z.number().min(0).optional(),
-  maxBudget: z.number().int().optional(),
-  maxUsesPerMember: z.number().int().optional(),
-  isStackable: z.boolean().optional(),
-  abTesting: z.boolean().optional(),
-  startsAt: z.coerce.date().optional(),
-  endsAt: z.coerce.date().optional(),
-  variants: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        trafficPct: z.number().min(0).max(100),
-        config: z.record(z.unknown()).optional(),
-      }),
-    )
-    .optional(),
-});
-
-const updateSchema = createSchema.partial();
-
-const lifecycleSchema = z.object({
-  action: z.enum(["activate", "pause", "archive"]),
-});
+const updateSchema = campaignCreateBodySchema.partial();
 
 export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   // POST /admin/campaigns — Create campaign
   app.post("/admin/campaigns", async (request, reply) => {
-    const body = createSchema.parse(request.body);
+    const body = campaignCreateBodySchema.parse(request.body);
     const programId = request.programId;
     const campaign = await campaigns.create({
       ...body,
@@ -64,20 +32,7 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   // GET /admin/campaigns — List campaigns
   app.get("/admin/campaigns", async (request, reply) => {
-    const query = z
-      .object({
-        page: z.coerce.number().int().min(1).optional().default(1),
-        pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
-        isActive: z
-          .enum(["true", "false"])
-          .optional()
-          .transform((v) => {
-            if (v === "true") return true;
-            if (v === "false") return false;
-            return undefined;
-          }),
-      })
-      .parse(request.query);
+    const query = campaignListQuerySchema.parse(request.query);
 
     const where: Prisma.CampaignWhereInput = {
       programId: request.programId,
@@ -184,7 +139,7 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
   // POST /admin/campaigns/:id/lifecycle — Manage campaign lifecycle
   app.post("/admin/campaigns/:id/lifecycle", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
-    const { action } = lifecycleSchema.parse(request.body);
+    const { action } = campaignLifecycleSchema.parse(request.body);
 
     switch (action) {
       case "activate":

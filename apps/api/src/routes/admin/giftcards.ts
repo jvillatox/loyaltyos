@@ -1,3 +1,4 @@
+import { giftcardLookupBodySchema } from "@loyaltyos/api-contract";
 import { GiftCardBatchNotFoundError, maskCode, normalizeCode } from "@loyaltyos/giftcards";
 import type { AdminRole } from "@loyaltyos/permissions";
 import { can } from "@loyaltyos/permissions";
@@ -64,10 +65,6 @@ const transactionsBodySchema = z
   .refine((d) => d.code !== undefined || d.cardId !== undefined, {
     message: "Either code or cardId is required",
   });
-
-const lookupBodySchema = z.object({
-  code: z.string().min(1),
-});
 
 const adminRedeemBodySchema = z.object({
   code: z.string().min(1),
@@ -470,7 +467,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
   // ── Card lookup (admin search) ─────────────
 
   app.post(`${prefix}/lookup`, async (request, reply) => {
-    const body = lookupBodySchema.parse(request.body);
+    const body = giftcardLookupBodySchema.parse(request.body);
     const normalized = normalizeCode(body.code);
 
     const card = await prisma.giftCard.findFirst({

@@ -1,81 +1,82 @@
+import { rewardCreateBodySchema, rewardListQuerySchema } from "@loyaltyos/api-contract";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { LoyaltyOSClient } from "../client.js";
+import { registerContract } from "../contracts.js";
 import { mapAxiosError } from "../errors.js";
 
-const rewardTypeEnum = z
-  .enum(["discount", "product", "gift_card", "experience", "donation", "coalition"])
-  .optional();
-
-export const RewardsCatalogSchema = z.object({
-  limit: z.number().int().min(1).max(100).optional().default(20),
-  offset: z.number().int().min(0).optional().default(0),
-  maxCost: z.number().int().min(0).optional(),
-  type: rewardTypeEnum,
-  availableOnly: z.boolean().optional().default(true),
+const rewardsCatalogInputSchema = z.object({
+  category: z.string().optional().describe("Reward category"),
+  isActive: z
+    .enum(["true", "false"])
+    .optional()
+    .describe('Filter by active status ("true"/"false")'),
+  minPoints: z.number().int().min(0).optional().describe("Minimum point cost"),
+  maxPoints: z.number().int().min(0).optional().describe("Maximum point cost"),
+  tierRequired: z.string().optional().describe("Tier id required to redeem"),
+  page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+  pageSize: z.number().int().min(1).max(100).optional().describe("Items per page (max 100)"),
 });
 
-export const RewardCreateSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1),
-  type: z.enum(["discount", "product", "gift_card", "experience", "donation", "coalition"]),
-  pointCost: z.number().int().min(1),
+const rewardCreateInputSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+  pointsCost: z.number().int().min(1),
   stock: z.number().int().min(0).optional(),
-  imageUrl: z.string().url().optional(),
-  availableFromDate: z.string().optional().describe("ISO datetime"),
-  availableUntilDate: z.string().optional().describe("ISO datetime"),
-  tierRestriction: z.array(z.string()).optional(),
-});
-
-export const RewardRedemptionStatsSchema = z.object({
-  rewardId: z.string().optional().describe("Omit for aggregate stats across all rewards"),
-  period: z.enum(["7d", "30d", "90d", "365d"]).optional().default("30d"),
+  imageUrl: z.string().optional(),
+  category: z
+    .enum([
+      "DISCOUNT_FUTURE",
+      "PHYSICAL_PRODUCT",
+      "GIFT_CARD",
+      "EXPERIENCE",
+      "CHARITY_DONATION",
+      "COALITION_TRANSFER",
+    ])
+    .optional(),
+  tierRequired: z.string().optional(),
 });
 
 export function registerRewardTools(server: McpServer, client: LoyaltyOSClient): void {
+  registerContract({
+    name: "rewards_catalog",
+    method: "GET",
+    path: "/api/v1/admin/rewards",
+    permission: "read",
+    inputSchema: rewardsCatalogInputSchema,
+    requestSchema: rewardListQuerySchema,
+  });
   server.tool(
     "rewards_catalog",
-    "Browse the loyalty rewards catalog. Members redeem their points for these rewards.",
-    RewardsCatalogSchema.shape,
+    "List the rewards catalog with optional category, active-status, point-cost, and tier filters.",
+    rewardsCatalogInputSchema.shape,
     async (params) => {
       try {
-        const result = await client.listRewards(params);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
+        const result = await client.get("/api/v1/admin/rewards", { params });
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (error) {
         mapAxiosError(error);
       }
     },
   );
 
+  registerContract({
+    name: "reward_create",
+    method: "POST",
+    path: "/api/v1/admin/rewards",
+    permission: "rewards.write",
+    inputSchema: rewardCreateInputSchema,
+    requestSchema: rewardCreateBodySchema,
+  });
   server.tool(
     "reward_create",
-    "Add a new item to the rewards catalog.",
-    RewardCreateSchema.shape,
+    "Add a new item to the rewards catalog. Points are spent via pointsCost (not a discount percentage).",
+    rewardCreateInputSchema.shape,
     async (params) => {
       try {
-        const result = await client.createReward(params);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-      } catch (error) {
-        mapAxiosError(error);
-      }
-    },
-  );
-
-  server.tool(
-    "reward_redemption_stats",
-    "Get redemption statistics for a reward or all rewards.",
-    RewardRedemptionStatsSchema.shape,
-    async (params) => {
-      try {
-        const result = await client.getRedemptionStats(params.rewardId, params.period);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
+        const result = await client.post("/api/v1/admin/rewards", params);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (error) {
         mapAxiosError(error);
       }

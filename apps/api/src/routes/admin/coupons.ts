@@ -1,3 +1,4 @@
+import { couponCreateBodySchema } from "@loyaltyos/api-contract";
 import { CouponsService, maskCode } from "@loyaltyos/coupons";
 import type { AdminRole } from "@loyaltyos/permissions";
 import { can } from "@loyaltyos/permissions";
@@ -14,32 +15,7 @@ function maskIfNeeded(role: AdminRole | null, code: string): string {
 
 const coupons = new CouponsService(prisma, adaptCouponsMetrics(getBusinessMetrics()));
 
-const createSchema = z.object({
-  code: z
-    .string()
-    .min(3)
-    .max(50)
-    .regex(/^[A-Z0-9_-]+$/),
-  mode: z.enum(["SHARED", "INDIVIDUAL", "LIMITED"]),
-  discountType: z.enum([
-    "PERCENTAGE",
-    "FIXED",
-    "FREE_PRODUCT",
-    "FREE_SHIPPING",
-    "EXTRA_POINTS",
-    "EXPERIENCE",
-  ]),
-  discountValue: z.number().min(0).optional(),
-  minPurchase: z.number().int().min(0).optional(),
-  maxUses: z.number().int().min(1).optional(),
-  maxUsesPerMember: z.number().int().min(1).optional(),
-  isStackable: z.boolean().optional(),
-  channels: z.array(z.string().min(1)).optional(),
-  startsAt: z.coerce.date().optional(),
-  expiresAt: z.coerce.date().optional(),
-});
-
-const updateSchema = createSchema.partial();
+const updateSchema = couponCreateBodySchema.partial();
 
 const generateSchema = z.object({
   prefix: z.string().max(10).optional(),
@@ -66,7 +42,7 @@ const generateSchema = z.object({
 export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   // POST /admin/coupons — Create coupon
   app.post("/admin/coupons", async (request, reply) => {
-    const body = createSchema.parse(request.body);
+    const body = couponCreateBodySchema.parse(request.body);
     const programId = request.programId;
     const coupon = await coupons.create({
       ...body,

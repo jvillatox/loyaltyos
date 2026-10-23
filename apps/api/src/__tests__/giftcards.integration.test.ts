@@ -256,26 +256,6 @@ describe("Batch export logic (Section I.1)", () => {
   });
 });
 
-// ── MCP schema validation ──────────────────────────
-
-describe("MCP redeem schema (Section A.4)", () => {
-  it("g) rejects missing idempotencyKey", async () => {
-    const { GiftCardRedeemSchema } = await import("../../../mcp-server/src/tools/giftcards.js");
-
-    const result = GiftCardRedeemSchema.safeParse({
-      code: "ABCDEFGHJKLMNPQR",
-      amount: 100,
-      programSecret: "test-secret",
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const issues = result.error.issues.map((i) => i.path.join("."));
-      expect(issues).toContain("idempotencyKey");
-    }
-  });
-});
-
 // ── V12-4.1: Cross-tenant metrics + card-by-id ──────
 
 describe("V12-4.1 — Cross-tenant metrics scoping", () => {

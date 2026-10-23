@@ -1,9 +1,5 @@
-import {
-  restockSchema,
-  rewardCreateSchema,
-  RewardsService,
-  rewardUpdateSchema,
-} from "@loyaltyos/rewards";
+import { rewardCreateBodySchema, rewardListQuerySchema } from "@loyaltyos/api-contract";
+import { restockSchema, RewardsService, rewardUpdateSchema } from "@loyaltyos/rewards";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
@@ -15,32 +11,15 @@ export function adminRewardsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // POST /admin/rewards — create a reward
   app.post("/admin/rewards", async (request, reply) => {
     const programId = request.programId;
-    const body = rewardCreateSchema.parse({ ...(request.body as object), programId });
-    const reward = await rewards.create(body);
+    const body = rewardCreateBodySchema.parse(request.body);
+    const reward = await rewards.create({ ...body, programId });
     return reply.status(201).send({ data: reward });
   });
 
   // GET /admin/rewards — list all rewards for a program
   app.get("/admin/rewards", async (request, reply) => {
     const programId = request.programId;
-    const query = z
-      .object({
-        category: z.string().optional(),
-        isActive: z
-          .enum(["true", "false"])
-          .optional()
-          .transform((v) => {
-            if (v === "true") return true;
-            if (v === "false") return false;
-            return undefined;
-          }),
-        minPoints: z.coerce.number().int().min(0).optional(),
-        maxPoints: z.coerce.number().int().min(0).optional(),
-        tierRequired: z.string().optional(),
-        page: z.coerce.number().int().min(1).optional().default(1),
-        pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
-      })
-      .parse(request.query);
+    const query = rewardListQuerySchema.parse(request.query);
 
     const result = await rewards.list(programId, query);
     return reply.send({ data: result });

@@ -23,6 +23,7 @@
     "@fastify/swagger": "^8.14.0",
     "@fastify/swagger-ui": "^3.0.0",
     "@loyaltyos/ai": "workspace:*",
+    "@loyaltyos/api-contract": "workspace:*",
     "@loyaltyos/badges": "workspace:*",
     "@loyaltyos/campaigns": "workspace:*",
     "@loyaltyos/coalition": "workspace:*",
