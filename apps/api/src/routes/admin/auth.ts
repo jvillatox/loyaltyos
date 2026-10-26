@@ -101,11 +101,15 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
     name: z.string().min(1).optional(),
   });
 
-  /** PATCH /admin/me — update current admin user */
+  /** PATCH /admin/me — update current admin user (real session only) */
   app.patch("/admin/me", async (request, reply) => {
     const adminId = request.adminId;
     if (!adminId) {
       throw new LoyaltyError("UNAUTHORIZED", 401);
+    }
+    // A personal access token must not modify the owner's account.
+    if (request.patId) {
+      throw new LoyaltyError("FORBIDDEN", 403);
     }
 
     const body = updateAdminMeSchema.parse(request.body);

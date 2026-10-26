@@ -27,13 +27,34 @@ cd apps/mcp-server && pnpm dev:sse
 
 ## Environment Variables
 
-| Variable             | Default                 | Description                            |
-| -------------------- | ----------------------- | -------------------------------------- |
-| `MCP_TRANSPORT`      | `stdio`                 | Transport mode: `stdio` or `sse`       |
-| `MCP_SERVER_PORT`    | `3010`                  | HTTP port when running in SSE mode     |
-| `MCP_RATE_LIMIT_RPM` | `100`                   | Max tool calls per minute              |
-| `LOYALTYOS_API_URL`  | `http://localhost:3002` | Internal URL to the LoyaltyOS REST API |
-| `LOYALTYOS_API_KEY`  | —                       | API key to call the LoyaltyOS API      |
+| Variable             | Default                 | Description                                |
+| -------------------- | ----------------------- | ------------------------------------------ |
+| `MCP_TRANSPORT`      | `stdio`                 | Transport mode: `stdio` or `sse`           |
+| `MCP_SERVER_PORT`    | `3010`                  | HTTP port when running in SSE mode         |
+| `MCP_RATE_LIMIT_RPM` | `100`                   | Max tool calls per minute                  |
+| `LOYALTYOS_API_URL`  | `http://localhost:3002` | Internal URL to the LoyaltyOS REST API     |
+| `LOYALTYOS_TOKEN`    | —                       | Personal access token used to call the API |
+
+## Personal Access Tokens
+
+The MCP server authenticates to the LoyaltyOS API with a **personal access token**
+(PAT), not an internal API key. A PAT acts on behalf of a specific admin, and its
+effective role is always capped by that admin's current role.
+
+Create a token with the admin CLI (or the admin UI → _API tokens_ page):
+
+```bash
+# Read-only ANALYST token (recommended for Claude Desktop / code assistants)
+pnpm --filter @loyaltyos/api admin:token:create \
+  --email analyst@your-domain.com --name "MCP" --role ANALYST --days 90
+
+# OPERATOR token (grants write access to campaigns, coupons, segments, …)
+pnpm --filter @loyaltyos/api admin:token:create \
+  --email operator@your-domain.com --name "MCP write" --role OPERATOR --days 90
+```
+
+The plaintext token is printed exactly once. Copy it into `LOYALTYOS_TOKEN`. A
+missing token is reported on startup and every tool call is rejected until one is set.
 
 ## Claude Code Integration
 
@@ -49,7 +70,7 @@ Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json
       "env": {
         "MCP_TRANSPORT": "stdio",
         "LOYALTYOS_API_URL": "http://localhost:3002",
-        "LOYALTYOS_API_KEY": "your-internal-api-key"
+        "LOYALTYOS_TOKEN": "lopat_your-token-here"
       }
     }
   }
@@ -122,6 +143,13 @@ Connect remote agents to `http://localhost:3010/mcp`.
 | `program_config_get` | Get the program config (composes /admin/me → /admin/programs/:id + tiers) |
 | `webhooks_list`      | List configured webhooks for the loyalty program                          |
 
+### Analytics
+
+| Tool                  | Description                                                            |
+| --------------------- | ---------------------------------------------------------------------- |
+| `analytics_dashboard` | Program-wide metrics (member count, point totals, recent transactions) |
+| `analytics_campaign`  | Per-campaign stats (applications, points awarded, unique members)      |
+
 ## Removed tools
 
 The following tools were removed because they move money/points without a server-side
@@ -137,8 +165,6 @@ the corresponding confirmation mechanism or endpoint is in place.
 | `coalition_convert`       | Converts points across systems; needs confirmation                         |
 | `coalition_balance`       | No admin read endpoint exists to query an external coalition balance       |
 | `reward_redemption_stats` | Endpoint does not exist in the API                                         |
-| `analytics_dashboard`     | `/admin/stats/dashboard` is a new endpoint landing in a follow-up PR       |
-| `analytics_campaign`      | `/admin/campaigns/:id/stats` is a new endpoint landing in a follow-up PR   |
 
 ## MCP Resources
 
@@ -203,9 +229,10 @@ Stdio mode (single client) does not apply rate limiting.
 
 ## Security
 
-- **API Key Authentication**: The MCP server calls the LoyaltyOS API with the
-  `LOYALTYOS_API_KEY` value in the `X-API-Key` header. The API key is scoped to a
-  single program, so the server cannot switch tenants.
+- **Personal access token authentication**: The MCP server calls the LoyaltyOS API
+  with the `LOYALTYOS_TOKEN` value in the `Authorization: Bearer` header. A PAT is
+  scoped to its owner's program, so the server cannot switch tenants, and its
+  effective role never exceeds the owner's current role.
 - **No client-side money movement**: tools that create or redeem value were removed
   until a server-owned confirmation mechanism is in place.
 - **Rate Limiting**: Configurable via `MCP_RATE_LIMIT_RPM` (default: 100 requests per minute).

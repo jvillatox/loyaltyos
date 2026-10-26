@@ -9,12 +9,26 @@ import { defaultRateLimiter } from "./rate-limiter.js";
 import { createMcpServer } from "./server.js";
 
 const LOYALTYOS_API_URL = process.env.LOYALTYOS_API_URL ?? "http://localhost:3002";
-const LOYALTYOS_API_KEY = process.env.LOYALTYOS_API_KEY ?? "";
+const LOYALTYOS_TOKEN = process.env.LOYALTYOS_TOKEN ?? "";
 const MCP_TRANSPORT = process.env.MCP_TRANSPORT ?? "stdio";
 const MCP_SERVER_PORT = Number(process.env.MCP_SERVER_PORT ?? "3010");
 
+function warnIfMissingToken(): void {
+  if (LOYALTYOS_TOKEN) {
+    return;
+  }
+  console.error(
+    [
+      "LOYALTYOS_TOKEN is not set.",
+      "Create an ANALYST personal access token:",
+      '  pnpm --filter @loyaltyos/api admin:token:create --email <email> --name "MCP" --role ANALYST --days 90',
+      "then set LOYALTYOS_TOKEN to the printed token. Tool calls will be rejected until it is configured.",
+    ].join("\n"),
+  );
+}
+
 async function startStdio(): Promise<void> {
-  const client = new LoyaltyOSClient(LOYALTYOS_API_URL, LOYALTYOS_API_KEY);
+  const client = new LoyaltyOSClient(LOYALTYOS_API_URL, LOYALTYOS_TOKEN);
   const server = createMcpServer(client);
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -22,7 +36,7 @@ async function startStdio(): Promise<void> {
 }
 
 async function startSSE(): Promise<void> {
-  const client = new LoyaltyOSClient(LOYALTYOS_API_URL, LOYALTYOS_API_KEY);
+  const client = new LoyaltyOSClient(LOYALTYOS_API_URL, LOYALTYOS_TOKEN);
 
   // We use a simple HTTP server for SSE transport using the MCP SDK's
   // StreamableHTTPServerTransport, which provides full MCP over HTTP POST.
@@ -85,6 +99,7 @@ async function startSSE(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  warnIfMissingToken();
   if (MCP_TRANSPORT === "sse") {
     await startSSE();
   } else {

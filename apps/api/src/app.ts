@@ -16,6 +16,7 @@ import Fastify from "fastify";
 import { prisma } from "./db.js";
 import { getBusinessMetricsRegistry } from "./lib/business-metrics.js";
 import { errorHandler } from "./lib/error-handler.js";
+import { hashToken, PAT_PREFIX } from "./lib/personal-access-token.js";
 import { adminRbacPlugin } from "./plugins/admin-rbac.js";
 import { adminSessionGuard } from "./plugins/admin-session-guard.js";
 import { authPlugin } from "./plugins/auth.js";
@@ -30,7 +31,9 @@ import { adminNotificationsRoutes } from "./routes/admin/notifications.js";
 import { adminProgramsRoutes } from "./routes/admin/programs.js";
 import { adminRewardsRoutes } from "./routes/admin/rewards.js";
 import { adminSegmentsRoutes } from "./routes/admin/segments.js";
+import { adminStatsRoutes } from "./routes/admin/stats.js";
 import { adminTiersRoutes } from "./routes/admin/tiers.js";
+import { adminTokensRoutes } from "./routes/admin/tokens.js";
 import { authRoutes } from "./routes/auth.js";
 import { coalitionRoutes } from "./routes/coalition.js";
 import { couponsRoutes } from "./routes/coupons.js";
@@ -146,12 +149,24 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
     maxAge: 86400,
   });
 
-  // Rate limiting — global default
+  // Rate limiting — global default, keyed per credential so one token (or API
+  // key) cannot be used to bypass the limit of another.
   await app.register(rateLimit, {
     max: 1000,
     timeWindow: "1 minute",
     keyGenerator: (req) => {
-      return (req.headers["x-api-key"] as string | undefined) ?? req.ip;
+      const apiKey = req.headers["x-api-key"] as string | undefined;
+      if (apiKey) {
+        return apiKey;
+      }
+      const authorization = req.headers.authorization;
+      const bearer = authorization?.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : "";
+      if (bearer.startsWith(PAT_PREFIX)) {
+        return hashToken(bearer);
+      }
+      return req.ip;
     },
   });
 
@@ -202,8 +217,10 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   await app.register(adminCampaignsRoutes, { prefix: "/api/v1" });
   await app.register(statsRoutes, { prefix: "/api/v1" });
   await app.register(adminSegmentsRoutes, { prefix: "/api/v1" });
+  await app.register(adminStatsRoutes, { prefix: "/api/v1" });
   await app.register(adminBadgesRoutes, { prefix: "/api/v1" });
   await app.register(adminTiersRoutes, { prefix: "/api/v1" });
+  await app.register(adminTokensRoutes, { prefix: "/api/v1" });
   await app.register(adminCouponsRoutes, { prefix: "/api/v1" });
   await app.register(adminGiftCardsRoutes, { prefix: "/api/v1" });
   await app.register(adminNotificationsRoutes, { prefix: "/api/v1" });

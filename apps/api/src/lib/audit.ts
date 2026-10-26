@@ -5,6 +5,8 @@ import { prisma } from "../db.js";
 export interface AuditActor {
   type: AuditActorType;
   id: string;
+  /** Set when the actor is a personal access token; recorded as metadata.patId. */
+  patId?: string;
 }
 
 export async function audit(
@@ -14,7 +16,9 @@ export async function audit(
   entityType: string,
   entityId: string | null,
   diff: Record<string, unknown> = {},
+  metadata: Record<string, unknown> = {},
 ): Promise<void> {
+  const metadataWithPat = actor.patId ? { patId: actor.patId, ...metadata } : metadata;
   await prisma.auditLog.create({
     data: {
       programId,
@@ -25,6 +29,7 @@ export async function audit(
       entityType,
       entityId,
       diff: diff as never,
+      metadata: metadataWithPat as never,
     },
   });
 }

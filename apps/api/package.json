@@ -14,7 +14,10 @@
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "admin:create": "tsx src/admin-create.ts"
+    "admin:create": "tsx src/admin-create.ts",
+    "admin:token:create": "tsx src/admin-token.ts create",
+    "admin:token:list": "tsx src/admin-token.ts list",
+    "admin:token:revoke": "tsx src/admin-token.ts revoke"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

@@ -8,15 +8,20 @@ export interface RequestOptions {
  * Thin HTTP executor for the LoyaltyOS REST API. It does not know about
  * individual tools — each tool builds its own path, query, and body from the
  * shared `@loyaltyos/api-contract` schemas, then calls `get`/`post` here.
+ *
+ * Authentication uses a personal access token (`LOYALTYOS_TOKEN`) sent as
+ * `Authorization: Bearer <token>`. The API resolves the token to an admin
+ * session with an effective role, so every tool — including the member reads —
+ * inherits that admin's program scope and permissions.
  */
 export class LoyaltyOSClient {
   private readonly http: AxiosInstance;
 
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, token: string) {
     this.http = axios.create({
       baseURL: baseUrl,
       headers: {
-        "X-API-Key": apiKey,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       timeout: 15_000,
