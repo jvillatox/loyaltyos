@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Personal access tokens (PATs).** Admins mint `lopat_` bearer tokens from the
+  admin UI (_API tokens_) or the CLI (`admin:token:create` / `admin:token:list` /
+  `admin:token:revoke`). A token is shown exactly once, stored only as a SHA-256
+  hash, expires within 90 days, and its effective role is always capped by its
+  owner's current role. Token-authenticated requests cannot mint, list, or revoke
+  tokens, nor edit the owner's profile. (#48)
+- **Functional MCP server.** The MCP server authenticates with a personal access
+  token (`LOYALTYOS_TOKEN`) instead of an internal API key, and gains the
+  `analytics_dashboard` and `analytics_campaign` tools backed by the new
+  `GET /admin/stats/dashboard` and `GET /admin/campaigns/:id/stats` endpoints. (#48)
+
 ## [1.2.0] - 2026-10-21
 
 ### Added
@@ -52,7 +67,6 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 
 ### Known limitations
 
-- **MCP server:** its admin tools call routes that do not exist in the API (#48).
 - Points ledger concurrency fixes from #29 are not included in this release.
 
 ## [1.1.0] - 2026-10-18

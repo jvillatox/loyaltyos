@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { LoyaltyOSClient } from "./client.js";
 import { registerResources } from "./resources.js";
 import {
+  registerAnalyticsTools,
   registerCampaignTools,
   registerCouponTools,
   registerGiftCardTools,
@@ -19,6 +20,7 @@ export function createMcpServer(client: LoyaltyOSClient): McpServer {
   });
 
   registerMemberTools(server, client);
+  registerAnalyticsTools(server, client);
   registerCampaignTools(server, client);
   registerSegmentTools(server, client);
   registerCouponTools(server, client);

@@ -4,6 +4,7 @@ import {
   Award,
   BarChart3,
   Gift,
+  KeyRound,
   LayoutDashboard,
   Link2,
   LogOut,
@@ -57,6 +58,7 @@ export function Sidebar(): JSX.Element {
     { to: "/rewards", label: t("navigation.rewards"), icon: Gift, permission: "read" },
     { to: "/coalition", label: t("navigation.coalition"), icon: Link2, permission: "read" },
     { to: "/giftcards", label: t("navigation.giftcards"), icon: Gift, permission: "read" },
+    { to: "/api-tokens", label: t("navigation.apiTokens"), icon: KeyRound, permission: "read" },
   ];
 
   const role: AdminRole | null = admin && isAdminRole(admin.role) ? admin.role : null;

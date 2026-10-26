@@ -4,6 +4,7 @@ import { Route, Routes } from "react-router-dom";
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequirePermission } from "@/components/auth/require-permission";
 import { AppLayout } from "@/components/layout/app-layout";
+import { ApiTokensPage } from "@/pages/api-tokens";
 import { BadgeEditorPage } from "@/pages/badge-editor";
 import { BadgesListPage } from "@/pages/badges-list";
 import { CampaignBuilderPage } from "@/pages/campaign-builder";
@@ -44,6 +45,7 @@ export function App(): JSX.Element {
       >
         <Route index element={<DashboardPage />} />
         <Route path="/forbidden" element={<ForbiddenPage />} />
+        <Route path="/api-tokens" element={<ApiTokensPage />} />
         <Route path="/members" element={<MembersListPage />} />
         <Route path="/members/:id" element={<MemberDetailPage />} />
         <Route path="/campaigns" element={<CampaignsListPage />} />

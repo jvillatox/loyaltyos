@@ -43,6 +43,12 @@ beforeAll(() => {
 });
 
 describe("MCP tool ↔ API contract", () => {
+  it("registers exactly 21 tools including the analytics tools", () => {
+    expect(toolNames).toHaveLength(21);
+    expect(toolNames).toContain("analytics_dashboard");
+    expect(toolNames).toContain("analytics_campaign");
+  });
+
   it("every tool is registered in the contract registry (and vice versa)", () => {
     expect(toolNames.slice().sort()).toEqual(
       contracts

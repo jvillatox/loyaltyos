@@ -685,9 +685,27 @@ model AdminUser {
   auditLogs    AuditLog[]
   sessions     AdminSession[]
   giftCardBatches GiftCardBatch[]
+  personalAccessTokens PersonalAccessToken[]
 
   @@index([programId])
   @@index([email])
+}
+
+model PersonalAccessToken {
+  id          String    @id @default(cuid())
+  adminUserId String
+  name        String
+  tokenHash   String    @unique
+  prefix      String
+  role        AdminRole
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
 }
 
 model Session {
@@ -781,6 +799,7 @@ model AuditLog {
   entityType  String
   entityId    String?
   diff        Json?           @default("{}")
+  metadata    Json?           @default("{}")
   reason      String?
   ipAddress   String?
   createdAt   DateTime        @default(now())

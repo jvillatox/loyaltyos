@@ -68,6 +68,7 @@ export const ADMIN_ROUTE_ENTRIES: readonly (readonly [HttpMethod, string, Permis
   ["POST", "/api/v1/admin/campaigns", "campaigns.write"],
   ["GET", "/api/v1/admin/campaigns", "read"],
   ["GET", "/api/v1/admin/campaigns/:id", "read"],
+  ["GET", "/api/v1/admin/campaigns/:id/stats", "read"],
   ["PATCH", "/api/v1/admin/campaigns/:id", "campaigns.write"],
   ["DELETE", "/api/v1/admin/campaigns/:id", "campaigns.write"],
   ["POST", "/api/v1/admin/campaigns/estimate", "read"],
@@ -115,6 +116,8 @@ export const ADMIN_ROUTE_ENTRIES: readonly (readonly [HttpMethod, string, Permis
   ["GET", "/api/v1/admin/giftcards/metrics", "read"],
   // ai companion
   ["POST", "/api/v1/admin/ai/chat", "ai.chat"],
+  // stats / analytics
+  ["GET", "/api/v1/admin/stats/dashboard", "read"],
 ];
 
 /**
@@ -167,4 +170,9 @@ export const ADMIN_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set([
   "/api/v1/admin/me",
   "/api/v1/admin/login",
   "/api/v1/admin/logout",
+  // Personal access tokens are self-service: each admin manages their own.
+  // The route handler additionally rejects token-authenticated requests, so a
+  // token can never mint or revoke another token.
+  "/api/v1/admin/tokens",
+  "/api/v1/admin/tokens/:id",
 ]);

@@ -70,3 +70,22 @@ export function can(role: AdminRole | null | undefined, permission: Permission):
 export function isAdminRole(value: string): value is AdminRole {
   return (ADMIN_ROLES as readonly string[]).includes(value);
 }
+
+const ADMIN_ROLE_RANK: Record<AdminRole, number> = {
+  ANALYST: 1,
+  OPERATOR: 2,
+  SUPER_ADMIN: 3,
+};
+
+/** Ordinal weight of a role, used to compute the effective (least) role. */
+export function adminRoleRank(role: AdminRole): number {
+  return ADMIN_ROLE_RANK[role];
+}
+
+/**
+ * The effective role a token may act with: never higher than its owner's
+ * current role, and never higher than the role stamped on the token itself.
+ */
+export function minAdminRole(a: AdminRole, b: AdminRole): AdminRole {
+  return adminRoleRank(a) <= adminRoleRank(b) ? a : b;
+}
