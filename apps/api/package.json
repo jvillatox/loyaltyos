@@ -35,7 +35,6 @@
     "@loyaltyos/coupons": "workspace:*",
     "@loyaltyos/giftcards": "workspace:*",
     "@loyaltyos/i18n": "workspace:*",
-    "@loyaltyos/mcp-server": "workspace:*",
     "@loyaltyos/notifications": "workspace:*",
     "@loyaltyos/permissions": "workspace:*",
     "@loyaltyos/rewards": "workspace:*",
@@ -54,6 +53,7 @@
   "devDependencies": {
     "@loyaltyos/config-eslint": "workspace:*",
     "@loyaltyos/config-prettier": "workspace:*",
+    "@loyaltyos/mcp-server": "workspace:*",
     "@types/supertest": "^6.0.2",
     "csv-stringify": "^6.5.0",
     "esbuild": "^0.25.12",
