@@ -4,7 +4,11 @@ import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createInMemoryMcp, LoyaltyOSClient, type InMemoryMcp } from "@loyaltyos/mcp-server";
+import {
+  createInMemoryMcp,
+  LoyaltyOSClient,
+  type InMemoryMcp,
+} from "@loyaltyos/mcp-server/testing";
 
 import { buildApp } from "../app.js";
 import { generateToken } from "../lib/personal-access-token.js";
@@ -244,11 +248,27 @@ describe("MCP mutation tools enforce RBAC", () => {
     });
   }
 
-  it("every mutation is denied (403) for ANALYST", async () => {
+  it("every mutation is denied (403 FORBIDDEN) for ANALYST", async () => {
     for (const tool of WRITE_TOOLS) {
       const res = await mcps.ANALYST.callTool(tool.name, tool.args("ANALYST"));
       expect(res.isError, `${tool.name} should be denied for ANALYST`).toBe(true);
+      expect(res.text, `${tool.name} should surface FORBIDDEN, got: ${res.text}`).toContain(
+        "FORBIDDEN",
+      );
     }
+  });
+
+  it("ANALYST denials write nothing to the database", async () => {
+    const [campaigns, coupons, rewards, segments] = await Promise.all([
+      prisma.campaign.findMany({ where: { programId, name: { contains: "ANL" } } }),
+      prisma.coupon.findMany({ where: { programId, code: { contains: "ANL" } } }),
+      prisma.reward.findMany({ where: { programId, name: { contains: "ANL" } } }),
+      prisma.segment.findMany({ where: { programId, name: { contains: "ANL" } } }),
+    ]);
+    expect(campaigns).toHaveLength(0);
+    expect(coupons).toHaveLength(0);
+    expect(rewards).toHaveLength(0);
+    expect(segments).toHaveLength(0);
   });
 });
 
@@ -258,14 +278,16 @@ describe("webhooks_list is SUPER_ADMIN-only", () => {
     expect(res.isError, res.text).toBe(false);
   });
 
-  it("is denied for OPERATOR", async () => {
+  it("is denied (403 FORBIDDEN) for OPERATOR", async () => {
     const res = await mcps.OPERATOR.callTool("webhooks_list", {});
     expect(res.isError).toBe(true);
+    expect(res.text).toContain("FORBIDDEN");
   });
 
-  it("is denied for ANALYST", async () => {
+  it("is denied (403 FORBIDDEN) for ANALYST", async () => {
     const res = await mcps.ANALYST.callTool("webhooks_list", {});
     expect(res.isError).toBe(true);
+    expect(res.text).toContain("FORBIDDEN");
   });
 });
 

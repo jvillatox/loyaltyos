@@ -258,9 +258,6 @@ importers:
       '@loyaltyos/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
-      '@loyaltyos/mcp-server':
-        specifier: workspace:*
-        version: link:../mcp-server
       '@loyaltyos/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
@@ -310,6 +307,9 @@ importers:
       '@loyaltyos/config-prettier':
         specifier: workspace:*
         version: link:../../packages/config-prettier
+      '@loyaltyos/mcp-server':
+        specifier: workspace:*
+        version: link:../mcp-server
       '@types/supertest':
         specifier: ^6.0.2
         version: 6.0.3
