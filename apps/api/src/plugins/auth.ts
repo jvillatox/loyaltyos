@@ -150,10 +150,14 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
         throw new LoyaltyError("FORBIDDEN", 403);
       }
 
-      await prisma.personalAccessToken.update({
-        where: { id: token.id },
-        data: { lastUsedAt: new Date() },
-      });
+      // Avoid a write on every request: refresh lastUsedAt at most once a minute.
+      const now = new Date();
+      if (!token.lastUsedAt || now.getTime() - token.lastUsedAt.getTime() > 60_000) {
+        await prisma.personalAccessToken.update({
+          where: { id: token.id },
+          data: { lastUsedAt: now },
+        });
+      }
 
       // The effective role is capped by the owner's current role, so demoting
       // (or deactivating) an admin immediately degrades their tokens.

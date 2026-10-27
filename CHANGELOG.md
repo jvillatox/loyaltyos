@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `analytics_dashboard` and `analytics_campaign` tools backed by the new
   `GET /admin/stats/dashboard` and `GET /admin/campaigns/:id/stats` endpoints. (#48)
 
+### Security
+
+- **No token material leaks from `/admin/tokens`.** `POST`, `GET`, and `DELETE`
+  responses never include `tokenHash`; `DELETE` returns only `{ id, revoked }`
+  (idempotent on re-revoke), and a token id owned by another program returns
+  `404` rather than `403` so token existence is not disclosed. (#48)
+
 ## [1.2.0] - 2026-10-21
 
 ### Added
