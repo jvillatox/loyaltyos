@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "./src/testing.ts",
+  "types": "./src/testing.ts",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:sse": "MCP_TRANSPORT=sse tsx watch src/index.ts",

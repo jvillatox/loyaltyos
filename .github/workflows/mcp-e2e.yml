@@ -1,0 +1,94 @@
+name: MCP E2E
+
+on:
+  workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mcp-server/**"
+      - "packages/api-contract/**"
+      - "apps/api/src/routes/**"
+      - "apps/api/src/__tests__/mcp.e2e.test.ts"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/mcp-server/**"
+      - "packages/api-contract/**"
+      - "apps/api/src/routes/**"
+      - "apps/api/src/__tests__/mcp.e2e.test.ts"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcp-e2e:
+    name: MCP real-API E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: loyaltyos
+          POSTGRES_PASSWORD: loyaltyos
+          POSTGRES_DB: loyaltyos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-for-ci-at-least-32-chars
+      API_KEY_SALT: test-salt-for-ci
+      KMS_MASTER_KEY: 0000000000000000000000000000000000000000000000000000000000000001
+      GIFTCARD_HMAC_SECRET: test-giftcard-hmac-secret-for-ci
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @loyaltyos/api exec prisma generate
+
+      - name: Run migrations
+        run: pnpm --filter @loyaltyos/api exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+
+      - name: Seed database
+        run: pnpm --filter @loyaltyos/api exec tsx prisma/seed.ts
+        env:
+          DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+
+      - name: Write .env for vitest
+        run: |
+          echo "DATABASE_URL=$DATABASE_URL" > apps/api/.env
+          echo "REDIS_URL=$REDIS_URL" >> apps/api/.env
+          echo "--- apps/api/.env written ($(wc -c < apps/api/.env) bytes) ---"
+
+      - name: Run MCP E2E
+        run: pnpm --filter @loyaltyos/api test:mcp
