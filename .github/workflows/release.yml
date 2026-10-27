@@ -78,11 +78,15 @@ jobs:
 
       - run: pnpm test
 
+  mcp-e2e:
+    name: MCP E2E
+    uses: ./.github/workflows/mcp-e2e.yml
+
   docker:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: test
+    needs: [test, mcp-e2e]
     strategy:
       matrix:
         image:
@@ -129,7 +133,7 @@ jobs:
     name: Publish widget to npm
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: test
+    needs: [test, mcp-e2e]
     # Best-effort publish: only attempt it when an npm token is configured.
     # The @loyaltyos scope is not registered on npm yet, so a fresh scope
     # returns E404 and must not fail the release. To enable publishing, claim
@@ -162,7 +166,7 @@ jobs:
     name: Helm Lint
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: test
+    needs: [test, mcp-e2e]
 
     steps:
       - uses: actions/checkout@v7

@@ -258,6 +258,9 @@ importers:
       '@loyaltyos/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@loyaltyos/mcp-server':
+        specifier: workspace:*
+        version: link:../mcp-server
       '@loyaltyos/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
