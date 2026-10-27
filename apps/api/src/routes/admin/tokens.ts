@@ -109,22 +109,26 @@ export function adminTokensRoutes(app: FastifyInstance, _opts: unknown, done: ()
 
     const token = await prisma.personalAccessToken.findUnique({
       where: { id },
-      include: { adminUser: { select: { programId: true } } },
+      select: {
+        adminUserId: true,
+        revokedAt: true,
+        adminUser: { select: { programId: true } },
+      },
     });
 
-    if (!token) {
+    // A token from another program is indistinguishable from one that does not
+    // exist, so a caller cannot probe for the existence of other tenants' tokens.
+    if (!token || token.adminUser.programId !== request.programId) {
       throw new LoyaltyError("NOT_FOUND", 404);
     }
 
-    const canRevoke =
-      token.adminUserId === adminId ||
-      (ownerRole === "SUPER_ADMIN" && token.adminUser.programId === request.programId);
+    const canRevoke = token.adminUserId === adminId || ownerRole === "SUPER_ADMIN";
     if (!canRevoke) {
       throw new LoyaltyError("FORBIDDEN", 403);
     }
 
     if (token.revokedAt) {
-      return reply.send({ data: { ...token, revoked: false } });
+      return reply.send({ data: { id, revoked: false } });
     }
 
     await prisma.personalAccessToken.update({
