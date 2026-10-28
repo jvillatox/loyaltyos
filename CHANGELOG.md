@@ -15,12 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   admin UI (_API tokens_) or the CLI (`admin:token:create` / `admin:token:list` /
   `admin:token:revoke`). A token is shown exactly once, stored only as a SHA-256
   hash, expires within 90 days, and its effective role is always capped by its
-  owner's current role. Token-authenticated requests cannot mint, list, or revoke
-  tokens, nor edit the owner's profile. (#48)
+  owner's current role. (#48)
 - **Functional MCP server.** The MCP server authenticates with a personal access
   token (`LOYALTYOS_TOKEN`) instead of an internal API key, and gains the
   `analytics_dashboard` and `analytics_campaign` tools backed by the new
   `GET /admin/stats/dashboard` and `GET /admin/campaigns/:id/stats` endpoints. (#48)
+
+### Fixed
+
+- MCP tools now target real `/api/v1` routes with the API's actual request
+  schemas, enforced by a contract test against the new `@loyaltyos/api-contract`
+  package (route manifest + shared Zod schemas). Previously several tools called
+  non-existent endpoints. (#48)
+
+### Removed
+
+- MCP tools that moved money or had no backing endpoint: `member_adjust_points`,
+  `giftcards_create_batch`, `giftcards_redeem`, `coalition_accumulate`,
+  `coalition_convert`, `coalition_balance`, `reward_redemption_stats`. (#48)
 
 ### Security
 
@@ -58,10 +70,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    }
    ```
 
+3. **Removed tools.** MCP clients relying on the removed tools must be updated;
+   points adjustments will return through a dedicated flow with audit and
+   per-role limits (#44).
+
 ### Known limitations
 
 - Points ledger concurrency fixes from #29 are not included in this release.
-- The `member_adjust_points` MCP tool remains disabled until #44.
+- Manual points adjustment is not available through the MCP or the admin API until #44.
 
 ## [1.2.0] - 2026-10-21
 
