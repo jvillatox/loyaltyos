@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-28
+
 ### Added
 
 - **Personal access tokens (PATs).** Admins mint `lopat_` bearer tokens from the
@@ -26,6 +28,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   responses never include `tokenHash`; `DELETE` returns only `{ id, revoked }`
   (idempotent on re-revoke), and a token id owned by another program returns
   `404` rather than `403` so token existence is not disclosed. (#48)
+- **Personal access tokens are least-privilege and rate-limited per token.** A
+  token cannot create, list, or revoke other tokens, nor modify `/admin/me`, and
+  requests authenticated by a PAT are rate-limited per token rather than per IP
+  or per session. (#48)
+
+### Upgrade notes
+
+1. Run the new database migration (`prisma migrate deploy`): it adds the
+   `PersonalAccessToken` table.
+2. **MCP configuration changed.** The MCP server no longer accepts an internal API
+   key; set `LOYALTYOS_TOKEN` to a personal access token created in **Admin →
+   API Tokens** (or via `admin:token:create`). For example, in Claude Desktop:
+
+   ```json
+   {
+     "mcpServers": {
+       "loyaltyos": {
+         "command": "node",
+         "args": ["apps/mcp-server/dist/src/index.js"],
+         "cwd": "/path/to/loyaltyos",
+         "env": {
+           "MCP_TRANSPORT": "stdio",
+           "LOYALTYOS_API_URL": "http://localhost:3002",
+           "LOYALTYOS_TOKEN": "lopat_your-token-here"
+         }
+       }
+     }
+   }
+   ```
+
+### Known limitations
+
+- Points ledger concurrency fixes from #29 are not included in this release.
+- The `member_adjust_points` MCP tool remains disabled until #44.
 
 ## [1.2.0] - 2026-10-21
 
@@ -270,3 +306,5 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 - **Seed script** — demo program with 12 members, 3 tiers, 2 campaigns, 2 coupons, 3 rewards, 2 badges, and realistic point transactions.
 - **Widget scaffold (`apps/widget`)** — Vite + Lit project for embeddable loyalty widget (UI coming in Phase 3).
 - **Documentation** — professional README with quick start, architecture overview, API reference, and roadmap. CONTRIBUTING.md with conventions and pull request checklist.
+
+[1.3.0]: https://github.com/jvillatox/loyaltyos/compare/v1.2.0...v1.3.0
