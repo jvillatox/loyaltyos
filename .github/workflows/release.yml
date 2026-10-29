@@ -252,28 +252,45 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
-      - name: Generate release body
+      - name: Generate release body from CHANGELOG
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          SECTION="$(awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (in_section) exit
+              if (index($0, "## [" ver "]") == 1) { in_section=1; print; next }
+              next
+            }
+            in_section { print }
+          ' CHANGELOG.md)"
+
+          if [ -z "$SECTION" ]; then
+            echo "::error::CHANGELOG.md has no section '## [$VERSION]'; refusing to publish a release without notes."
+            exit 1
+          fi
+
+          BODY_CONTENT="$(printf '%s\n' "$SECTION" | sed '1d' | tr -d '[:space:]')"
+          if [ -z "$BODY_CONTENT" ]; then
+            echo "::error::CHANGELOG.md section '## [$VERSION]' is empty; refusing to publish a release without notes."
+            exit 1
+          fi
+
           {
-            echo "## Changes"
-            echo
-            git log $(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD \
-              --pretty=format:"* %s (%h)" --no-merges
+            printf '%s\n' "$SECTION"
             echo
             echo "## Docker Images"
             echo
-            echo "- \`ghcr.io/${{ github.repository_owner }}/loyaltyos-api:${{ github.ref_name }}\`"
-            echo "- \`ghcr.io/${{ github.repository_owner }}/loyaltyos-admin:${{ github.ref_name }}\`"
-            echo "- \`ghcr.io/${{ github.repository_owner }}/loyaltyos-portal:${{ github.ref_name }}\`"
+            echo "- \`ghcr.io/${{ github.repository_owner }}/loyaltyos-api:${VERSION}\`"
+            echo "- \`ghcr.io/${{ github.repository_owner }}/loyaltyos-admin:${VERSION}\`"
+            echo "- \`ghcr.io/${{ github.repository_owner }}/loyaltyos-portal:${VERSION}\`"
             echo
             echo "## Deploy"
             echo
             echo '```bash'
             echo "helm repo add loyaltyos https://jvillatox.github.io/loyaltyos/helm"
-            echo "helm upgrade --install loyaltyos loyaltyos/loyaltyos --version ${{ github.ref_name }}"
+            echo "helm upgrade --install loyaltyos loyaltyos/loyaltyos --version ${VERSION}"
             echo '```'
           } > /tmp/release-body.md
 
