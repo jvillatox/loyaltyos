@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
+import { audit } from "../lib/audit.js";
 import { adaptPointsMetrics, getBusinessMetrics } from "../lib/business-metrics.js";
 import { LoyaltyError } from "../lib/errors.js";
 import { notificationsService } from "../lib/notifications-setup.js";
@@ -270,9 +271,16 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         programId: request.programId,
         amount: body.amount,
         reason: body.reason,
-        adminUserId: "admin", // Will be replaced by real auth in Prompt 6
+        adminUserId: request.adminId ?? request.actor.id,
         idempotencyKey,
       });
+
+      // Record the real actor (admin session, PAT or API key) in the audit log.
+      await audit(request.programId, request.actor, "ADJUST_POINTS", "member", id, {
+        amount: body.amount,
+        reason: body.reason,
+      });
+
       return reply.status(201).send({ data: result });
     },
   );
