@@ -4,25 +4,27 @@ import { hashPassword } from "@loyaltyos/core";
 import { ADMIN_ROLES } from "@loyaltyos/permissions";
 import type { AdminRole } from "@loyaltyos/permissions";
 import type { PrismaClient } from "@prisma/client";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, HTTPMethods } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
 import { coalitionService } from "../lib/coalition-setup.js";
 import { PRINCIPALS, routePolicy } from "../lib/route-policy.js";
-import type { Principal } from "../lib/route-policy.js";
+import type { PolicyEntry, Principal } from "../lib/route-policy.js";
 
 // M0 point 1 — deny-by-default route policy for non-/admin routes.
 //
 // The auth plugin resolves a principal (CLIENT / MEMBER / SERVER / admin role)
 // but nothing enforces its scope on non-admin routes, so a CLIENT API key or a
-// member session can call any endpoint. These tests encode the target policy:
+// member session can call any endpoint. `routePolicy` (enforced by the
+// route-policy preHandler plugin) maps every non-admin route to the principals
+// allowed to reach it, plus a "SELF" marker for member-scoped `:id` routes.
 //
-//   anonymous            → 401 (auth plugin, already enforced)
-//   CLIENT               → read-only rewards catalog (GET /rewards, GET /rewards/:id)
-//   MEMBER               → self-only (/members/me*) + catalog + redeem self
-//   SERVER               → everything
-//   ANALYST              → read-only (GET only on non-admin routes)
+//   anonymous              → 401 (auth plugin)
+//   CLIENT                 → read-only rewards catalog (GET /rewards, GET /rewards/:id)
+//   MEMBER                 → self-only (/members/me*) + catalog + redeem self + own :id
+//   SERVER                 → everything
+//   ANALYST                → read-only (GET only on non-admin routes)
 //   OPERATOR / SUPER_ADMIN → everything
 //
 // Expected to fail today (red): `routePolicy` returns [] and no hook enforces it.
@@ -42,9 +44,11 @@ let memberCookie = "";
 
 const adminCookies = {} as Record<AdminRole, string>;
 
-// ── Reference policy (the point-1 spec this test asserts against) ──────────
+// ── Principal sets ──────────────────────────────────────────────────────────
 
-const CATALOG: readonly Principal[] = [
+type Principal2 = Exclude<Principal, "anonymous">;
+
+const P_ALL: readonly Principal2[] = [
   "CLIENT",
   "MEMBER",
   "SERVER",
@@ -52,34 +56,172 @@ const CATALOG: readonly Principal[] = [
   "OPERATOR",
   "SUPER_ADMIN",
 ];
-const MEMBER_SELF: readonly Principal[] = [
+const P_MEMBER_SELF: readonly Principal2[] = [
   "MEMBER",
   "SERVER",
   "ANALYST",
   "OPERATOR",
   "SUPER_ADMIN",
 ];
-const READ: readonly Principal[] = ["SERVER", "ANALYST", "OPERATOR", "SUPER_ADMIN"];
-const MUTATE: readonly Principal[] = ["SERVER", "OPERATOR", "SUPER_ADMIN"];
-const REDEEM: readonly Principal[] = ["MEMBER", "SERVER", "OPERATOR", "SUPER_ADMIN"];
+const P_READ: readonly Principal2[] = ["SERVER", "ANALYST", "OPERATOR", "SUPER_ADMIN"];
+const P_MUTATE: readonly Principal2[] = ["SERVER", "OPERATOR", "SUPER_ADMIN"];
+const P_REDEEM: readonly Principal2[] = ["MEMBER", "SERVER", "OPERATOR", "SUPER_ADMIN"];
 
-const MEMBER_SELF_RE = /^\/api\/v1\/members\/me(?:\/|$)/;
+const NON_ANONYMOUS = PRINCIPALS.filter((p): p is Principal2 => p !== "anonymous");
 
-/** Principals (excluding anonymous) that the point-1 policy allows on `method url`. */
-function allowedPrincipals(method: string, url: string): readonly Principal[] {
-  const m = method.toUpperCase();
-  if (MEMBER_SELF_RE.test(url)) return MEMBER_SELF;
-  if (m === "GET" && (url === "/api/v1/rewards" || url === "/api/v1/rewards/:id")) {
-    return CATALOG;
-  }
-  if (url === "/api/v1/rewards/:id/redeem") return REDEEM;
-  if (m === "GET") return READ;
-  return MUTATE;
-}
+// ── Declarative route table (the point-1 spec) ──────────────────────────────
+//
+// `allow` lists the principals permitted to reach the route directly. `self`
+// marks a member-scoped route where MEMBER may additionally reach it only when
+// the `:id` path param equals their own memberId.
 
-const NON_ANONYMOUS = PRINCIPALS.filter((p) => p !== "anonymous");
+type RouteEntry = {
+  method: HTTPMethods;
+  url: string;
+  allow: readonly Principal2[];
+  self?: boolean;
+  idem?: boolean;
+  body?: (caseId: string) => Record<string, unknown>;
+};
 
-// ── Route inventory (derived from the onRoute hook, not hand-written) ───────
+const ROUTES: readonly RouteEntry[] = [
+  // Members
+  {
+    method: "POST",
+    url: "/api/v1/members",
+    allow: P_MUTATE,
+    body: (k) => ({ email: `m0p-mx-${k}@loyaltyos.dev` }),
+  },
+  { method: "GET", url: "/api/v1/members", allow: P_READ },
+  { method: "GET", url: "/api/v1/members/me", allow: P_MEMBER_SELF },
+  {
+    method: "PATCH",
+    url: "/api/v1/members/me",
+    allow: P_MEMBER_SELF,
+    body: () => ({ locale: "en-US" }),
+  },
+  { method: "GET", url: "/api/v1/members/:id", allow: P_READ, self: true },
+  {
+    method: "PATCH",
+    url: "/api/v1/members/:id",
+    allow: P_MUTATE,
+    body: () => ({ firstName: "Matrix" }),
+  },
+  { method: "GET", url: "/api/v1/members/me/balance", allow: P_MEMBER_SELF },
+  { method: "GET", url: "/api/v1/members/me/transactions", allow: P_MEMBER_SELF },
+  { method: "GET", url: "/api/v1/members/me/badges", allow: P_MEMBER_SELF },
+  { method: "GET", url: "/api/v1/members/me/tier", allow: P_MEMBER_SELF },
+  { method: "GET", url: "/api/v1/members/:id/balance", allow: P_READ, self: true },
+  { method: "GET", url: "/api/v1/members/:id/transactions", allow: P_READ, self: true },
+  {
+    method: "POST",
+    url: "/api/v1/members/:id/adjust",
+    allow: P_MUTATE,
+    idem: true,
+    body: () => ({ amount: 10, reason: "test" }),
+  },
+  { method: "GET", url: "/api/v1/members/:id/badges", allow: P_READ, self: true },
+  { method: "GET", url: "/api/v1/members/:id/tier", allow: P_READ, self: true },
+  {
+    method: "POST",
+    url: "/api/v1/members/:id/devices",
+    allow: P_MUTATE,
+    self: true,
+    body: (k) => ({ token: `tok-${k}`, platform: "WEB" }),
+  },
+  { method: "DELETE", url: "/api/v1/members/:id/devices/:deviceId", allow: P_MUTATE, self: true },
+  { method: "GET", url: "/api/v1/members/:id/preferences", allow: P_READ, self: true },
+  {
+    method: "PATCH",
+    url: "/api/v1/members/:id/preferences",
+    allow: P_MUTATE,
+    self: true,
+    body: () => ({ channel: "EMAIL", optedIn: true }),
+  },
+
+  // Events
+  {
+    method: "POST",
+    url: "/api/v1/events",
+    allow: P_MUTATE,
+    idem: true,
+    body: () => ({ type: "page_view" }),
+  },
+
+  // Coupons
+  {
+    method: "POST",
+    url: "/api/v1/coupons/validate",
+    allow: P_MUTATE,
+    body: () => ({ code: "NOPE", memberId }),
+  },
+  {
+    method: "POST",
+    url: "/api/v1/coupons/redeem",
+    allow: P_MUTATE,
+    body: () => ({ code: "NOPE", memberId }),
+  },
+
+  // Gift cards
+  {
+    method: "POST",
+    url: "/api/v1/giftcards/validate",
+    allow: P_MUTATE,
+    body: () => ({ code: "NOPE" }),
+  },
+  {
+    method: "POST",
+    url: "/api/v1/giftcards/redeem",
+    allow: P_MUTATE,
+    idem: true,
+    body: () => ({ code: "NOPE", amount: 10, memberId }),
+  },
+
+  // Coalition
+  {
+    method: "POST",
+    url: "/api/v1/coalition/accumulate",
+    allow: P_MUTATE,
+    idem: true,
+    body: (k) => ({ memberId, externalMemberRef: "ext", points: 10, txRef: `tx-${k}` }),
+  },
+  {
+    method: "POST",
+    url: "/api/v1/coalition/redeem",
+    allow: P_MUTATE,
+    idem: true,
+    body: (k) => ({ memberId, externalMemberRef: "ext", points: 10, txRef: `tx-${k}` }),
+  },
+  {
+    method: "POST",
+    url: "/api/v1/coalition/convert",
+    allow: P_MUTATE,
+    idem: true,
+    body: (k) => ({ memberId, externalMemberRef: "ext", ownPoints: 10, txRef: `tx-${k}` }),
+  },
+  {
+    method: "POST",
+    url: "/api/v1/coalition/reverse",
+    allow: P_MUTATE,
+    idem: true,
+    body: (k) => ({ txRef: `tx-${k}`, reason: "test" }),
+  },
+  { method: "GET", url: "/api/v1/members/:id/coalition/balance", allow: P_READ, self: true },
+  { method: "GET", url: "/api/v1/members/:id/coalition/history", allow: P_READ, self: true },
+
+  // Rewards
+  { method: "GET", url: "/api/v1/rewards", allow: P_ALL },
+  { method: "GET", url: "/api/v1/rewards/:id", allow: P_ALL },
+  {
+    method: "POST",
+    url: "/api/v1/rewards/:id/redeem",
+    allow: P_REDEEM,
+    body: (k) => ({ rewardId, memberId, idempotencyKey: `rd-${k}` }),
+  },
+
+  // Stats
+  { method: "GET", url: "/api/v1/stats/dashboard", allow: P_READ },
+];
 
 const IN_SCOPE_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
@@ -158,16 +300,21 @@ beforeAll(async () => {
   });
   rewardId = reward.id;
 
-  // Balance so a successful redeem is possible (attack-proof test).
+  // Ample balance so the matrix's redeem cases (and the foreign-memberId test)
+  // can exercise the deduction path without draining the account to zero.
   await prisma.pointAccount.create({
-    data: { memberId, programId, balance: 100, totalEarned: 100 },
+    data: { memberId, programId, balance: 10000, totalEarned: 10000 },
+  });
+  // The foreign member has a known balance so "saldo ajeno intacto" is provable.
+  await prisma.pointAccount.create({
+    data: { memberId: otherMemberId, programId, balance: 70, totalEarned: 70 },
   });
 
   for (const role of ADMIN_ROLES) {
     adminCookies[role] = await loginAs(role);
   }
 
-  // Mock coalition adapter so a CLIENT-key accumulate can actually succeed today.
+  // Mock coalition adapter so a SERVER-key accumulate can actually succeed.
   coalitionService.registerAdapter({
     name: "M0RP_ATTACK",
     capabilities: {
@@ -227,182 +374,202 @@ afterAll(async () => {
       await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
     }
   }
+  await prisma.auditLog.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.program.delete({ where: { id: programId } }).catch(() => {});
   await app.close();
 });
 
-const serverHeaders = () => ({ "x-api-key": serverKey, "x-program-id": programId });
-const clientHeaders = () => ({ "x-api-key": clientKey, "x-program-id": programId });
+// ── Contract: the declarative table matches reality ─────────────────────────
 
-// ── Contract: every registered non-admin route has a policy ─────────────────
-
-describe("M0 route policy — contract (derived from onRoute)", () => {
-  it("every in-scope route has a non-empty policy", () => {
-    const routes = app.routeCatalog.filter(isInScope);
-    expect(routes.length).toBeGreaterThan(0);
-    for (const r of routes) {
-      expect(
-        routePolicy(r.method, r.url),
-        `${r.method} ${r.url} has no policy entry`,
-      ).not.toHaveLength(0);
-    }
+describe("M0 route policy — contract", () => {
+  it("the declarative ROUTES table covers every in-scope route and nothing extra", () => {
+    const registered = app.routeCatalog
+      .filter(isInScope)
+      .map((r) => `${r.method} ${r.url}`)
+      .sort();
+    const declared = ROUTES.map((r) => `${r.method} ${r.url}`).sort();
+    expect(declared).toEqual(registered);
   });
 
-  it("route policy matches the point-1 matrix for every route × principal", () => {
-    const routes = app.routeCatalog.filter(isInScope);
-    let cases = 0;
-    for (const r of routes) {
-      const allowed = allowedPrincipals(r.method, r.url);
-      const actual = routePolicy(r.method, r.url);
-      for (const principal of NON_ANONYMOUS) {
-        cases += 1;
-        const shouldAllow = allowed.includes(principal);
-        expect(
-          actual.includes(principal),
-          `${r.method} ${r.url} should ${shouldAllow ? "allow" : "deny"} ${principal}`,
-        ).toBe(shouldAllow);
-      }
+  it("routePolicy matches the declarative allow/self table for every route", () => {
+    for (const route of ROUTES) {
+      const actual = routePolicy(route.method, route.url);
+      const expected: PolicyEntry[] = [...route.allow, ...(route.self ? (["SELF"] as const) : [])];
+      expect([...actual].sort(), `${route.method} ${route.url}`).toEqual([...expected].sort());
     }
-    expect(cases).toBe(routes.length * NON_ANONYMOUS.length);
   });
 });
 
-// ── Behavioral spot-checks ──────────────────────────────────────────────────
+// ── Behavioral matrix: one case per (route × principal) → code ──────────────
 
-describe("M0 route policy — CLIENT scope is read-only (rewards catalog)", () => {
-  it("GET /rewards → 200 (allowed)", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/rewards",
-      headers: clientHeaders(),
-    });
-    expect(res.statusCode).toBe(200);
-  });
+type MatrixCase = {
+  id: string;
+  name: string;
+  route: RouteEntry;
+  principal: Principal2;
+  idScope: "own" | "other" | "none";
+  allowed: boolean;
+};
 
-  it("GET /rewards/:id → 200 (allowed)", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/v1/rewards/${rewardId}`,
-      headers: clientHeaders(),
-    });
-    expect(res.statusCode).toBe(200);
-  });
+const matrixCases: MatrixCase[] = [];
+ROUTES.forEach((route, ri) => {
+  for (const principal of NON_ANONYMOUS) {
+    if (route.self && principal === "MEMBER") {
+      matrixCases.push({
+        id: `c${ri}-${principal}-own`,
+        name: `${route.method} ${route.url} × MEMBER (own id) → allowed`,
+        route,
+        principal,
+        idScope: "own",
+        allowed: true,
+      });
+      matrixCases.push({
+        id: `c${ri}-${principal}-other`,
+        name: `${route.method} ${route.url} × MEMBER (other id) → 403`,
+        route,
+        principal,
+        idScope: "other",
+        allowed: false,
+      });
+    } else {
+      // adminRbacPlugin enforces ANALYST read-only on non-admin routes, so a
+      // non-GET route is denied for ANALYST even where routePolicy lists it.
+      const allowed =
+        route.allow.includes(principal) && !(principal === "ANALYST" && route.method !== "GET");
+      matrixCases.push({
+        id: `c${ri}-${principal}`,
+        name: `${route.method} ${route.url} × ${principal} → ${allowed ? "allowed" : "403"}`,
+        route,
+        principal,
+        idScope: "none",
+        allowed,
+      });
+    }
+  }
+});
 
-  it("POST /events → 403", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/v1/events",
-      headers: { ...clientHeaders(), "idempotency-key": `m0p-ev-${suffix}` },
-      payload: { type: "page_view" },
-    });
-    expect(res.statusCode).toBe(403);
-  });
+function headersFor(c: MatrixCase): Record<string, string> {
+  const h: Record<string, string> = {};
+  switch (c.principal) {
+    case "CLIENT":
+      h["x-api-key"] = clientKey;
+      h["x-program-id"] = programId;
+      break;
+    case "SERVER":
+      h["x-api-key"] = serverKey;
+      h["x-program-id"] = programId;
+      break;
+    case "MEMBER":
+      h.cookie = memberCookie;
+      break;
+    default:
+      h.cookie = adminCookies[c.principal];
+  }
+  if (c.route.idem) h["idempotency-key"] = `m0p-${c.id}`;
+  return h;
+}
 
-  it("GET /members → 403", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/members",
-      headers: clientHeaders(),
-    });
-    expect(res.statusCode).toBe(403);
-  });
+async function injectCase(c: MatrixCase) {
+  let url = c.route.url;
 
-  it("POST /members/:id/adjust → 403", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/v1/members/${memberId}/adjust`,
-      headers: { ...clientHeaders(), "idempotency-key": `m0p-adj-${suffix}` },
-      payload: { amount: 10, reason: "test" },
+  // :deviceId needs a real device owned by the target member.
+  if (url.includes(":deviceId")) {
+    const targetId = c.idScope === "other" ? otherMemberId : memberId;
+    const dev = await prisma.memberDevice.create({
+      data: { memberId: targetId, programId, token: `dev-${c.id}`, platform: "WEB" },
     });
-    expect(res.statusCode).toBe(403);
-  });
+    url = url.replace(":deviceId", dev.id);
+  }
 
-  it("POST /rewards/:id/redeem → 403 (attack proof, was 201), balance unchanged", async () => {
-    const before = await prisma.pointAccount.findUnique({ where: { memberId } });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/v1/rewards/${rewardId}/redeem`,
-      headers: clientHeaders(),
-      payload: { rewardId, memberId, idempotencyKey: `m0p-rd-${suffix}` },
-    });
-    expect(res.statusCode).toBe(403);
-    const after = await prisma.pointAccount.findUnique({ where: { memberId } });
-    expect(after?.balance).toBe(before?.balance);
-  });
+  // :id is a reward id on reward routes, a member id everywhere else.
+  if (url.includes(":id")) {
+    if (url.startsWith("/api/v1/rewards/")) {
+      url = url.replace(":id", rewardId);
+    } else {
+      url = url.replace(":id", c.idScope === "other" ? otherMemberId : memberId);
+    }
+  }
 
-  it("POST /coalition/accumulate → 403 (attack proof, was 201), no account created", async () => {
-    const before = await prisma.coalitionAccount.count({ where: { memberId, programId } });
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/v1/coalition/accumulate",
-      headers: { ...clientHeaders(), "idempotency-key": `m0p-co-${suffix}` },
-      payload: {
-        memberId,
-        externalMemberRef: "ext-attack",
-        points: 10,
-        txRef: `tx-attack-${suffix}`,
-      },
-    });
-    expect(res.statusCode).toBe(403);
-    const after = await prisma.coalitionAccount.count({ where: { memberId, programId } });
-    expect(after).toBe(before);
+  const options: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    payload?: Record<string, unknown>;
+  } = { method: c.route.method, url, headers: headersFor(c) };
+  if (c.route.body) options.payload = c.route.body(c.id);
+
+  return app.inject(options);
+}
+
+describe("M0 route policy — behavioral matrix", () => {
+  it.each(matrixCases.map((c) => [c.name, c] as const))("%s", async (_name, c) => {
+    const res = await injectCase(c);
+    if (c.allowed) {
+      // The route policy must not block it; the handler then decides its own
+      // code (200/201/400/404…) which is covered by each route's own tests.
+      expect(res.statusCode).not.toBe(403);
+    } else {
+      expect(res.statusCode).toBe(403);
+    }
   });
 });
 
-describe("M0 route policy — MEMBER scope is self-only", () => {
-  it("GET /members/me → 200 (allowed)", async () => {
+// ── Focused checks (stronger assertions than the matrix) ────────────────────
+
+describe("M0 route policy — MEMBER self-gating", () => {
+  it("GET /members/:id own id → 200", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/api/v1/members/me",
+      url: `/api/v1/members/${memberId}`,
       headers: { cookie: memberCookie },
     });
     expect(res.statusCode).toBe(200);
   });
 
-  it("GET /members/me/balance → 200 (allowed)", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/members/me/balance",
-      headers: { cookie: memberCookie },
-    });
-    expect(res.statusCode).toBe(200);
-  });
-
-  it("GET /rewards → 200 (allowed)", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/rewards",
-      headers: { cookie: memberCookie },
-    });
-    expect(res.statusCode).toBe(200);
-  });
-
-  it("GET /members → 403", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/members",
-      headers: { cookie: memberCookie },
-    });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it("POST /events → 403", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/v1/events",
-      headers: { cookie: memberCookie, "idempotency-key": `m0p-mev-${suffix}` },
-      payload: { type: "page_view" },
-    });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it("GET /members/:id (another member) → 403", async () => {
+  it("GET /members/:id other id → 403", async () => {
     const res = await app.inject({
       method: "GET",
       url: `/api/v1/members/${otherMemberId}`,
       headers: { cookie: memberCookie },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it("PATCH /members/:id (own id) → 403 (members may not patch profiles via :id)", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/members/${memberId}`,
+      headers: { cookie: memberCookie },
+      payload: { firstName: "Hacked" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("M0 route policy — redeem is scoped to the caller", () => {
+  it("MEMBER redeeming with a foreign body.memberId deducts own points, foreign balance intact", async () => {
+    const ownBefore = await prisma.pointAccount.findUnique({ where: { memberId } });
+    const otherBefore = await prisma.pointAccount.findUnique({
+      where: { memberId: otherMemberId },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/rewards/${rewardId}/redeem`,
+      headers: { cookie: memberCookie },
+      // Attacker-controlled body points at another member; must be ignored.
+      payload: { rewardId, memberId: otherMemberId, idempotencyKey: `rd-foreign-${suffix}` },
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    const ownAfter = await prisma.pointAccount.findUnique({ where: { memberId } });
+    const otherAfter = await prisma.pointAccount.findUnique({ where: { memberId: otherMemberId } });
+
+    // 50 points (reward cost) deducted from the caller, not the foreign member.
+    expect(ownAfter?.balance).toBe((ownBefore?.balance ?? 0) - 50);
+    expect(otherAfter?.balance).toBe(otherBefore?.balance);
+    expect(otherAfter?.balance).toBe(70);
   });
 });
 
@@ -420,67 +587,5 @@ describe("M0 route policy — anonymous is rejected", () => {
   it("GET /members → 401", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/members" });
     expect(res.statusCode).toBe(401);
-  });
-});
-
-describe("M0 route policy — SERVER scope is allowed", () => {
-  it("POST /events → 201", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/v1/events",
-      headers: { ...serverHeaders(), "idempotency-key": `m0p-sev-${suffix}` },
-      payload: { type: "page_view" },
-    });
-    expect(res.statusCode).toBe(201);
-  });
-
-  it("GET /members → 200", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/members",
-      headers: serverHeaders(),
-    });
-    expect(res.statusCode).toBe(200);
-  });
-});
-
-describe("M0 route policy — admin roles on non-admin routes", () => {
-  it("ANALYST GET /members → 200 (read allowed)", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/v1/members",
-      headers: { cookie: adminCookies.ANALYST },
-    });
-    expect(res.statusCode).toBe(200);
-  });
-
-  it("ANALYST POST /events → 403 (read-only)", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/v1/events",
-      headers: { cookie: adminCookies.ANALYST, "idempotency-key": `m0p-anl-${suffix}` },
-      payload: { type: "page_view" },
-    });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it("OPERATOR POST /events → 201", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/v1/events",
-      headers: { cookie: adminCookies.OPERATOR, "idempotency-key": `m0p-op-${suffix}` },
-      payload: { type: "page_view" },
-    });
-    expect(res.statusCode).toBe(201);
-  });
-
-  it("SUPER_ADMIN POST /events → 201", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/v1/events",
-      headers: { cookie: adminCookies.SUPER_ADMIN, "idempotency-key": `m0p-sa-${suffix}` },
-      payload: { type: "page_view" },
-    });
-    expect(res.statusCode).toBe(201);
   });
 });

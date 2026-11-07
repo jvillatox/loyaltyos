@@ -48,7 +48,8 @@ export function giftCardsRoutes(app: FastifyInstance, _opts: unknown, done: () =
           timeWindow: "1 minute",
           keyGenerator: (req) => {
             const ip = req.ip;
-            const codePrefix = (req.body as { code?: string }).code?.slice(0, 4) ?? "anon";
+            const codePrefix =
+              (req.body as { code?: string } | undefined)?.code?.slice(0, 4) ?? "anon";
             return `validate:${ip}:${codePrefix}`;
           },
         },

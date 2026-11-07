@@ -20,6 +20,7 @@ import { hashToken, PAT_PREFIX } from "./lib/personal-access-token.js";
 import { adminRbacPlugin } from "./plugins/admin-rbac.js";
 import { adminSessionGuard } from "./plugins/admin-session-guard.js";
 import { authPlugin } from "./plugins/auth.js";
+import { routePolicyPlugin } from "./plugins/route-policy.js";
 import { adminAiRoutes } from "./routes/admin/ai.js";
 import { adminAuthRoutes } from "./routes/admin/auth.js";
 import { adminBadgesRoutes } from "./routes/admin/badges.js";
@@ -207,6 +208,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
 
   // Custom plugins
   await app.register(authPlugin);
+  await app.register(routePolicyPlugin);
   await app.register(adminSessionGuard);
   await app.register(adminRbacPlugin);
 

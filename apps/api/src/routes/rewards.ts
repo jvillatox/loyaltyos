@@ -2,6 +2,7 @@ import { redeemSchema, rewardListQuerySchema, RewardsService } from "@loyaltyos/
 import type { FastifyInstance } from "fastify";
 
 import { prisma } from "../db.js";
+import { LoyaltyError } from "../lib/errors.js";
 
 const rewards = new RewardsService(prisma);
 
@@ -29,7 +30,13 @@ export function rewardsRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const body = redeemSchema.parse(request.body);
-      const result = await rewards.redeem(body.rewardId || id, body.memberId, body.idempotencyKey);
+      // A member may only redeem their own points; never trust a body.memberId
+      // that points at another member.
+      const memberId = request.apiKeyScope === "MEMBER" ? request.memberId : body.memberId;
+      if (!memberId) {
+        throw new LoyaltyError("FORBIDDEN", 403);
+      }
+      const result = await rewards.redeem(body.rewardId || id, memberId, body.idempotencyKey);
       return reply.status(201).send({ data: result });
     },
   );
