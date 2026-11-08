@@ -18,6 +18,12 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
   app.get("/admin/programs/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
 
+    if (id !== request.programId) {
+      return reply.status(404).send({
+        error: { code: "NOT_FOUND", message: "Program not found" },
+      });
+    }
+
     const program = await prisma.program.findUnique({
       where: { id },
       select: {
@@ -47,6 +53,12 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
   app.patch("/admin/programs/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateProgramSchema.parse(request.body);
+
+    if (id !== request.programId) {
+      return reply.status(404).send({
+        error: { code: "NOT_FOUND", message: "Program not found" },
+      });
+    }
 
     const program = await prisma.program.update({
       where: { id },

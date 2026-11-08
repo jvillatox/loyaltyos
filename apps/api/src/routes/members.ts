@@ -169,6 +169,13 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     if (body.tags !== undefined) data.tags = body.tags;
     if (body.metadata !== undefined) data.metadata = body.metadata;
 
+    const existing = await prisma.member.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!existing) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+    }
+
     const member = await prisma.member.update({
       where: { id },
       data: data as Prisma.MemberUpdateInput,

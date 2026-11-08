@@ -85,6 +85,16 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
   app.patch("/admin/campaigns/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateSchema.parse(request.body);
+
+    const owned = await prisma.campaign.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+    }
+
     const campaign = await campaigns.update(id, body);
     return reply.send({ data: campaign });
   });
@@ -92,6 +102,16 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
   // DELETE /admin/campaigns/:id — Soft delete campaign
   app.delete("/admin/campaigns/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+
+    const owned = await prisma.campaign.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+    }
+
     await campaigns.archive(id);
     return reply.status(204).send();
   });
@@ -140,6 +160,15 @@ export function adminCampaignsRoutes(app: FastifyInstance, _opts: unknown, done:
   app.post("/admin/campaigns/:id/lifecycle", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const { action } = campaignLifecycleSchema.parse(request.body);
+
+    const owned = await prisma.campaign.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+    }
 
     switch (action) {
       case "activate":

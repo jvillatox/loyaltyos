@@ -142,7 +142,7 @@ export class CouponsService {
   }
 
   async validate(code: string, context: CouponValidateContext): Promise<ValidateResult> {
-    const coupon = await this.repo.findByCodeGlobal(code);
+    const coupon = await this.repo.findByCode(context.programId, code);
     if (!coupon) {
       return { valid: false, reason: "Coupon not found", coupon: null as never };
     }

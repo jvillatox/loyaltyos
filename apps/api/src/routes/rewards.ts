@@ -36,7 +36,25 @@ export function rewardsRoutes(app: FastifyInstance, _opts: unknown, done: () => 
       if (!memberId) {
         throw new LoyaltyError("FORBIDDEN", 403);
       }
-      const result = await rewards.redeem(body.rewardId || id, memberId, body.idempotencyKey);
+
+      const rewardId = body.rewardId || id;
+
+      // Both the reward and the member must belong to this program; otherwise a
+      // tenant could redeem another tenant's reward against another member.
+      const reward = await prisma.reward.findFirst({
+        where: { id: rewardId, programId: request.programId, deletedAt: null },
+      });
+      if (!reward) {
+        throw new LoyaltyError("NOT_FOUND", 404);
+      }
+      const member = await prisma.member.findFirst({
+        where: { id: memberId, programId: request.programId },
+      });
+      if (!member) {
+        throw new LoyaltyError("NOT_FOUND", 404);
+      }
+
+      const result = await rewards.redeem(rewardId, memberId, body.idempotencyKey);
       return reply.status(201).send({ data: result });
     },
   );

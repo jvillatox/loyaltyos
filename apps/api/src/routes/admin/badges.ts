@@ -75,6 +75,10 @@ export function adminBadgesRoutes(app: FastifyInstance, _opts: unknown, done: ()
   // GET /admin/badges/:id — Get badge by id
   app.get("/admin/badges/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.badge.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Badge not found" } });
+    }
     const badge = await badges.getById(id);
     return reply.send({ data: badge });
   });
@@ -83,6 +87,12 @@ export function adminBadgesRoutes(app: FastifyInstance, _opts: unknown, done: ()
   app.patch("/admin/badges/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateSchema.parse(request.body);
+
+    const owned = await prisma.badge.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Badge not found" } });
+    }
+
     const badge = await badges.update(id, body);
     return reply.send({ data: badge });
   });
@@ -90,6 +100,12 @@ export function adminBadgesRoutes(app: FastifyInstance, _opts: unknown, done: ()
   // DELETE /admin/badges/:id — Soft delete badge
   app.delete("/admin/badges/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+
+    const owned = await prisma.badge.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Badge not found" } });
+    }
+
     await badges.delete(id);
     return reply.status(204).send();
   });

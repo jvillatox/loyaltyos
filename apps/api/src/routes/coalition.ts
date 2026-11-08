@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
+import { prisma } from "../db.js";
 import { coalitionService, getCachedExternalBalance } from "../lib/coalition-setup.js";
 
 // ── Schemas ────────────────────────────────────────────────────────
@@ -52,6 +53,15 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
       const body = accumulateSchema.parse(request.body);
       const programId = request.programId;
 
+      const member = await prisma.member.findFirst({
+        where: { id: body.memberId, programId },
+      });
+      if (!member) {
+        return reply
+          .status(404)
+          .send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+      }
+
       const result = await coalitionService.accumulate({
         programId,
         memberId: body.memberId,
@@ -80,6 +90,15 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
 
       const body = redeemSchema.parse(request.body);
       const programId = request.programId;
+
+      const member = await prisma.member.findFirst({
+        where: { id: body.memberId, programId },
+      });
+      if (!member) {
+        return reply
+          .status(404)
+          .send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+      }
 
       const result = await coalitionService.redeem({
         programId,
@@ -110,6 +129,15 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
       const body = convertSchema.parse(request.body);
       const programId = request.programId;
 
+      const member = await prisma.member.findFirst({
+        where: { id: body.memberId, programId },
+      });
+      if (!member) {
+        return reply
+          .status(404)
+          .send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+      }
+
       const result = await coalitionService.convert({
         programId,
         memberId: body.memberId,
@@ -133,6 +161,17 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
     }
 
     const body = reverseSchema.parse(request.body);
+
+    // The transaction must belong to this program's coalition account; a
+    // foreign txRef must not let one tenant reverse another tenant's earn.
+    const tx = await prisma.coalitionTransaction.findFirst({
+      where: { localTxRef: body.txRef, account: { programId: request.programId } },
+    });
+    if (!tx) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Transaction not found" } });
+    }
 
     await coalitionService.reverseCoalitionTransaction(body.txRef, body.reason);
 

@@ -20,6 +20,7 @@ export interface CouponCreateInput {
 export type CouponUpdateInput = Partial<Omit<CouponCreateInput, "programId" | "code" | "mode">>;
 
 export interface CouponValidateContext {
+  programId: string;
   memberId: string;
   purchaseAmount?: number;
   channel?: string;

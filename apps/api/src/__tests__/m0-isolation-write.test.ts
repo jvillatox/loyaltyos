@@ -476,3 +476,128 @@ describe("M0 isolation writes — admin write routes (A admin, B id) → 404, B 
     expect(row?.name).toBe(`M0W B ${suffix}`);
   });
 });
+
+describe("M0 isolation writes — admin PATCH routes (A admin, B id) → 404, B unchanged", () => {
+  it("PATCH /admin/rewards/:id → 404, B reward unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/rewards/${bRewardId}`,
+      headers: aAdminHeaders(),
+      payload: { name: "HACKED" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.reward.findUnique({ where: { id: bRewardId } });
+    expect(row?.name).toBe(`M0W Reward ${suffix}`);
+  });
+
+  it("PATCH /admin/coupons/:id → 404, B coupon unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/coupons/${bCouponId}`,
+      headers: aAdminHeaders(),
+      payload: { discountValue: 99 },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.coupon.findUnique({ where: { id: bCouponId } });
+    expect(row?.discountValue).toBe(10);
+  });
+
+  it("PATCH /admin/campaigns/:id → 404, B campaign unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/campaigns/${bCampaignId}`,
+      headers: aAdminHeaders(),
+      payload: { name: "HACKED" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.campaign.findUnique({ where: { id: bCampaignId } });
+    expect(row?.name).toBe(`M0W Campaign ${suffix}`);
+  });
+
+  it("PATCH /admin/segments/:id → 404, B segment unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/segments/${bSegmentId}`,
+      headers: aAdminHeaders(),
+      payload: { name: "HACKED" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.segment.findUnique({ where: { id: bSegmentId } });
+    expect(row?.name).toBe(`M0W Segment ${suffix}`);
+  });
+
+  it("PATCH /admin/badges/:id → 404, B badge unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/badges/${bBadgeId}`,
+      headers: aAdminHeaders(),
+      payload: { name: "HACKED" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.badge.findUnique({ where: { id: bBadgeId } });
+    expect(row?.name).toBe(`M0W Badge ${suffix}`);
+  });
+
+  it("PATCH /admin/tiers/:id → 404, B tier unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/tiers/${bTierId}`,
+      headers: aAdminHeaders(),
+      payload: { name: "HACKED" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.tier.findUnique({ where: { id: bTierId } });
+    expect(row?.name).toBe(`M0W Tier ${suffix}`);
+  });
+
+  it("PATCH /admin/webhooks/:id → 404, B webhook unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/webhooks/${bWebhookId}`,
+      headers: aAdminHeaders(),
+      payload: { url: "https://example.invalid/hacked" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.webhookSubscription.findUnique({ where: { id: bWebhookId } });
+    expect(row?.url).toBe("https://example.invalid/hook");
+  });
+
+  it("PATCH /admin/notification-templates/:id → 404, B template unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/notification-templates/${bTemplateId}`,
+      headers: aAdminHeaders(),
+      payload: { name: "HACKED" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.notificationTemplate.findUnique({ where: { id: bTemplateId } });
+    expect(row?.name).toBe(`M0W Template ${suffix}`);
+  });
+
+  it("PATCH /admin/giftcards/terms/:id → 404, B terms unchanged", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/giftcards/terms/${bTermsId}`,
+      headers: aAdminHeaders(),
+      payload: { name: "HACKED" },
+    });
+    expect(res.statusCode).toBe(404);
+    const row = await prisma.termsTemplate.findUnique({ where: { id: bTermsId } });
+    expect(row?.name).toBe(`M0W Terms ${suffix}`);
+  });
+});
+
+describe("M0 isolation writes — notification test-send with foreign memberId", () => {
+  it("POST /admin/notification-templates/:id/test-send (B memberId) → 404, no notification", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/notification-templates/${bTemplateId}/test-send`,
+      headers: aAdminHeaders(),
+      payload: { memberId: bMemberId },
+    });
+    expect(res.statusCode).toBe(404);
+
+    const notifications = await prisma.notification.count({ where: { memberId: bMemberId } });
+    expect(notifications).toBe(0);
+  });
+});

@@ -85,7 +85,7 @@ describe("CouponsService.validate", () => {
     mockPrisma.couponRedemption.count.mockResolvedValue(0);
 
     const svc = new CouponsService(mockPrisma as never);
-    const result = await svc.validate("SUMMER20", { memberId: "mem-1" });
+    const result = await svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1" });
 
     expect(result.valid).toBe(true);
     expect(result.discountAmount).toBe(0);
@@ -95,7 +95,7 @@ describe("CouponsService.validate", () => {
     mockPrisma.coupon.findFirst.mockResolvedValue(null);
 
     const svc = new CouponsService(mockPrisma as never);
-    const result = await svc.validate("BOGUS", { memberId: "mem-1" });
+    const result = await svc.validate("BOGUS", { programId: "prog-1", memberId: "mem-1" });
 
     expect(result.valid).toBe(false);
     expect(result.reason).toBe("Coupon not found");
@@ -105,7 +105,9 @@ describe("CouponsService.validate", () => {
     mockPrisma.coupon.findFirst.mockResolvedValue(couponRow({ expiresAt: new Date("2020-01-01") }));
 
     const svc = new CouponsService(mockPrisma as never);
-    await expect(svc.validate("SUMMER20", { memberId: "mem-1" })).rejects.toThrow("has expired");
+    await expect(
+      svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1" }),
+    ).rejects.toThrow("has expired");
   });
 
   it("throws CouponNotStartedError when not yet started", async () => {
@@ -114,16 +116,18 @@ describe("CouponsService.validate", () => {
     mockPrisma.coupon.findFirst.mockResolvedValue(couponRow({ startsAt: future }));
 
     const svc = new CouponsService(mockPrisma as never);
-    await expect(svc.validate("SUMMER20", { memberId: "mem-1" })).rejects.toThrow(
-      "has not started",
-    );
+    await expect(
+      svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1" }),
+    ).rejects.toThrow("has not started");
   });
 
   it("throws CouponExhaustedError when maxUses reached", async () => {
     mockPrisma.coupon.findFirst.mockResolvedValue(couponRow({ maxUses: 100, usedCount: 100 }));
 
     const svc = new CouponsService(mockPrisma as never);
-    await expect(svc.validate("SUMMER20", { memberId: "mem-1" })).rejects.toThrow("usage limit");
+    await expect(
+      svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1" }),
+    ).rejects.toThrow("usage limit");
   });
 
   it("throws CouponMemberLimitError when member limit reached", async () => {
@@ -131,9 +135,9 @@ describe("CouponsService.validate", () => {
     mockPrisma.couponRedemption.count.mockResolvedValue(1);
 
     const svc = new CouponsService(mockPrisma as never);
-    await expect(svc.validate("SUMMER20", { memberId: "mem-1" })).rejects.toThrow(
-      "has exceeded usage limit",
-    );
+    await expect(
+      svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1" }),
+    ).rejects.toThrow("has exceeded usage limit");
   });
 
   it("throws CouponMinPurchaseError when purchase below minimum", async () => {
@@ -142,7 +146,7 @@ describe("CouponsService.validate", () => {
 
     const svc = new CouponsService(mockPrisma as never);
     await expect(
-      svc.validate("SUMMER20", { memberId: "mem-1", purchaseAmount: 10000 }),
+      svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1", purchaseAmount: 10000 }),
     ).rejects.toThrow("minimum purchase");
   });
 
@@ -152,7 +156,7 @@ describe("CouponsService.validate", () => {
 
     const svc = new CouponsService(mockPrisma as never);
     await expect(
-      svc.validate("SUMMER20", { memberId: "mem-1", channel: "physical" }),
+      svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1", channel: "physical" }),
     ).rejects.toThrow("not valid for channel");
   });
 
@@ -162,6 +166,7 @@ describe("CouponsService.validate", () => {
 
     const svc = new CouponsService(mockPrisma as never);
     const result = await svc.validate("SUMMER20", {
+      programId: "prog-1",
       memberId: "mem-1",
       purchaseAmount: 50000,
     });
@@ -176,7 +181,7 @@ describe("CouponsService.validate", () => {
     mockPrisma.couponRedemption.count.mockResolvedValue(0);
 
     const svc = new CouponsService(mockPrisma as never);
-    const result = await svc.validate("SUMMER20", { memberId: "mem-1" });
+    const result = await svc.validate("SUMMER20", { programId: "prog-1", memberId: "mem-1" });
 
     expect(result.discountAmount).toBe(5000);
   });
@@ -190,7 +195,7 @@ describe("CouponsService.redeem", () => {
     mockPrisma.coupon.update.mockResolvedValue(couponRow());
 
     const svc = new CouponsService(mockPrisma as never);
-    const result = await svc.redeem("SUMMER20", { memberId: "mem-1" });
+    const result = await svc.redeem("SUMMER20", { programId: "prog-1", memberId: "mem-1" });
 
     expect(result.redemptionId).toBe("red-1");
     expect(mockPrisma.couponRedemption.create).toHaveBeenCalled();

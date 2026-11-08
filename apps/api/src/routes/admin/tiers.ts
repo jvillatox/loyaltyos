@@ -54,6 +54,10 @@ export function adminTiersRoutes(app: FastifyInstance, _opts: unknown, done: () 
   // GET /admin/tiers/:id — Get tier by id
   app.get("/admin/tiers/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.tier.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Tier not found" } });
+    }
     const tier = await tiers.getById(id);
     return reply.send({ data: tier });
   });
@@ -61,6 +65,10 @@ export function adminTiersRoutes(app: FastifyInstance, _opts: unknown, done: () 
   // GET /admin/tiers/:id/benefits — Get tier benefits
   app.get("/admin/tiers/:id/benefits", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.tier.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Tier not found" } });
+    }
     const benefits = await tiers.benefits(id);
     return reply.send({ data: benefits });
   });
@@ -69,6 +77,12 @@ export function adminTiersRoutes(app: FastifyInstance, _opts: unknown, done: () 
   app.patch("/admin/tiers/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateSchema.parse(request.body);
+
+    const owned = await prisma.tier.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Tier not found" } });
+    }
+
     const tier = await tiers.update(id, body);
     return reply.send({ data: tier });
   });
@@ -76,6 +90,12 @@ export function adminTiersRoutes(app: FastifyInstance, _opts: unknown, done: () 
   // DELETE /admin/tiers/:id — Delete tier
   app.delete("/admin/tiers/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+
+    const owned = await prisma.tier.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Tier not found" } });
+    }
+
     await tiers.delete(id);
     return reply.status(204).send();
   });

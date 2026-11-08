@@ -105,12 +105,24 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   app.get(`${prefix}/batches/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.giftCardBatch.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      throw new GiftCardBatchNotFoundError(id);
+    }
     const batch = await giftCardService.getBatch(id);
     return reply.send({ data: batch });
   });
 
   app.post(`${prefix}/batches/:id/cancel`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.giftCardBatch.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      throw new GiftCardBatchNotFoundError(id);
+    }
     const batch = await giftCardService.cancelBatch(id);
     return reply.send({ data: batch });
   });
@@ -447,6 +459,14 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
 
   app.get(`${prefix}/terms/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.termsTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Terms template not found" } });
+    }
     const template = await giftCardService.getTermsTemplate(id);
     return reply.send({ data: template });
   });
@@ -454,12 +474,28 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
   app.patch(`${prefix}/terms/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateTermsSchema.parse(request.body);
+    const owned = await prisma.termsTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Terms template not found" } });
+    }
     const template = await giftCardService.updateTermsTemplate(id, body);
     return reply.send({ data: template });
   });
 
   app.delete(`${prefix}/terms/:id`, async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.termsTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Terms template not found" } });
+    }
     await giftCardService.deleteTermsTemplate(id);
     return reply.status(204).send();
   });

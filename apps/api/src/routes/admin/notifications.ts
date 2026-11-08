@@ -100,6 +100,14 @@ export function adminNotificationsRoutes(
   // GET /admin/notification-templates/:id
   app.get("/admin/notification-templates/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.notificationTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+    }
     const template = await notifications.getTemplate(id);
     return reply.send({ data: template });
   });
@@ -108,6 +116,14 @@ export function adminNotificationsRoutes(
   app.patch("/admin/notification-templates/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = templateUpdateBody.parse(request.body);
+    const owned = await prisma.notificationTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+    }
     const template = await notifications.updateTemplate(id, body);
     await audit(
       getProgramId(request),
@@ -123,6 +139,14 @@ export function adminNotificationsRoutes(
   // DELETE /admin/notification-templates/:id
   app.delete("/admin/notification-templates/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.notificationTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+    }
     await notifications.deleteTemplate(id);
     await audit(
       getProgramId(request),
@@ -140,6 +164,15 @@ export function adminNotificationsRoutes(
     const { variables } = z
       .object({ variables: z.record(z.unknown()).optional().default({}) })
       .parse(request.body);
+
+    const owned = await prisma.notificationTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+    }
 
     const template = await notifications.getTemplate(id);
     const subject = template.subject ? render(template.subject, variables) : null;
@@ -175,6 +208,15 @@ export function adminNotificationsRoutes(
       });
     }
 
+    const owned = await prisma.notificationTemplate.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply
+        .status(404)
+        .send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+    }
+
     const template = await notifications.getTemplate(id);
     const targetChannel = channel ?? template.channel;
     let context: Record<string, unknown> = {};
@@ -184,7 +226,7 @@ export function adminNotificationsRoutes(
     if (memberId) {
       // Load member data for variable interpolation
       const member = await prisma.member.findFirst({
-        where: { id: memberId },
+        where: { id: memberId, programId: request.programId },
         include: {
           pointAccount: true,
           memberTiers: { include: { tier: true } },
@@ -332,6 +374,12 @@ export function adminNotificationsRoutes(
   // GET /admin/webhooks/:id
   app.get("/admin/webhooks/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.webhookSubscription.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Webhook not found" } });
+    }
     const webhook = await notifications.getWebhook(id);
     return reply.send({ data: webhook });
   });
@@ -340,6 +388,12 @@ export function adminNotificationsRoutes(
   app.patch("/admin/webhooks/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = webhookUpdateBody.parse(request.body);
+    const owned = await prisma.webhookSubscription.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Webhook not found" } });
+    }
     const webhook = await notifications.updateWebhook(id, body);
     await audit(
       getProgramId(request),
@@ -355,6 +409,12 @@ export function adminNotificationsRoutes(
   // DELETE /admin/webhooks/:id
   app.delete("/admin/webhooks/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.webhookSubscription.findFirst({
+      where: { id, programId: request.programId },
+    });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Webhook not found" } });
+    }
     await notifications.deleteWebhook(id);
     await audit(getProgramId(request), request.actor, "DELETE_WEBHOOK", "WebhookSubscription", id);
     return reply.status(204).send();

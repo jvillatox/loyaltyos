@@ -21,6 +21,7 @@ export function couponsRoutes(app: FastifyInstance, _opts: unknown, done: () => 
   app.post("/coupons/validate", async (request, reply) => {
     const body = validateSchema.parse(request.body);
     const result = await coupons.validate(body.code, {
+      programId: request.programId,
       memberId: body.memberId,
       purchaseAmount: body.purchaseAmount,
       channel: body.channel,
@@ -32,6 +33,7 @@ export function couponsRoutes(app: FastifyInstance, _opts: unknown, done: () => 
   app.post("/coupons/redeem", async (request, reply) => {
     const body = redeemSchema.parse(request.body);
     const result = await coupons.redeem(body.code, {
+      programId: request.programId,
       memberId: body.memberId,
       purchaseAmount: body.purchaseAmount,
       channel: body.channel,

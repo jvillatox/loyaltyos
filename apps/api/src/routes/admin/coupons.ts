@@ -96,7 +96,10 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // GET /admin/coupons/:id — Get coupon by id
   app.get("/admin/coupons/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
-
+    const owned = await prisma.coupon.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Coupon not found" } });
+    }
     const coupon = await coupons.getById(id);
     return reply.send({
       data: { ...coupon, code: maskIfNeeded(request.adminRole, coupon.code) },
@@ -107,6 +110,10 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   app.patch("/admin/coupons/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateSchema.parse(request.body);
+    const owned = await prisma.coupon.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Coupon not found" } });
+    }
     const coupon = await coupons.update(id, body);
     return reply.send({ data: coupon });
   });
@@ -114,6 +121,10 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // DELETE /admin/coupons/:id — Soft delete coupon
   app.delete("/admin/coupons/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.coupon.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Coupon not found" } });
+    }
     await coupons.delete(id);
     return reply.status(204).send();
   });
@@ -121,6 +132,10 @@ export function adminCouponsRoutes(app: FastifyInstance, _opts: unknown, done: (
   // GET /admin/coupons/:id/stats — Usage statistics
   app.get("/admin/coupons/:id/stats", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.coupon.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Coupon not found" } });
+    }
     const stats = await coupons.stats(id);
     return reply.send({
       data: { ...stats, code: maskIfNeeded(request.adminRole, stats.code) },

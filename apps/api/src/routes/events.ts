@@ -79,6 +79,20 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
 
       // Create event
       const programId = request.programId;
+
+      // A member id must belong to this program before we process an event for
+      // it; otherwise a foreign memberId would let one tenant earn for another.
+      if (body.memberId) {
+        const member = await prisma.member.findFirst({
+          where: { id: body.memberId, programId },
+        });
+        if (!member) {
+          return reply
+            .status(404)
+            .send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+        }
+      }
+
       const event = await prisma.event.create({
         data: {
           programId,

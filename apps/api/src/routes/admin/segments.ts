@@ -65,6 +65,10 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
   // GET /admin/segments/:id — Get segment by id
   app.get("/admin/segments/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.segment.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
+    }
     const segment = await segments.getById(id);
     return reply.send({ data: segment });
   });
@@ -73,6 +77,12 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
   app.patch("/admin/segments/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = updateSchema.parse(request.body);
+
+    const owned = await prisma.segment.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
+    }
+
     const segment = await segments.update(id, body as Parameters<typeof segments.update>[1]);
     return reply.send({ data: segment });
   });
@@ -80,6 +90,12 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
   // DELETE /admin/segments/:id — Soft delete segment
   app.delete("/admin/segments/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+
+    const owned = await prisma.segment.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
+    }
+
     await segments.delete(id);
     return reply.status(204).send();
   });
@@ -87,6 +103,10 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
   // GET /admin/segments/:id/count — Get member count
   app.get("/admin/segments/:id/count", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const owned = await prisma.segment.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
+    }
     const count = await segments.count(id);
     return reply.send({ data: { count } });
   });
@@ -101,6 +121,11 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
       })
       .parse(request.query);
 
+    const owned = await prisma.segment.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
+    }
+
     const result = await segments.getMembers(id, query);
     return reply.send({ data: result });
   });
@@ -112,6 +137,11 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
       .object({ memberIds: z.array(z.string().min(1)).min(1) })
       .parse(request.body);
 
+    const owned = await prisma.segment.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
+    }
+
     const segment = await segments.addMembers(id, memberIds);
     return reply.send({ data: segment });
   });
@@ -122,6 +152,11 @@ export function adminSegmentsRoutes(app: FastifyInstance, _opts: unknown, done: 
     const { memberIds } = z
       .object({ memberIds: z.array(z.string().min(1)).min(1) })
       .parse(request.body);
+
+    const owned = await prisma.segment.findFirst({ where: { id, programId: request.programId } });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
+    }
 
     const segment = await segments.removeMembers(id, memberIds);
     return reply.send({ data: segment });
