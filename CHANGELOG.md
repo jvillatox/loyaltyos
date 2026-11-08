@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-08
+
+### Security
+
+- **Deny-by-default authorization for non-admin routes.** Public API routes are
+  now evaluated against a per-route access policy, so a request whose API key
+  scope does not match the route is rejected rather than silently processed.
+- **Cross-program resource isolation.** Resource lookups and writes are scoped
+  to the requesting program; an id owned by another program resolves to `404`
+  instead of operating on the foreign record.
+- **Program-scoped idempotency keys.** Point, coalition, and event transaction
+  idempotency keys are unique per program, so the same key used by two programs
+  can no longer resolve (or reuse) the other program's record.
+- **Point adjustments record the acting admin.** `/members/:id/adjust` captures
+  the real authenticated admin in the audit trail instead of a placeholder.
+
+### Changed
+
+- **Coalition adapter calls no longer auto-retry.** Transient failures
+  (timeouts, 5xx, network errors) surface immediately and are left for
+  queue-level reconciliation instead of firing the adapter up to three times
+  inline.
+
+### Upgrade notes
+
+1. Run the new database migration (`prisma migrate deploy`): it denormalizes
+   `programId` onto `PointTransaction` and `CoalitionTransaction` and replaces
+   the globally-unique idempotency keys with program-scoped compound unique
+   indexes.
+
 ## [1.3.0] - 2026-10-28
 
 ### Added
@@ -324,3 +354,4 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 - **Documentation** — professional README with quick start, architecture overview, API reference, and roadmap. CONTRIBUTING.md with conventions and pull request checklist.
 
 [1.3.0]: https://github.com/jvillatox/loyaltyos/compare/v1.2.0...v1.3.0
+[1.4.0]: https://github.com/jvillatox/loyaltyos/compare/v1.3.0...v1.4.0
