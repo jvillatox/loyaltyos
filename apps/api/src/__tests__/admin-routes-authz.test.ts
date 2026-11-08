@@ -292,9 +292,12 @@ describe("cross-tenant isolation (API key scope)", () => {
   });
 
   it("a program-A key with a matching X-Program-Id is not rejected", async () => {
+    // GET /rewards is one of the few routes a CLIENT-scope key may still reach
+    // (deny-by-default restricts CLIENT to the read-only rewards catalog), so it
+    // is the right positive control for the cross-tenant check.
     const res = await app.inject({
       method: "GET",
-      url: "/api/v1/members",
+      url: "/api/v1/rewards",
       headers: { "x-api-key": clientKeyValue, "x-program-id": PROGRAM_A },
     });
     expect(res.statusCode).not.toBe(403);

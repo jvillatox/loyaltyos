@@ -247,7 +247,7 @@ describe("GET /admin/coupons/:id", () => {
 
     expect(res.statusCode).toBe(404);
     const body = JSON.parse(res.body);
-    expect(body.error.code).toBe("COUPON_NOT_FOUND");
+    expect(body.error.code).toBe("NOT_FOUND");
   });
 });
 
