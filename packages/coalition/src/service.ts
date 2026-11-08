@@ -157,7 +157,7 @@ export class CoalitionService {
     }
 
     // 2. Idempotency check
-    const existing = await this.repo.findTxByLocalRef(txRef);
+    const existing = await this.repo.findTxByLocalRef(programId, txRef);
     if (existing) {
       this.metrics?.recordOperation(config.provider, "CONVERT", existing.status, true);
       return {
@@ -175,6 +175,7 @@ export class CoalitionService {
     // 4. Create PENDING tx
     const tx = await this.repo.createTx({
       accountId: account.id,
+      programId,
       type: "REDEEM",
       amount: ownPoints,
       localTxRef: txRef,
@@ -365,8 +366,12 @@ export class CoalitionService {
     return this.repo.listTransactions({ programId, ...filters });
   }
 
-  async reverseCoalitionTransaction(txRef: string, reason: string): Promise<void> {
-    const tx = await this.repo.findTxByLocalRef(txRef);
+  async reverseCoalitionTransaction(
+    programId: string,
+    txRef: string,
+    reason: string,
+  ): Promise<void> {
+    const tx = await this.repo.findTxByLocalRef(programId, txRef);
     if (!tx) {
       throw new CoalitionBusinessError(`Transaction "${txRef}" not found`);
     }
@@ -416,7 +421,7 @@ export class CoalitionService {
     }
 
     // 2. Idempotency check
-    const existing = await this.repo.findTxByLocalRef(txRef);
+    const existing = await this.repo.findTxByLocalRef(programId, txRef);
     if (existing) {
       this.metrics?.recordOperation(config.provider, txType, existing.status, true);
       return {
@@ -441,6 +446,7 @@ export class CoalitionService {
     // 4. Create PENDING tx (Phase 1)
     const tx = await this.repo.createTx({
       accountId: account.id,
+      programId,
       type: txType,
       amount: points,
       localTxRef: txRef,

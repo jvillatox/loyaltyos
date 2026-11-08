@@ -223,6 +223,7 @@ beforeAll(async () => {
   const bTx = await prisma.coalitionTransaction.create({
     data: {
       accountId: bCoalAccount.id,
+      programId: progB,
       type: "EARN",
       amount: 10,
       localTxRef: bTxRef,

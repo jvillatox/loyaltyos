@@ -136,6 +136,7 @@ export function createRepository(prisma: PrismaClient) {
 
   async function createTx(input: {
     accountId: string;
+    programId: string;
     type: "EARN" | "REDEEM";
     amount: number;
     localTxRef: string;
@@ -145,6 +146,7 @@ export function createRepository(prisma: PrismaClient) {
     return prisma.coalitionTransaction.create({
       data: {
         accountId: input.accountId,
+        programId: input.programId,
         type: input.type,
         amount: input.amount,
         localTxRef: input.localTxRef,
@@ -158,16 +160,20 @@ export function createRepository(prisma: PrismaClient) {
   }
 
   async function findTxByIdempotencyKey(
+    programId: string,
     idempotencyKey: string,
   ): Promise<CoalitionTransactionRow | null> {
     return prisma.coalitionTransaction.findUnique({
-      where: { idempotencyKey },
+      where: { programId_idempotencyKey: { programId, idempotencyKey } },
     });
   }
 
-  async function findTxByLocalRef(localTxRef: string): Promise<CoalitionTransactionRow | null> {
+  async function findTxByLocalRef(
+    programId: string,
+    localTxRef: string,
+  ): Promise<CoalitionTransactionRow | null> {
     return prisma.coalitionTransaction.findFirst({
-      where: { localTxRef },
+      where: { programId, localTxRef },
     });
   }
 

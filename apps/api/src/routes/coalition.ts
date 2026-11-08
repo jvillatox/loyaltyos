@@ -173,7 +173,7 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
         .send({ error: { code: "NOT_FOUND", message: "Transaction not found" } });
     }
 
-    await coalitionService.reverseCoalitionTransaction(body.txRef, body.reason);
+    await coalitionService.reverseCoalitionTransaction(request.programId, body.txRef, body.reason);
 
     return reply.status(200).send({ data: { txRef: body.txRef, reversed: true } });
   });

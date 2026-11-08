@@ -276,6 +276,7 @@ async function main(): Promise<void> {
       await prisma.pointTransaction.create({
         data: {
           accountId: account.id,
+          programId: program.id,
           type: "EARN",
           amount,
           balanceAfter,
@@ -293,6 +294,7 @@ async function main(): Promise<void> {
       await prisma.pointTransaction.create({
         data: {
           accountId: account.id,
+          programId: program.id,
           type: "REDEEM",
           amount: redeemAmount,
           balanceAfter,

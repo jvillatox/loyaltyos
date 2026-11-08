@@ -273,6 +273,7 @@ describe("PointsService.reverse", () => {
     const originalTx = {
       id: "tx-orig",
       accountId: "acc-1",
+      programId: "prog-1",
       type: "EARN",
       amount: 100,
       balanceAfter: 100,
@@ -288,8 +289,8 @@ describe("PointsService.reverse", () => {
     };
 
     mockPrisma.pointTransaction.findUnique
-      .mockResolvedValueOnce(null) // no existing idempotent match
-      .mockResolvedValueOnce(originalTx); // findTxById
+      .mockResolvedValueOnce(originalTx) // findTxById
+      .mockResolvedValueOnce(null); // no existing idempotent match
 
     mockPrisma.pointTransaction.findFirst.mockResolvedValue(null); // no existing reversal
 
@@ -339,6 +340,7 @@ describe("PointsService.reverse", () => {
     const originalTx = {
       id: "tx-orig",
       accountId: "acc-1",
+      programId: "prog-1",
       type: "EARN" as const,
       amount: 100,
       balanceAfter: 100,
@@ -348,8 +350,8 @@ describe("PointsService.reverse", () => {
     };
 
     mockPrisma.pointTransaction.findUnique
-      .mockResolvedValueOnce(null) // idempotency check
-      .mockResolvedValueOnce(originalTx); // find by id
+      .mockResolvedValueOnce(originalTx) // find by id
+      .mockResolvedValueOnce(null); // idempotency check
 
     mockPrisma.pointTransaction.findFirst.mockResolvedValue({
       id: "existing-reversal",

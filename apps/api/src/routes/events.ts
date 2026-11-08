@@ -68,17 +68,15 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
       }
 
       const body = eventSchema.parse(request.body);
+      const programId = request.programId;
 
-      // Deduplicate the event
+      // Deduplicate the event (scoped to this program).
       const existing = await prisma.event.findUnique({
-        where: { idempotencyKey },
+        where: { programId_idempotencyKey: { programId, idempotencyKey } },
       });
       if (existing) {
         return reply.send({ data: existing, idempotent: true });
       }
-
-      // Create event
-      const programId = request.programId;
 
       // A member id must belong to this program before we process an event for
       // it; otherwise a foreign memberId would let one tenant earn for another.

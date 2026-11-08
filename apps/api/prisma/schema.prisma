@@ -116,13 +116,14 @@ enum TransactionType {
 model PointTransaction {
   id              String          @id @default(cuid())
   accountId       String
+  programId       String
   type            TransactionType
   amount          Int
   balanceAfter    Int
   source          String
   description     String?
   metadata        Json?           @default("{}")
-  idempotencyKey  String          @unique
+  idempotencyKey  String
   expiresAt       DateTime?
   settledAt       DateTime?
   reversedFromId  String?
@@ -131,9 +132,9 @@ model PointTransaction {
 
   account       PointAccount              @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
+  @@unique([programId, idempotencyKey])
   @@index([accountId])
   @@index([type])
-  @@index([idempotencyKey])
   @@index([expiresAt])
   @@index([createdAt])
   @@index([source])
@@ -629,6 +630,7 @@ model CoalitionAccount {
 model CoalitionTransaction {
   id               String   @id @default(cuid())
   accountId        String
+  programId        String
   type             TransactionType
   amount           Int
   localTxRef       String
@@ -637,13 +639,13 @@ model CoalitionTransaction {
   attempts         Int      @default(1)
   lastError        String?
   metadata         Json?    @default("{}")
-  idempotencyKey   String   @unique
+  idempotencyKey   String
   createdAt        DateTime @default(now())
 
   account CoalitionAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
+  @@unique([programId, idempotencyKey])
   @@index([accountId])
-  @@index([idempotencyKey])
   @@index([status])
 }
 
@@ -857,7 +859,7 @@ model Event {
   memberId        String?
   type            String
   payload         Json?    @default("{}")
-  idempotencyKey  String   @unique
+  idempotencyKey  String
   processed       Boolean  @default(false)
   processedAt     DateTime?
   error           String?
@@ -866,8 +868,8 @@ model Event {
   program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
   member  Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
 
+  @@unique([programId, idempotencyKey])
   @@index([programId, type])
-  @@index([idempotencyKey])
   @@index([processed])
   @@index([createdAt])
 }

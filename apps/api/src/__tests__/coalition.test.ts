@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockPrisma = vi.hoisted(() => ({
   apiKey: { findUnique: vi.fn(), update: vi.fn() },
+  member: { findFirst: vi.fn() },
+  coalitionTransaction: { findFirst: vi.fn() },
 }));
 
 vi.mock("../db.js", () => ({ prisma: mockPrisma }));
@@ -60,6 +62,14 @@ beforeEach(async () => {
     updatedAt: new Date(),
   });
   mockPrisma.apiKey.update.mockResolvedValue({});
+  mockPrisma.member.findFirst.mockResolvedValue({ id: "member-1", programId: "prog-1" });
+  mockPrisma.coalitionTransaction.findFirst.mockResolvedValue({
+    id: "tx-1",
+    localTxRef: "tx-acc-1",
+    accountId: "acc-1",
+    status: "CONFIRMED",
+    externalTxRef: "ext-1",
+  });
 
   app = await buildApp({ logger: false });
 

@@ -42,7 +42,7 @@ export class PointsService {
 
   async earn(input: EarnInput): Promise<EarnResult> {
     // Idempotency check
-    const existing = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+    const existing = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
     if (existing) {
       this.metrics?.recordEarn(input.programId, existing.amount, true);
       return {
@@ -68,6 +68,7 @@ export class PointsService {
     // Create transaction (points are pending until settlement may not apply for EARN)
     const tx = await this.repo.createTx({
       accountId: account.id,
+      programId: input.programId,
       type: "EARN",
       amount: effective.total,
       balanceAfter,
@@ -94,7 +95,7 @@ export class PointsService {
 
   async redeem(input: RedeemInput): Promise<RedeemResult> {
     // Idempotency check
-    const existing = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+    const existing = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
     if (existing) {
       return {
         transactionId: existing.id,
@@ -115,6 +116,7 @@ export class PointsService {
 
     const tx = await this.repo.createTx({
       accountId: account.id,
+      programId: input.programId,
       type: "REDEEM",
       amount: input.amount,
       balanceAfter,
@@ -138,7 +140,7 @@ export class PointsService {
 
   async adjust(input: AdjustInput): Promise<AdjustResult> {
     // Idempotency check
-    const existing = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+    const existing = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
     if (existing) {
       return {
         transactionId: existing.id,
@@ -152,6 +154,7 @@ export class PointsService {
 
     const tx = await this.repo.createTx({
       accountId: account.id,
+      programId: input.programId,
       type: "ADJUST",
       amount: input.amount,
       balanceAfter,
@@ -178,23 +181,21 @@ export class PointsService {
     adminUserId: string,
     idempotencyKey?: string,
   ): Promise<ReverseResult> {
+    const originalTx = await this.repo.findTxById(txId);
+    if (!originalTx) {
+      throw new TransactionNotFoundError(txId);
+    }
+
     const key = idempotencyKey ?? `reverse-${txId}-${adminUserId}`;
 
     // Idempotency check
-    const existing = await this.repo.findTxByIdempotencyKey(key);
+    const existing = await this.repo.findTxByIdempotencyKey(originalTx.programId, key);
     if (existing) {
-      const originalTx = await this.repo.findTxById(txId);
-      if (!originalTx) throw new TransactionNotFoundError(txId);
       return {
         reversalId: existing.id,
         originalType: originalTx.type,
         amountReversed: existing.amount,
       };
-    }
-
-    const originalTx = await this.repo.findTxById(txId);
-    if (!originalTx) {
-      throw new TransactionNotFoundError(txId);
     }
 
     // Check for existing reversal
@@ -212,6 +213,7 @@ export class PointsService {
 
     const reversalTx = await this.repo.createTx({
       accountId: originalTx.accountId,
+      programId: originalTx.programId,
       type: "REVERSE",
       amount: originalTx.amount,
       balanceAfter,
@@ -244,6 +246,7 @@ export class PointsService {
 
       await this.repo.createTx({
         accountId: account.id,
+        programId: account.programId,
         type: "EXPIRE",
         amount: tx.amount,
         balanceAfter,

@@ -26,9 +26,9 @@ export function createRepository(prisma: PrismaClient) {
       });
     },
 
-    async findTxByIdempotencyKey(idempotencyKey: string) {
+    async findTxByIdempotencyKey(programId: string, idempotencyKey: string) {
       return prisma.pointTransaction.findUnique({
-        where: { idempotencyKey },
+        where: { programId_idempotencyKey: { programId, idempotencyKey } },
       });
     },
 
@@ -40,6 +40,7 @@ export function createRepository(prisma: PrismaClient) {
 
     createTx(input: {
       accountId: string;
+      programId: string;
       type: Prisma.PointTransactionCreateInput["type"];
       amount: number;
       balanceAfter: number;
