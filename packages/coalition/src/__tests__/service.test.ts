@@ -451,47 +451,46 @@ describe("CoalitionService", () => {
   // ═══ Retries ═══
 
   describe("retries", () => {
-    it("retries transient errors up to 3 times then succeeds", async () => {
+    it("does not retry transient errors — a timeout fails immediately", async () => {
       mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
       mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
       mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
       mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow());
       mockPrisma.coalitionTransaction.update.mockResolvedValue(
-        txRow({ status: "CONFIRMED", externalTxRef: "ext-retry-1" }),
+        txRow({ status: "FAILED", lastError: "Transient failure 1/2", attempts: 2 }),
       );
 
       const svc = new CoalitionService(mockPrisma as never);
-      // 2 transient fails, then succeed
       const adapter = new MockAdapter({
         transientFails: 2,
         externalTxId: "ext-retry-1",
       });
       svc.registerAdapter(adapter);
 
-      const result = await svc.accumulate({
-        programId: "prog-1",
-        memberId: "mem-1",
-        externalMemberRef: "ext-ref-1",
-        points: 100,
-        txRef: "ref-retry",
-      });
+      await expect(
+        svc.accumulate({
+          programId: "prog-1",
+          memberId: "mem-1",
+          externalMemberRef: "ext-ref-1",
+          points: 100,
+          txRef: "ref-retry",
+        }),
+      ).rejects.toThrow(CoalitionTransientError);
 
-      expect(result.status).toBe("CONFIRMED");
-      // Should have been called 3 times (2 transient fails + 1 success)
-      expect(adapter.accumulateCalls).toHaveLength(3);
+      // No auto-retry: the adapter is called exactly once.
+      expect(adapter.accumulateCalls).toHaveLength(1);
     });
 
-    it("throws after exhausting retries on transient errors", async () => {
+    it("throws on transient error after a single attempt", async () => {
       mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
       mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
       mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
       mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow());
       mockPrisma.coalitionTransaction.update.mockResolvedValue(
-        txRow({ status: "FAILED", lastError: "Transient failure 3/3", attempts: 4 }),
+        txRow({ status: "FAILED", lastError: "Transient failure 1/5", attempts: 2 }),
       );
 
       const svc = new CoalitionService(mockPrisma as never);
-      // 5 transient fails → never succeeds within 3 attempts
       const adapter = new MockAdapter({ transientFails: 5 });
       svc.registerAdapter(adapter);
 
@@ -505,8 +504,8 @@ describe("CoalitionService", () => {
         }),
       ).rejects.toThrow(CoalitionTransientError);
 
-      // Should have retried exactly 3 times
-      expect(adapter.accumulateCalls).toHaveLength(3);
+      // No auto-retry: the adapter is called exactly once.
+      expect(adapter.accumulateCalls).toHaveLength(1);
     });
 
     it("does NOT retry business errors", async () => {

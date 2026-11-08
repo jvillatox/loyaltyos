@@ -18,44 +18,9 @@ import type {
 import {
   CoalitionAccountNotLinkedError,
   CoalitionBusinessError,
-  CoalitionCircuitOpenError,
   CoalitionConfigNotFoundError,
-  CoalitionTransientError,
   CoalitionUnsupportedError,
 } from "./types.js";
-
-function isTransientError(error: Error): boolean {
-  // Coalition-specific transient errors
-  if (error instanceof CoalitionTransientError) return true;
-  if (error instanceof CoalitionBusinessError) return false;
-  if (error instanceof CoalitionCircuitOpenError) return false;
-  if (error instanceof CoalitionConfigNotFoundError) return false;
-  if (error instanceof CoalitionAccountNotLinkedError) return false;
-  if (error instanceof CoalitionUnsupportedError) return false;
-
-  // Network / HTTP errors are transient
-  const message = error.message.toLowerCase();
-  if (
-    message.includes("timeout") ||
-    message.includes("econnrefused") ||
-    message.includes("enotfound") ||
-    message.includes("etimedout") ||
-    message.includes("econnreset") ||
-    message.includes("network") ||
-    message.includes("fetch failed")
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-const RETRY_OPTIONS = {
-  attempts: 3,
-  backoff: "exponential" as const,
-  initialDelay: 1000,
-  maxDelay: 8000,
-};
 
 const BREAKER_OPTIONS: CircuitBreaker.Options = {
   timeout: 10000,
@@ -187,7 +152,7 @@ export class CoalitionService {
       const adapter = await this.getActiveAdapter(programId);
       this.requireCapability(adapter, "convert", "convert");
 
-      const adapterResult = await this.callWithRetry(() => {
+      const adapterResult = await this.callAdapter(() => {
         if (!adapter.convert) throw new CoalitionUnsupportedError("convert", adapter.name);
         return adapter.convert(externalMemberRef, ownPoints, txRef);
       });
@@ -472,7 +437,7 @@ export class CoalitionService {
         return adapter.redeem(externalMemberRef, points, txRef, metadata);
       };
 
-      const adapterResult = await this.callWithRetry(adapterFn);
+      const adapterResult = await this.callAdapter(adapterFn);
       await this.repo.updateTxSuccess(
         tx.id,
         adapterResult.externalTxId,
@@ -500,30 +465,15 @@ export class CoalitionService {
     }
   }
 
-  /** Calls `fn` through the circuit breaker with retry logic. */
-  private async callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+  /** Calls `fn` through the circuit breaker without auto-retry. */
+  private async callAdapter<T>(fn: () => Promise<T>): Promise<T> {
     const adapter = this.getAnyAdapter(); // used only for breaker identification
     const breaker = adapter ? this.breakers.get(adapter.name) : undefined;
 
-    let lastError: Error | undefined;
-    let delay = RETRY_OPTIONS.initialDelay;
-
-    for (let attempt = 1; attempt <= RETRY_OPTIONS.attempts; attempt++) {
-      try {
-        if (breaker) {
-          return (await breaker.fire(fn as () => Promise<unknown>)) as T;
-        }
-        return await fn();
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        if (!isTransientError(lastError) || attempt === RETRY_OPTIONS.attempts) {
-          throw lastError;
-        }
-        await sleep(delay);
-        delay = Math.min(delay * 2, RETRY_OPTIONS.maxDelay);
-      }
+    if (breaker) {
+      return (await breaker.fire(fn as () => Promise<unknown>)) as T;
     }
-    throw lastError ?? new Error("Retry exhausted with no error captured");
+    return await fn();
   }
 
   private getAnyAdapter(): CoalitionAdapter | undefined {
@@ -540,8 +490,4 @@ export class CoalitionService {
       throw new CoalitionUnsupportedError(method, adapter.name);
     }
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
