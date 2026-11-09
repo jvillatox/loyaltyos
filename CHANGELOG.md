@@ -9,33 +9,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.0] - 2026-11-08
 
+> **Security release.** All deployments of v1.3.0 and earlier should upgrade. See advisory GHSA-4hxr-gr8c-vghw.
+
 ### Security
 
 - **Deny-by-default authorization for non-admin routes.** Public API routes are
   now evaluated against a per-route access policy, so a request whose API key
   scope does not match the route is rejected rather than silently processed.
 - **Cross-program resource isolation.** Resource lookups and writes are scoped
-  to the requesting program; an id owned by another program resolves to `404`
-  instead of operating on the foreign record.
+  to the requesting program; an id owned by another program resolves to a
+  generic `404` instead of operating on the foreign record.
 - **Program-scoped idempotency keys.** Point, coalition, and event transaction
   idempotency keys are unique per program, so the same key used by two programs
   can no longer resolve (or reuse) the other program's record.
 - **Point adjustments record the acting admin.** `/members/:id/adjust` captures
   the real authenticated admin in the audit trail instead of a placeholder.
 
+### Breaking changes
+
+- **CLIENT-scope API keys are read-only and limited to the rewards catalog.**
+  A `CLIENT` key can no longer accumulate, redeem, or adjust points, validate or
+  redeem coupons or gift cards, or reach any mutation route; it can only read
+  `GET /rewards` and `GET /rewards/:id`.
+- **Members only reach their own resources.** The `MEMBER` principal is limited
+  to `/members/me/*` and to `:id` routes where `:id` matches the authenticated
+  member; every other member-scoped route now returns `403`.
+- **Point adjustments are restricted.** `/members/:id/adjust` is now reachable
+  only with a `SERVER`-scope API key or an admin holding `members.write`
+  (`OPERATOR`/`SUPER_ADMIN`); previously any key could adjust any member's points.
+- **Cross-program resources return a generic `404`.** Where a foreign id
+  previously surfaced a specific error (e.g. `COUPON_NOT_FOUND`), it now returns
+  `404 NOT_FOUND` to avoid disclosing resource existence across tenants.
+
 ### Changed
 
-- **Coalition adapter calls no longer auto-retry.** Transient failures
-  (timeouts, 5xx, network errors) surface immediately and are left for
-  queue-level reconciliation instead of firing the adapter up to three times
-  inline.
+- **Coalition adapter calls no longer auto-retry on transient failures.**
+  Transient failures (timeouts, network errors, `5xx`, `CoalitionTransientError`)
+  leave the transaction `PENDING` with an updated `lastError` and `attempts`
+  counter, and the API responds `502`/`503` with `COALITION_OUTCOME_UNKNOWN`.
+  Retrying the same `txRef` returns the stored state without calling the adapter
+  again; only business rejections (a `4xx` from Apprecio) mark the transaction
+  `FAILED`.
 
 ### Upgrade notes
 
-1. Run the new database migration (`prisma migrate deploy`): it denormalizes
-   `programId` onto `PointTransaction` and `CoalitionTransaction` and replaces
-   the globally-unique idempotency keys with program-scoped compound unique
-   indexes.
+1. **Back up your database before migrating.** The migration denormalizes
+   `programId` onto `PointTransaction` and `CoalitionTransaction` and backfills
+   it from the parent account, which rewrites large tables; the globally-unique
+   idempotency keys are replaced with program-scoped compound unique indexes.
+2. **Switch `CLIENT`-scope writers to `SERVER`.** Integrations that wrote points,
+   coupons, gift cards, or coalition transactions with a `CLIENT` key must move
+   that write traffic to a `SERVER`-scope key called from your backend.
+
+### Known limitations
+
+- Points ledger concurrency fixes from #29 are not included in this release.
+- The Apprecio adapter uses the environment credential, not the per-program
+  stored credential.
 
 ## [1.3.0] - 2026-10-28
 
@@ -107,7 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known limitations
 
 - Points ledger concurrency fixes from #29 are not included in this release.
-- Manual points adjustment is not available through the MCP or the admin API until #44.
+- Manual points adjustment is not available through the MCP; the `/members/:id/adjust` endpoint existed but was not role-restricted in this release (fixed in 1.4.0).
 
 ## [1.2.0] - 2026-10-21
 
