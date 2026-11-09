@@ -451,13 +451,13 @@ describe("CoalitionService", () => {
   // ═══ Retries ═══
 
   describe("retries", () => {
-    it("does not retry transient errors — a timeout fails immediately", async () => {
+    it("keeps a transient failure PENDING (outcome unknown) and does not retry", async () => {
       mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
       mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
       mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
       mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow());
       mockPrisma.coalitionTransaction.update.mockResolvedValue(
-        txRow({ status: "FAILED", lastError: "Transient failure 1/2", attempts: 2 }),
+        txRow({ status: "PENDING", lastError: "Transient failure 1/2", attempts: 2 }),
       );
 
       const svc = new CoalitionService(mockPrisma as never);
@@ -479,15 +479,20 @@ describe("CoalitionService", () => {
 
       // No auto-retry: the adapter is called exactly once.
       expect(adapter.accumulateCalls).toHaveLength(1);
+      // The transaction is left PENDING (not FAILED) for reconciliation.
+      expect(mockPrisma.coalitionTransaction.update).toHaveBeenCalledWith({
+        where: { id: "tx-1" },
+        data: { status: "PENDING", lastError: "Transient failure 1/2", attempts: 2 },
+      });
     });
 
-    it("throws on transient error after a single attempt", async () => {
+    it("throws on transient error after a single attempt and stays PENDING", async () => {
       mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
       mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
       mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
       mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow());
       mockPrisma.coalitionTransaction.update.mockResolvedValue(
-        txRow({ status: "FAILED", lastError: "Transient failure 1/5", attempts: 2 }),
+        txRow({ status: "PENDING", lastError: "Transient failure 1/5", attempts: 2 }),
       );
 
       const svc = new CoalitionService(mockPrisma as never);
@@ -504,11 +509,14 @@ describe("CoalitionService", () => {
         }),
       ).rejects.toThrow(CoalitionTransientError);
 
-      // No auto-retry: the adapter is called exactly once.
       expect(adapter.accumulateCalls).toHaveLength(1);
+      expect(mockPrisma.coalitionTransaction.update).toHaveBeenCalledWith({
+        where: { id: "tx-1" },
+        data: { status: "PENDING", lastError: "Transient failure 1/5", attempts: 2 },
+      });
     });
 
-    it("does NOT retry business errors", async () => {
+    it("marks a business error FAILED (not PENDING)", async () => {
       mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
       mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
       mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
@@ -533,7 +541,56 @@ describe("CoalitionService", () => {
         }),
       ).rejects.toThrow(CoalitionBusinessError);
 
-      // Only 1 attempt — business errors are not retried
+      expect(adapter.accumulateCalls).toHaveLength(1);
+      expect(mockPrisma.coalitionTransaction.update).toHaveBeenCalledWith({
+        where: { id: "tx-1" },
+        data: {
+          status: "FAILED",
+          lastError: "Bad request: invalid external account",
+          attempts: 2,
+        },
+      });
+    });
+
+    it("retrying the same txRef returns the existing PENDING tx without re-calling the adapter", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
+      // First attempt: no existing tx.
+      mockPrisma.coalitionTransaction.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow());
+      mockPrisma.coalitionTransaction.update.mockResolvedValue(
+        txRow({ status: "PENDING", lastError: "Transient failure 1/1", attempts: 2 }),
+      );
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({ transientFails: 1 });
+      svc.registerAdapter(adapter);
+
+      await expect(
+        svc.accumulate({
+          programId: "prog-1",
+          memberId: "mem-1",
+          externalMemberRef: "ext-ref-1",
+          points: 100,
+          txRef: "ref-transient-idem",
+        }),
+      ).rejects.toThrow(CoalitionTransientError);
+      expect(adapter.accumulateCalls).toHaveLength(1);
+
+      // Retry: the idempotency check short-circuits before the adapter call.
+      mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(
+        txRow({ status: "PENDING", lastError: "Transient failure 1/1", attempts: 2 }),
+      );
+      const result = await svc.accumulate({
+        programId: "prog-1",
+        memberId: "mem-1",
+        externalMemberRef: "ext-ref-1",
+        points: 100,
+        txRef: "ref-transient-idem",
+      });
+
+      expect(result.idempotent).toBe(true);
+      expect(result.status).toBe("PENDING");
       expect(adapter.accumulateCalls).toHaveLength(1);
     });
   });

@@ -611,8 +611,8 @@ function mapError(
       status: 502,
       body: {
         error: {
-          code: "EXTERNAL_SERVICE_ERROR",
-          message: localizeMessage("EXTERNAL_SERVICE_ERROR", locale),
+          code: "COALITION_OUTCOME_UNKNOWN",
+          message: localizeMessage("COALITION_OUTCOME_UNKNOWN", locale),
         },
       },
     };
@@ -622,7 +622,10 @@ function mapError(
     return {
       status: 503,
       body: {
-        error: { code: "CIRCUIT_OPEN", message: localizeMessage("CIRCUIT_OPEN", locale) },
+        error: {
+          code: "COALITION_OUTCOME_UNKNOWN",
+          message: localizeMessage("COALITION_OUTCOME_UNKNOWN", locale),
+        },
       },
     };
   }

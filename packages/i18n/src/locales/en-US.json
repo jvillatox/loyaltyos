@@ -355,6 +355,7 @@
     "COALITION_CONFIG_NOT_FOUND": "Coalition configuration not found",
     "COALITION_ACCOUNT_NOT_LINKED": "Coalition account not linked",
     "COALITION_BUSINESS_ERROR": "Coalition business error",
+    "COALITION_OUTCOME_UNKNOWN": "Coalition operation outcome unknown",
     "EXTERNAL_SERVICE_ERROR": "External service error",
     "CIRCUIT_OPEN": "Circuit open",
     "UNSUPPORTED_OPERATION": "Unsupported operation",

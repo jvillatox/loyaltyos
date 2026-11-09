@@ -19,6 +19,7 @@ import {
   CoalitionAccountNotLinkedError,
   CoalitionBusinessError,
   CoalitionConfigNotFoundError,
+  CoalitionTransientError,
   CoalitionUnsupportedError,
 } from "./types.js";
 
@@ -232,6 +233,11 @@ export class CoalitionService {
       };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
+      if (error instanceof CoalitionTransientError) {
+        await this.repo.updateTxPending(tx.id, error.message, tx.attempts + 1);
+        this.metrics?.recordOperation(config.provider, "CONVERT", "PENDING", false);
+        throw error;
+      }
       await this.repo.updateTxFailed(tx.id, error.message, tx.attempts + 1);
       this.metrics?.recordOperation(config.provider, "CONVERT", "FAILED", false);
       throw error;
@@ -459,6 +465,14 @@ export class CoalitionService {
       };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
+      if (error instanceof CoalitionTransientError) {
+        // Outcome unknown: the adapter may or may not have applied the operation.
+        // Keep the transaction PENDING for queue-level reconciliation instead of
+        // marking it FAILED.
+        await this.repo.updateTxPending(tx.id, error.message, tx.attempts + 1);
+        this.metrics?.recordOperation(config.provider, txType, "PENDING", false);
+        throw error;
+      }
       await this.repo.updateTxFailed(tx.id, error.message, tx.attempts + 1);
       this.metrics?.recordOperation(config.provider, txType, "FAILED", false);
       throw error;

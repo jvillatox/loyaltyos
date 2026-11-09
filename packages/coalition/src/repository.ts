@@ -203,6 +203,17 @@ export function createRepository(prisma: PrismaClient) {
     });
   }
 
+  async function updateTxPending(
+    txId: string,
+    error: string,
+    attempts: number,
+  ): Promise<CoalitionTransactionRow> {
+    return prisma.coalitionTransaction.update({
+      where: { id: txId },
+      data: { status: "PENDING", lastError: error, attempts },
+    });
+  }
+
   async function unlinkAccount(accountId: string): Promise<void> {
     await prisma.coalitionAccount.delete({
       where: { id: accountId },
@@ -270,6 +281,7 @@ export function createRepository(prisma: PrismaClient) {
     findTxByLocalRef,
     updateTxSuccess,
     updateTxFailed,
+    updateTxPending,
     updateTxReversed,
   };
 }

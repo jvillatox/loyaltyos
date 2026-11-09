@@ -154,6 +154,29 @@ describe("Coalition API routes", () => {
 
       expect(res.statusCode).toBe(200);
     });
+
+    it("returns 502 with COALITION_OUTCOME_UNKNOWN on a transient error", async () => {
+      const { CoalitionTransientError } = await import("@loyaltyos/coalition");
+      mockCoalitionService.accumulate.mockRejectedValue(
+        new CoalitionTransientError("Connection timed out"),
+      );
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/v1/coalition/accumulate",
+        headers: { ...authHeaders, ...idempotencyKey },
+        payload: {
+          memberId: "member-1",
+          externalMemberRef: "user@test.com",
+          points: 100,
+          txRef: "tx-acc-transient",
+        },
+      });
+
+      expect(res.statusCode).toBe(502);
+      const body = res.json<{ error: { code: string } }>();
+      expect(body.error.code).toBe("COALITION_OUTCOME_UNKNOWN");
+    });
   });
 
   // ═══ Redeem ═══
