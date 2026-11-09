@@ -36,6 +36,7 @@ beforeAll(async () => {
 
   coalitionService.registerAdapter({
     name: "TIMEOUT_PROVIDER",
+    timeoutMs: 10000,
     capabilities: {
       accumulate: true,
       redeem: true,

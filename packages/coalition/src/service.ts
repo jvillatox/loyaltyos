@@ -18,13 +18,18 @@ import type {
 import {
   CoalitionAccountNotLinkedError,
   CoalitionBusinessError,
+  CoalitionCircuitOpenError,
   CoalitionConfigNotFoundError,
   CoalitionTransientError,
   CoalitionUnsupportedError,
 } from "./types.js";
 
+// The breaker must fire after the adapter's own upstream timeout so the adapter
+// always has the first chance to surface a transient error. The +2000ms margin
+// accounts for the adapter's own abort handling.
+const BREAKER_TIMEOUT_PADDING_MS = 2000;
+
 const BREAKER_OPTIONS: CircuitBreaker.Options = {
-  timeout: 10000,
   errorThresholdPercentage: 50,
   volumeThreshold: 5,
   resetTimeout: 30000,
@@ -59,10 +64,10 @@ export class CoalitionService {
 
     // Create a circuit breaker for this adapter
     if (!this.breakers.has(adapter.name)) {
-      const breaker = new CircuitBreaker(
-        async (fn: () => Promise<unknown>) => fn(),
-        BREAKER_OPTIONS,
-      );
+      const breaker = new CircuitBreaker(async (fn: () => Promise<unknown>) => fn(), {
+        ...BREAKER_OPTIONS,
+        timeout: adapter.timeoutMs + BREAKER_TIMEOUT_PADDING_MS,
+      });
       breaker.on("open", () => {
         console.warn(`[Coalition] Circuit breaker OPEN for adapter "${adapter.name}"`);
         this.metrics?.setCircuitBreakerState(adapter.name, 2);
@@ -467,8 +472,8 @@ export class CoalitionService {
       const error = err instanceof Error ? err : new Error(String(err));
       if (error instanceof CoalitionTransientError) {
         // Outcome unknown: the adapter may or may not have applied the operation.
-        // Keep the transaction PENDING for queue-level reconciliation instead of
-        // marking it FAILED.
+        // Leave the transaction PENDING so an operator can check the partner's
+        // history before deciding whether to retry.
         await this.repo.updateTxPending(tx.id, error.message, tx.attempts + 1);
         this.metrics?.recordOperation(config.provider, txType, "PENDING", false);
         throw error;
@@ -484,10 +489,28 @@ export class CoalitionService {
     const adapter = this.getAnyAdapter(); // used only for breaker identification
     const breaker = adapter ? this.breakers.get(adapter.name) : undefined;
 
-    if (breaker) {
-      return (await breaker.fire(fn as () => Promise<unknown>)) as T;
+    if (!adapter || !breaker) {
+      return await fn();
     }
-    return await fn();
+
+    try {
+      return (await breaker.fire(fn as () => Promise<unknown>)) as T;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      // A breaker timeout means the outcome is unknown: the adapter may still be
+      // applying the operation upstream, so the transaction must stay PENDING.
+      if (code === "ETIMEDOUT") {
+        throw new CoalitionTransientError(
+          `Coalition adapter "${adapter.name}" exceeded the circuit breaker timeout ` +
+            `(${String(adapter.timeoutMs + BREAKER_TIMEOUT_PADDING_MS)}ms)`,
+        );
+      }
+      // An open breaker never invoked the adapter, so the operation did not run.
+      if (code === "EOPENBREAKER") {
+        throw new CoalitionCircuitOpenError(adapter.name);
+      }
+      throw err;
+    }
   }
 
   private getAnyAdapter(): CoalitionAdapter | undefined {

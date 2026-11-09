@@ -4,6 +4,8 @@ import { CoalitionBusinessError, CoalitionTransientError } from "../types.js";
 export interface MockAdapterOptions {
   /** Simulated network latency in ms. */
   latency?: number;
+  /** Adapter request timeout in ms (drives the breaker timeout). */
+  timeoutMs?: number;
   /** Number of transient errors to throw before succeeding. */
   transientFails?: number;
   /** Business error to throw immediately (no retries). */
@@ -28,6 +30,7 @@ const DEFAULT_CAPABILITIES: AdapterCapabilities = {
 
 export class MockAdapter implements CoalitionAdapter {
   name = "mock";
+  timeoutMs: number;
   capabilities: AdapterCapabilities;
   latency: number;
   transientFails: number;
@@ -62,6 +65,7 @@ export class MockAdapter implements CoalitionAdapter {
 
   constructor(options: MockAdapterOptions = {}) {
     this.capabilities = { ...DEFAULT_CAPABILITIES, ...options.capabilities };
+    this.timeoutMs = options.timeoutMs ?? 10000;
     this.latency = options.latency ?? 0;
     this.transientFails = options.transientFails ?? 0;
     this.businessError = options.businessError;

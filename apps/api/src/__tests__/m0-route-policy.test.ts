@@ -317,6 +317,7 @@ beforeAll(async () => {
   // Mock coalition adapter so a SERVER-key accumulate can actually succeed.
   coalitionService.registerAdapter({
     name: "M0RP_ATTACK",
+    timeoutMs: 10000,
     capabilities: {
       accumulate: true,
       redeem: false,

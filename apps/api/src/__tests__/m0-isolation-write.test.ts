@@ -166,6 +166,7 @@ beforeAll(async () => {
   // ── Coalition: A (accumulate attack) + B (reverse target) ────────────────
   coalitionService.registerAdapter({
     name: "M0W_A",
+    timeoutMs: 10000,
     capabilities: {
       accumulate: true,
       redeem: false,
@@ -189,6 +190,7 @@ beforeAll(async () => {
 
   coalitionService.registerAdapter({
     name: "M0W_REVERSE",
+    timeoutMs: 10000,
     capabilities: {
       accumulate: false,
       redeem: false,

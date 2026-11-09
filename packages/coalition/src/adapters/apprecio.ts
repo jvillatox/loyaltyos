@@ -231,6 +231,7 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
 
   return {
     name: "apprecio",
+    timeoutMs,
     capabilities: {
       accumulate: true,
       redeem: false,

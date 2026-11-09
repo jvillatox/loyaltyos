@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CoalitionBusinessError,
+  CoalitionCircuitOpenError,
   CoalitionTransientError,
   CoalitionUnsupportedError,
 } from "../types.js";
@@ -637,6 +638,87 @@ describe("CoalitionService", () => {
       } catch (err) {
         expect(err).toBeDefined();
       }
+    });
+
+    it("leaves the transaction PENDING when the adapter outlives the breaker timeout", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
+      mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
+      mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow());
+      mockPrisma.coalitionTransaction.update.mockResolvedValue(
+        txRow({ status: "PENDING", attempts: 2 }),
+      );
+
+      const svc = new CoalitionService(mockPrisma as never);
+      // timeoutMs = 1 → breaker timeout = 2001ms; the adapter's 3000ms latency
+      // exceeds it, so the breaker fires ETIMEDOUT before the adapter resolves.
+      const adapter = new MockAdapter({ timeoutMs: 1, latency: 3000 });
+      svc.registerAdapter(adapter);
+
+      await expect(
+        svc.accumulate({
+          programId: "prog-1",
+          memberId: "mem-1",
+          externalMemberRef: "ext-ref-1",
+          points: 100,
+          txRef: "ref-breaker-timeout",
+        }),
+      ).rejects.toThrow(CoalitionTransientError);
+
+      // The adapter was invoked, but the breaker cut it off mid-flight.
+      expect(adapter.accumulateCalls).toHaveLength(1);
+      // The outcome is unknown, so the transaction stays PENDING — never FAILED.
+      expect(mockPrisma.coalitionTransaction.update).toHaveBeenCalledWith({
+        where: { id: "tx-1" },
+        data: expect.objectContaining({ status: "PENDING" }),
+      });
+      expect(mockPrisma.coalitionTransaction.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: "FAILED" }) }),
+      );
+    });
+
+    it("marks the transaction FAILED when the breaker is already open", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
+      mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
+      mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow());
+      mockPrisma.coalitionTransaction.update.mockResolvedValue(txRow({ status: "FAILED" }));
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({ businessError: "Service unavailable" });
+      svc.registerAdapter(adapter);
+
+      // Five business failures trip the breaker (volumeThreshold = 5).
+      for (let i = 0; i < 5; i++) {
+        await expect(
+          svc.accumulate({
+            programId: "prog-1",
+            memberId: "mem-1",
+            externalMemberRef: "ext-ref-1",
+            points: 10,
+            txRef: `ref-cb-open-${String(i)}`,
+          }),
+        ).rejects.toThrow(CoalitionBusinessError);
+      }
+      expect(adapter.accumulateCalls).toHaveLength(5);
+
+      // Sixth call: the breaker is open, so the adapter is never invoked and the
+      // transaction is marked FAILED (the operation did not run upstream).
+      await expect(
+        svc.accumulate({
+          programId: "prog-1",
+          memberId: "mem-1",
+          externalMemberRef: "ext-ref-1",
+          points: 10,
+          txRef: "ref-cb-open-6",
+        }),
+      ).rejects.toThrow(CoalitionCircuitOpenError);
+
+      expect(adapter.accumulateCalls).toHaveLength(5);
+      expect(mockPrisma.coalitionTransaction.update).toHaveBeenLastCalledWith({
+        where: { id: "tx-1" },
+        data: expect.objectContaining({ status: "FAILED" }),
+      });
     });
   });
 });

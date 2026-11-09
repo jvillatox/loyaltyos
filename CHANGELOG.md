@@ -66,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Points ledger concurrency fixes from #29 are not included in this release.
 - The Apprecio adapter uses the environment credential, not the per-program
   stored credential.
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically; check the partner's transaction history before retrying with a
+  new `txRef`.
 
 ## [1.3.0] - 2026-10-28
 

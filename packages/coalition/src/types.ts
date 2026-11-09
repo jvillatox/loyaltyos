@@ -14,6 +14,8 @@ export interface AdapterCapabilities {
 
 export interface CoalitionAdapter {
   readonly name: string;
+  /** Request timeout the adapter applies to its own upstream calls, in ms. */
+  readonly timeoutMs: number;
   readonly capabilities: AdapterCapabilities;
   healthcheck(): Promise<{ ok: boolean; latencyMs?: number; details?: unknown }>;
   getBalance(externalMemberRef: string): Promise<number>;
