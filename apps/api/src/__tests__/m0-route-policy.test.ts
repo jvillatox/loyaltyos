@@ -589,3 +589,92 @@ describe("M0 route policy — anonymous is rejected", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+// ── Point 1: resolvePrincipal has no SERVER fallback ────────────────────────
+
+describe("M0 route policy — resolvePrincipal has no fallback", () => {
+  it("API key with an unknown scope is denied (403) on a MUTATE route", async () => {
+    const bogusKey = await prisma.apiKey.create({
+      data: { programId, key: `bogus_${suffix}`, scope: "NOT_A_REAL_SCOPE" },
+    });
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/v1/events",
+        headers: { "x-api-key": bogusKey.key, "x-program-id": programId },
+        payload: { type: "page_view" },
+      });
+      expect(res.statusCode).toBe(403);
+    } finally {
+      await prisma.apiKey.delete({ where: { id: bogusKey.id } }).catch(() => {});
+    }
+  });
+
+  it("an authenticated admin with a null role is denied (403) on a MUTATE route", async () => {
+    // The AdminRole Prisma enum cannot store an invalid role, so the "admin with
+    // null role" path is defensive. Simulate it (adminId set, adminRole null)
+    // with an onRequest hook on a throwaway app; auth still passes via a valid
+    // SERVER key, but resolvePrincipal must key off adminId/role — not fall back
+    // to SERVER.
+    const probe = await buildApp({ logger: false });
+    probe.addHook("onRequest", async (request) => {
+      request.adminId = "defensive-admin";
+      request.adminRole = null;
+      request.programId = programId;
+      request.apiKeyScope = "SERVER";
+    });
+    await probe.ready();
+    try {
+      const res = await probe.inject({
+        method: "POST",
+        url: "/api/v1/events",
+        headers: { "x-api-key": serverKey, "x-program-id": programId },
+        payload: { type: "page_view" },
+      });
+      expect(res.statusCode).toBe(403);
+    } finally {
+      await probe.close();
+    }
+  });
+});
+
+// ── Point 2: undeclared routes are denied ───────────────────────────────────
+
+describe("M0 route policy — undeclared routes are denied", () => {
+  it("routePolicy returns [] for a route not in the policy table", () => {
+    expect(routePolicy("GET", "/api/v1/something/undeclared")).toEqual([]);
+    expect(routePolicy("POST", "/api/v1/something/undeclared")).toEqual([]);
+  });
+
+  it("a route registered only in test returns 403 for every principal", async () => {
+    const probe = await buildApp({ logger: false });
+    probe.get("/api/v1/secret-undeclared", async () => ({ ok: true }));
+    await probe.ready();
+
+    const headersForPrincipal = (p: Principal2): Record<string, string> => {
+      switch (p) {
+        case "CLIENT":
+          return { "x-api-key": clientKey, "x-program-id": programId };
+        case "SERVER":
+          return { "x-api-key": serverKey, "x-program-id": programId };
+        case "MEMBER":
+          return { cookie: memberCookie };
+        default:
+          return { cookie: adminCookies[p] };
+      }
+    };
+
+    try {
+      for (const p of NON_ANONYMOUS) {
+        const res = await probe.inject({
+          method: "GET",
+          url: "/api/v1/secret-undeclared",
+          headers: headersForPrincipal(p),
+        });
+        expect(res.statusCode, `${p} should be denied`).toBe(403);
+      }
+    } finally {
+      await probe.close();
+    }
+  });
+});

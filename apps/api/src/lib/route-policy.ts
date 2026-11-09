@@ -53,11 +53,16 @@ const MEMBER_ME_RE = /^\/api\/v1\/members\/me(?:\/|$)/;
 export function routePolicy(method: string, url: string): readonly PolicyEntry[] {
   const m = method.toUpperCase();
 
+  // Member "me" routes are always self-scoped (and match before the :id rules).
   if (MEMBER_ME_RE.test(url)) return MEMBER_SELF;
-  if (m === "GET" && (url === "/api/v1/rewards" || url === "/api/v1/rewards/:id")) return ALL;
+
+  if (url === "/api/v1/rewards") return ALL;
+  if (url === "/api/v1/rewards/:id") return ALL;
   if (url === "/api/v1/rewards/:id/redeem") return REDEEM;
 
+  if (url === "/api/v1/members") return m === "POST" ? MUTATE : READ;
   if (url === "/api/v1/members/:id") return m === "GET" ? READ_SELF : MUTATE;
+  if (url === "/api/v1/members/:id/adjust") return MUTATE;
   if (url === "/api/v1/members/:id/balance") return READ_SELF;
   if (url === "/api/v1/members/:id/transactions") return READ_SELF;
   if (url === "/api/v1/members/:id/badges") return READ_SELF;
@@ -68,6 +73,21 @@ export function routePolicy(method: string, url: string): readonly PolicyEntry[]
   if (url === "/api/v1/members/:id/coalition/balance") return READ_SELF;
   if (url === "/api/v1/members/:id/coalition/history") return READ_SELF;
 
-  if (m === "GET") return READ;
-  return MUTATE;
+  if (url === "/api/v1/events") return MUTATE;
+
+  if (url === "/api/v1/coupons/validate") return MUTATE;
+  if (url === "/api/v1/coupons/redeem") return MUTATE;
+
+  if (url === "/api/v1/giftcards/validate") return MUTATE;
+  if (url === "/api/v1/giftcards/redeem") return MUTATE;
+
+  if (url === "/api/v1/coalition/accumulate") return MUTATE;
+  if (url === "/api/v1/coalition/redeem") return MUTATE;
+  if (url === "/api/v1/coalition/convert") return MUTATE;
+  if (url === "/api/v1/coalition/reverse") return MUTATE;
+
+  if (url === "/api/v1/stats/dashboard") return READ;
+
+  // No default: an undeclared route is denied for every principal.
+  return [];
 }

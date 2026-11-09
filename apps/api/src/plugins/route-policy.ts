@@ -9,11 +9,24 @@ import { type Principal, routePolicy } from "../lib/route-policy.js";
 // Admin routes are left to admin-session-guard + admin-rbac; the auth plugin
 // already gates public routes.
 
-function resolvePrincipal(request: FastifyRequest): Principal {
-  if (request.adminRole) return request.adminRole;
-  if (request.apiKeyScope === "MEMBER") return "MEMBER";
-  if (request.apiKeyScope === "CLIENT") return "CLIENT";
-  return "SERVER";
+function resolvePrincipal(request: FastifyRequest): Principal | null {
+  // An authenticated admin (session or PAT) is identified by adminId; its
+  // effective role is adminRole, which is null when the stored role is missing
+  // or not a recognized role. Such a session must be denied, not treated as
+  // SERVER — there is no principal fallback.
+  if (request.adminId != null) {
+    return request.adminRole;
+  }
+
+  // API key (or member session, which the auth plugin marks scope "MEMBER").
+  switch (request.apiKeyScope) {
+    case "SERVER":
+    case "CLIENT":
+    case "MEMBER":
+      return request.apiKeyScope;
+    default:
+      return null; // unknown scope → deny
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -42,7 +55,7 @@ async function routePolicyImpl(_app: FastifyInstance): Promise<void> {
     const allowed = routePolicy(request.method, path);
     const principal = resolvePrincipal(request);
 
-    if (allowed.includes(principal)) {
+    if (principal != null && allowed.includes(principal)) {
       done();
       return;
     }
