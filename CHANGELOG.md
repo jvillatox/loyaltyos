@@ -7,14 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-10
+
 ### Fixed
 
 - **Points ledger operations are atomic.** Earn, redeem, reverse, expire, and
   pending-point settlement now run in a single database transaction with
   balance-checked updates and row-level locking, so concurrent requests can
   neither overspend nor lose an earn, and a transaction can be reversed only
-  once. Reversing already-spent points may leave the balance negative and is
-  recorded in the audit log. Thanks to @rneubauer for the original fix in #29.
+  once. Thanks to @rneubauer for the original fix in #29.
+
+### Changed
+
+- **Reversing already-spent points may leave the balance negative.** Reversing
+  an EARN whose points were already redeemed is now allowed and removes the
+  points even when the balance goes negative. While negative, redemption stays
+  blocked and later earnings cover the debt first. Each such reversal is
+  recorded in the audit log with the acting admin and reason; reversing a
+  REVERSE remains forbidden.
+
+### Upgrade notes
+
+1. **Back up your database before migrating.** This release ships a data
+   migration that corrects `pendingBalance` (previously double-counted on every
+   earn) and backfills `settledAt` on existing transactions. The migration
+   rewrites those columns, so back up before running `prisma migrate deploy`.
+
+### Known limitations
+
+- Points expiry is not FIFO; expiry removes from the account's current
+  spendable balance rather than per-lot (#33).
+- `holdDays` is a service-wide setting, not per-program, and
+  `settlePending()` / `expire()` are not scheduled automatically (#34).
+- `verifyConsistency()` still flags held EARNs as inconsistent until they
+  settle (#35).
 
 ## [1.4.0] - 2026-11-08
 
@@ -397,3 +423,4 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 
 [1.3.0]: https://github.com/jvillatox/loyaltyos/compare/v1.2.0...v1.3.0
 [1.4.0]: https://github.com/jvillatox/loyaltyos/compare/v1.3.0...v1.4.0
+[1.4.1]: https://github.com/jvillatox/loyaltyos/compare/v1.4.0...v1.4.1
