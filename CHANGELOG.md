@@ -9,13 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.1] - 2026-11-10
 
+### Security
+
+- **Point reversals are scoped to the program.** Reversing a transaction now
+  looks it up by id and program, so one program can no longer reverse another
+  program's transaction. (#37)
+
 ### Fixed
 
 - **Points ledger operations are atomic.** Earn, redeem, reverse, expire, and
   pending-point settlement now run in a single database transaction with
   balance-checked updates and row-level locking, so concurrent requests can
   neither overspend nor lose an earn, and a transaction can be reversed only
-  once. Thanks to @rneubauer for the original fix in #29.
+  once. Thanks to @rneubauer for the original fix in #29. Reversing a REVERSE
+  now fails with `CannotReverseError`.
 
 ### Changed
 
@@ -32,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    migration that corrects `pendingBalance` (previously double-counted on every
    earn) and backfills `settledAt` on existing transactions. The migration
    rewrites those columns, so back up before running `prisma migrate deploy`.
+   After the migration, members' pending balances drop to their correct values;
+   this is expected and no points are lost.
 
 ### Known limitations
 
@@ -41,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `settlePending()` / `expire()` are not scheduled automatically (#34).
 - `verifyConsistency()` still flags held EARNs as inconsistent until they
   settle (#35).
+- The embeddable widget cannot authenticate member requests yet (#58).
+- The Apprecio adapter uses the environment credential, not the per-program
+  stored credential (#59).
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
 
 ## [1.4.0] - 2026-11-08
 
