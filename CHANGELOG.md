@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Points ledger operations are atomic.** Earn, redeem, reverse, expire, and
+  pending-point settlement now run in a single database transaction with
+  balance-checked updates and row-level locking, so concurrent requests can
+  neither overspend nor lose an earn, and a transaction can be reversed only
+  once. Reversing already-spent points may leave the balance negative and is
+  recorded in the audit log. Thanks to @rneubauer for the original fix in #29.
+
 ## [1.4.0] - 2026-11-08
 
 > **Security release.** All deployments of v1.3.0 and earlier should upgrade. See advisory GHSA-4hxr-gr8c-vghw.
