@@ -286,6 +286,25 @@ export class PointsService {
           ? { pendingBalance: { increment: -effect } }
           : { balance: { increment: -effect } },
       });
+
+      // Reversing already-spent points is allowed and can take the balance
+      // negative. Record the actor and reason so the resulting debt is auditable.
+      if (!fromPending && updated.balance < 0) {
+        await db.auditLog.create({
+          data: {
+            programId,
+            actorType: "ADMIN_USER",
+            actorId: adminUserId,
+            adminUserId,
+            action: "REVERSE_TRANSACTION",
+            entityType: "point_transaction",
+            entityId: txId,
+            reason,
+            metadata: { balanceAfter: updated.balance, amount: effect },
+          },
+        });
+      }
+
       const created = await db.pointTransaction.create({
         data: {
           accountId: original.accountId,
