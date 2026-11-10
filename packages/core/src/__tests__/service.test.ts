@@ -318,10 +318,8 @@ describe("PointsService.reverse", () => {
     };
 
     mockPrisma.pointTransaction.findUnique
-      .mockResolvedValueOnce(originalTx) // findTxById
-      .mockResolvedValueOnce(null); // no existing idempotent match
-
-    mockPrisma.pointTransaction.findFirst.mockResolvedValue(null); // no existing reversal
+      .mockResolvedValueOnce(null) // idempotency check: no existing reversal
+      .mockResolvedValueOnce(originalTx); // findTxById
 
     mockPrisma.pointAccount.findFirst.mockResolvedValue({
       id: "acc-1",
@@ -354,7 +352,7 @@ describe("PointsService.reverse", () => {
     });
 
     const svc = new PointsService(prisma);
-    const result = await svc.reverse("tx-orig", "mistake", "admin-1");
+    const result = await svc.reverse("prog-1", "tx-orig", "mistake", "admin-1");
 
     expect(result.reversalId).toBe("tx-reverse");
     expect(result.originalType).toBe("EARN");
@@ -367,7 +365,7 @@ describe("PointsService.reverse", () => {
     mockPrisma.pointTransaction.findUnique.mockResolvedValue(null); // no idempotent, no original
 
     const svc = new PointsService(prisma);
-    await expect(svc.reverse("nonexistent", "reason", "admin-1")).rejects.toThrow(
+    await expect(svc.reverse("prog-1", "nonexistent", "reason", "admin-1")).rejects.toThrow(
       TransactionNotFoundError,
     );
   });
@@ -386,14 +384,16 @@ describe("PointsService.reverse", () => {
     };
 
     mockPrisma.pointTransaction.findUnique
-      .mockResolvedValueOnce(originalTx) // find by id
-      .mockResolvedValueOnce(null); // idempotency check
+      .mockResolvedValueOnce(null) // idempotency check: no existing reversal
+      .mockResolvedValueOnce(originalTx); // findTxById
 
     // Another reversal already claimed the original.
     mockPrisma.pointTransaction.updateMany.mockResolvedValue({ count: 0 });
 
     const svc = new PointsService(prisma);
-    await expect(svc.reverse("tx-orig", "reason", "admin-1")).rejects.toThrow(AlreadyReversedError);
+    await expect(svc.reverse("prog-1", "tx-orig", "reason", "admin-1")).rejects.toThrow(
+      AlreadyReversedError,
+    );
   });
 });
 
