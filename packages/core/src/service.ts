@@ -72,7 +72,7 @@ export class PointsService {
   }
 
   async earn(input: EarnInput): Promise<EarnResult> {
-    const existing = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+    const existing = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
     if (existing) return this.idempotentEarn(input.programId, existing);
 
     const rules = await this.repo.findActiveRules(input.programId, "purchase");
@@ -98,6 +98,7 @@ export class PointsService {
         const created = await db.pointTransaction.create({
           data: {
             accountId: account.id,
+            programId: input.programId,
             type: "EARN",
             amount: effective.total,
             balanceAfter: updated.balance,
@@ -122,14 +123,14 @@ export class PointsService {
       };
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
-      const winner = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+      const winner = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
       if (!winner) throw err;
       return this.idempotentEarn(input.programId, winner);
     }
   }
 
   async redeem(input: RedeemInput): Promise<RedeemResult> {
-    const existing = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+    const existing = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
     if (existing) return this.idempotentResult(existing);
 
     try {
@@ -157,6 +158,7 @@ export class PointsService {
         const created = await db.pointTransaction.create({
           data: {
             accountId: account.id,
+            programId: input.programId,
             type: "REDEEM",
             amount: input.amount,
             balanceAfter: updated.balance,
@@ -178,14 +180,14 @@ export class PointsService {
         throw err;
       }
       if (!isUniqueViolation(err)) throw err;
-      const winner = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+      const winner = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
       if (!winner) throw err;
       return this.idempotentResult(winner);
     }
   }
 
   async adjust(input: AdjustInput): Promise<AdjustResult> {
-    const existing = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+    const existing = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
     if (existing) {
       return {
         transactionId: existing.id,
@@ -204,6 +206,7 @@ export class PointsService {
         const created = await db.pointTransaction.create({
           data: {
             accountId: account.id,
+            programId: input.programId,
             type: "ADJUST",
             amount: input.amount,
             balanceAfter: updated.balance,
@@ -221,7 +224,7 @@ export class PointsService {
       return { transactionId: tx.id, amount: input.amount, balanceAfter };
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
-      const winner = await this.repo.findTxByIdempotencyKey(input.idempotencyKey);
+      const winner = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
       if (!winner) throw err;
       return { transactionId: winner.id, amount: winner.amount, balanceAfter: winner.balanceAfter };
     }
@@ -234,6 +237,7 @@ export class PointsService {
    * Reversing EARN points that were already spent can take the balance negative.
    */
   async reverse(
+    programId: string,
     txId: string,
     reason: string,
     adminUserId: string,
@@ -241,10 +245,12 @@ export class PointsService {
   ): Promise<ReverseResult> {
     const key = idempotencyKey ?? `reverse-${txId}-${adminUserId}`;
 
-    const existing = await this.repo.findTxByIdempotencyKey(key);
+    const existing = await this.repo.findTxByIdempotencyKey(programId, key);
     if (existing) {
       const original = await this.repo.findTxById(txId);
-      if (!original) throw new TransactionNotFoundError(txId);
+      if (!original || original.programId !== programId) {
+        throw new TransactionNotFoundError(txId);
+      }
       return {
         reversalId: existing.id,
         originalType: original.type,
@@ -253,12 +259,14 @@ export class PointsService {
     }
 
     const original = await this.repo.findTxById(txId);
-    if (!original) throw new TransactionNotFoundError(txId);
+    if (!original || original.programId !== programId) {
+      throw new TransactionNotFoundError(txId);
+    }
     if (original.type === "REVERSE") throw new CannotReverseError(txId);
 
     const effect = applyTxToBalance(original.type, original.amount);
 
-    const { reversal, programId } = await this.prisma.$transaction(async (db) => {
+    const { reversal } = await this.prisma.$transaction(async (db) => {
       // Claim the original first; a concurrent reversal blocks on this row and
       // then finds it already claimed.
       const claimed = await db.pointTransaction.updateMany({
@@ -281,6 +289,7 @@ export class PointsService {
       const created = await db.pointTransaction.create({
         data: {
           accountId: original.accountId,
+          programId,
           type: "REVERSE",
           amount: effect,
           balanceAfter: updated.balance,
@@ -292,7 +301,7 @@ export class PointsService {
         },
       });
       await db.pointTransaction.update({ where: { id: txId }, data: { reversedById: created.id } });
-      return { reversal: created, programId: updated.programId };
+      return { reversal: created };
     });
 
     this.metrics?.recordReverse(programId, original.type);
@@ -369,6 +378,7 @@ export class PointsService {
         const created = await db.pointTransaction.create({
           data: {
             accountId: tx.accountId,
+            programId,
             type: "EXPIRE",
             amount,
             balanceAfter: updated.balance,

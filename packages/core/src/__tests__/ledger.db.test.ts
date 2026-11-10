@@ -6,7 +6,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { verifyConsistency } from "../ledger.js";
 import { PointsService } from "../service.js";
-import { AlreadyReversedError, InsufficientBalanceError } from "../types.js";
+import {
+  AlreadyReversedError,
+  InsufficientBalanceError,
+  TransactionNotFoundError,
+} from "../types.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const HOLD_DAYS = 3;
@@ -122,7 +126,7 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     const svc = new PointsService(prisma);
     const earned = await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
-    const result = await svc.reverse(earned.transactionId, "refund", "admin-1");
+    const result = await svc.reverse(ids.programId, earned.transactionId, "refund", "admin-1");
 
     expect(result.amountReversed).toBe(100);
     expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(0);
@@ -134,7 +138,7 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     await earn(svc, ids, 100, `seed-${ids.memberId}`);
     const spent = await redeem(svc, ids, 40, `spend-${ids.memberId}`);
 
-    await svc.reverse(spent.transactionId, "purchase voided", "admin-1");
+    await svc.reverse(ids.programId, spent.transactionId, "purchase voided", "admin-1");
 
     expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(100);
   });
@@ -145,13 +149,27 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     const earned = await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
     const results = await Promise.allSettled([
-      svc.reverse(earned.transactionId, "refund", "admin-1"),
-      svc.reverse(earned.transactionId, "refund", "admin-2"),
+      svc.reverse(ids.programId, earned.transactionId, "refund", "admin-1"),
+      svc.reverse(ids.programId, earned.transactionId, "refund", "admin-2"),
     ]);
 
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(rejectionOf(results)).toBeInstanceOf(AlreadyReversedError);
     expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(0);
+  });
+
+  it("does not let one program reverse another program's transaction (#37)", async () => {
+    const a = await newMember();
+    const b = await newMember();
+    const svc = new PointsService(prisma);
+    const earned = await earn(svc, a, 100, `seed-${a.memberId}`);
+
+    await expect(
+      svc.reverse(b.programId, earned.transactionId, "refund", "admin-1"),
+    ).rejects.toBeInstanceOf(TransactionNotFoundError);
+
+    // Program A's points are untouched.
+    expect((await svc.balance(a.memberId, a.programId)).confirmed).toBe(100);
   });
 
   describe("with a hold period (F4)", () => {
@@ -201,7 +219,7 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
       const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
       const earned = await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
-      await svc.reverse(earned.transactionId, "refund", "admin-1");
+      await svc.reverse(ids.programId, earned.transactionId, "refund", "admin-1");
 
       expect(await svc.balance(ids.memberId, ids.programId)).toEqual({
         confirmed: 0,
