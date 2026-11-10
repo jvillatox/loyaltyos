@@ -383,12 +383,13 @@ export class PointsService {
         });
         if (claimed.count === 0) return false;
 
-        // Touch the row to take its lock before reading the balance, so a
-        // concurrent redemption cannot spend between the read and the decrement.
-        const account = await db.pointAccount.update({
-          where: { id: tx.accountId },
-          data: { updatedAt: new Date() },
-        });
+        // Lock the account row before reading its balance so a concurrent
+        // redemption cannot spend between the read and the decrement.
+        const rows = await db.$queryRaw<{ balance: number }[]>(
+          Prisma.sql`SELECT balance FROM "PointAccount" WHERE id = ${tx.accountId} FOR UPDATE`,
+        );
+        const account = rows[0];
+        if (!account) throw new Error(`PointAccount ${tx.accountId} missing for ${tx.id}`);
         const amount = Math.min(tx.amount, Math.max(account.balance, 0));
         const updated = await db.pointAccount.update({
           where: { id: tx.accountId },
