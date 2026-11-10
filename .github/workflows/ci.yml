@@ -92,6 +92,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+      TEST_DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: test-jwt-secret-for-ci-at-least-32-chars
       API_KEY_SALT: test-salt-for-ci
@@ -124,6 +125,7 @@ jobs:
       - name: Write .env for vitest
         run: |
           echo "DATABASE_URL=$DATABASE_URL" > apps/api/.env
+          echo "TEST_DATABASE_URL=$TEST_DATABASE_URL" >> apps/api/.env
           echo "REDIS_URL=$REDIS_URL" >> apps/api/.env
           echo "--- apps/api/.env written ($(wc -c < apps/api/.env) bytes) ---"
 
