@@ -52,6 +52,13 @@ async function routePolicyImpl(_app: FastifyInstance): Promise<void> {
       return;
     }
 
+    // Read-only member session tokens may not mutate, regardless of what the
+    // route policy otherwise allows for the MEMBER principal.
+    if (request.memberTokenReadOnly && request.method !== "GET" && request.method !== "HEAD") {
+      done(new LoyaltyError("FORBIDDEN", 403));
+      return;
+    }
+
     const allowed = routePolicy(request.method, path);
     const principal = resolvePrincipal(request);
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Member session tokens for the widget.** The widget can now authenticate a
+  member without ever receiving the merchant's `SERVER` key. A merchant backend
+  mints a short-lived, read-only `lomem_…` bearer token via
+  `POST /api/v1/members/:id/session-token` (SERVER-only) and hands it to the
+  widget, which sends it as `Authorization: Bearer lomem_…`. Tokens are stored
+  hashed (SHA-256), default to a 900-second TTL (max 3600), are read-only (any
+  non-GET/HEAD request returns 403), and can be revoked with
+  `DELETE /api/v1/members/:id/session-tokens`. Expired and revoked tokens are
+  deleted by a daily cleanup job. The widget gains a `client-key` attribute for
+  the anonymous rewards catalog, a public `setAuthToken()` method, and a
+  `loyaltyos:auth-required` event fired on 401. (#58)
+
+### Upgrade notes
+
+1. **Run the migration before deploying.** This release adds the
+   `MemberSessionToken` table. Run `prisma migrate deploy` as part of the
+   upgrade. No data backfill is required.
+
 ## [1.4.1] - 2026-11-10
 
 ### Security

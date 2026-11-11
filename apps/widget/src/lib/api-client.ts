@@ -27,6 +27,8 @@ export async function fetchApi<T>(
 
   if (config.authToken) {
     headers.Authorization = `Bearer ${config.authToken}`;
+  } else if (config.clientKey) {
+    headers["X-API-Key"] = config.clientKey;
   }
 
   const response = await fetch(url, { ...options, headers });

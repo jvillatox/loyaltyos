@@ -16,6 +16,7 @@ import Fastify from "fastify";
 import { prisma } from "./db.js";
 import { getBusinessMetricsRegistry } from "./lib/business-metrics.js";
 import { errorHandler } from "./lib/error-handler.js";
+import { MEMBER_TOKEN_PREFIX } from "./lib/member-session-token.js";
 import { hashToken, PAT_PREFIX } from "./lib/personal-access-token.js";
 import { adminRbacPlugin } from "./plugins/admin-rbac.js";
 import { adminSessionGuard } from "./plugins/admin-session-guard.js";
@@ -165,6 +166,9 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
         ? authorization.slice("Bearer ".length)
         : "";
       if (bearer.startsWith(PAT_PREFIX)) {
+        return hashToken(bearer);
+      }
+      if (bearer.startsWith(MEMBER_TOKEN_PREFIX)) {
         return hashToken(bearer);
       }
       return req.ip;

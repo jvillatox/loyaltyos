@@ -7,6 +7,7 @@ const config: WidgetConfig = {
   programId: "test-program-id",
   apiBase: "https://api.example.com",
   authToken: "test-token",
+  clientKey: null,
   theme: "light",
   accentColor: "#7c3aed",
   locale: "en-US",
@@ -43,6 +44,20 @@ describe("fetchApi", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer test-token");
     expect(headers["X-Program-Id"]).toBe("test-program-id");
+  });
+
+  it("sends X-API-Key when client-key is set and no auth-token", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 200 }));
+    vi.stubGlobal("fetch", mockFetch);
+
+    await fetchApi({ ...config, authToken: null, clientKey: "client-secret" }, "/rewards");
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+    expect(headers["X-API-Key"]).toBe("client-secret");
   });
 
   it("uses the configured API URL", async () => {

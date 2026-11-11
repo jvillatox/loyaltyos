@@ -17,6 +17,7 @@ import {
   startGiftCardGenerateWorker,
   startOutstandingBalanceWorker,
 } from "./workers/giftcards.js";
+import { startMemberTokenCleanupWorker } from "./workers/member-session-tokens.js";
 import { startNotificationsWorker } from "./workers/notifications.js";
 
 // Metrics
@@ -28,6 +29,7 @@ startNotificationsWorker();
 startGiftCardGenerateWorker();
 startGiftCardExpireWorker();
 startOutstandingBalanceWorker();
+startMemberTokenCleanupWorker();
 
 // Minimal HTTP server for health check and metrics (Prometheus scrape target)
 const metricsPort = Number(process.env.WORKER_METRICS_PORT) || 3003;

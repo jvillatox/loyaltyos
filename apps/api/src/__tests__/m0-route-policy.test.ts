@@ -66,6 +66,7 @@ const P_MEMBER_SELF: readonly Principal2[] = [
 const P_READ: readonly Principal2[] = ["SERVER", "ANALYST", "OPERATOR", "SUPER_ADMIN"];
 const P_MUTATE: readonly Principal2[] = ["SERVER", "OPERATOR", "SUPER_ADMIN"];
 const P_REDEEM: readonly Principal2[] = ["MEMBER", "SERVER", "OPERATOR", "SUPER_ADMIN"];
+const P_SERVER: readonly Principal2[] = ["SERVER"];
 
 const NON_ANONYMOUS = PRINCIPALS.filter((p): p is Principal2 => p !== "anonymous");
 
@@ -138,6 +139,8 @@ const ROUTES: readonly RouteEntry[] = [
     self: true,
     body: () => ({ channel: "EMAIL", optedIn: true }),
   },
+  { method: "POST", url: "/api/v1/members/:id/session-token", allow: P_SERVER },
+  { method: "DELETE", url: "/api/v1/members/:id/session-tokens", allow: P_SERVER },
 
   // Events
   {

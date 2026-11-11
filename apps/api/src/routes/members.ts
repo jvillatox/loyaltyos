@@ -9,6 +9,11 @@ import { prisma } from "../db.js";
 import { audit } from "../lib/audit.js";
 import { adaptPointsMetrics, getBusinessMetrics } from "../lib/business-metrics.js";
 import { LoyaltyError } from "../lib/errors.js";
+import {
+  generateMemberToken,
+  MEMBER_TOKEN_DEFAULT_TTL_SECONDS,
+  MEMBER_TOKEN_MAX_TTL_SECONDS,
+} from "../lib/member-session-token.js";
 import { notificationsService } from "../lib/notifications-setup.js";
 
 const points = new PointsService(prisma, adaptPointsMetrics(getBusinessMetrics()));
@@ -382,6 +387,78 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     // Return updated preferences
     const prefs = await notificationsService.getMemberPreferences(id, request.programId);
     return reply.send({ data: prefs });
+  });
+
+  // ═══ Member Session Tokens ═══
+
+  const sessionTokenSchema = z.object({
+    ttlSeconds: z.number().int().min(1).max(MEMBER_TOKEN_MAX_TTL_SECONDS).optional(),
+  });
+
+  // POST /members/:id/session-token — issue a short-lived member token (SERVER only)
+  app.post("/members/:id/session-token", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = sessionTokenSchema.parse(request.body ?? {});
+
+    const member = await prisma.member.findFirst({
+      where: { id, programId: request.programId, deletedAt: null },
+    });
+    if (!member) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+    }
+
+    const ttlSeconds = body.ttlSeconds ?? MEMBER_TOKEN_DEFAULT_TTL_SECONDS;
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+    const { token, tokenHash } = generateMemberToken();
+
+    const record = await prisma.memberSessionToken.create({
+      data: {
+        memberId: member.id,
+        programId: request.programId,
+        tokenHash,
+        readOnly: true,
+        expiresAt,
+      },
+    });
+
+    await audit(request.programId, request.actor, "OTHER", "member_session_token", record.id, {
+      memberId: member.id,
+      ttlSeconds,
+      expiresAt: expiresAt.toISOString(),
+    });
+
+    return reply.status(201).send({
+      data: { token, expiresAt: record.expiresAt, memberId: record.memberId },
+    });
+  });
+
+  // DELETE /members/:id/session-tokens — revoke all active member tokens (SERVER only)
+  app.delete("/members/:id/session-tokens", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+
+    const member = await prisma.member.findFirst({
+      where: { id, programId: request.programId, deletedAt: null },
+    });
+    if (!member) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+    }
+
+    const now = new Date();
+    const result = await prisma.memberSessionToken.updateMany({
+      where: {
+        memberId: member.id,
+        programId: request.programId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { revokedAt: now },
+    });
+
+    await audit(request.programId, request.actor, "OTHER", "member_session_token", member.id, {
+      revoked: result.count,
+    });
+
+    return reply.status(204).send();
   });
 
   done();

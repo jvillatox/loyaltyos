@@ -47,6 +47,7 @@ const MUTATE: readonly PolicyEntry[] = ["SERVER", "OPERATOR", "SUPER_ADMIN"];
 const REDEEM: readonly PolicyEntry[] = ["MEMBER", "SERVER", "OPERATOR", "SUPER_ADMIN"];
 const READ_SELF: readonly PolicyEntry[] = ["SERVER", "ANALYST", "OPERATOR", "SUPER_ADMIN", "SELF"];
 const MUTATE_SELF: readonly PolicyEntry[] = ["SERVER", "OPERATOR", "SUPER_ADMIN", "SELF"];
+const SERVER_ONLY: readonly PolicyEntry[] = ["SERVER"];
 
 const MEMBER_ME_RE = /^\/api\/v1\/members\/me(?:\/|$)/;
 
@@ -72,6 +73,8 @@ export function routePolicy(method: string, url: string): readonly PolicyEntry[]
   if (url === "/api/v1/members/:id/preferences") return m === "GET" ? READ_SELF : MUTATE_SELF;
   if (url === "/api/v1/members/:id/coalition/balance") return READ_SELF;
   if (url === "/api/v1/members/:id/coalition/history") return READ_SELF;
+  if (url === "/api/v1/members/:id/session-token" && m === "POST") return SERVER_ONLY;
+  if (url === "/api/v1/members/:id/session-tokens" && m === "DELETE") return SERVER_ONLY;
 
   if (url === "/api/v1/events") return MUTATE;
 

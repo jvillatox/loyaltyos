@@ -5,17 +5,16 @@ import "./loyalty-points-card.js";
 import "./loyalty-rewards-top3.js";
 import "./loyalty-tier-card.js";
 
-import { css, html, LitElement } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { css, html, LitElement, type TemplateResult } from "lit";
+import { customElement } from "lit/decorators.js";
 
 import { widgetT } from "../i18n.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
+import type { WidgetLocale } from "../types.js";
 
 @customElement("loyalty-widget")
 export class LoyaltyWidget extends LitElement {
   private controller = new WidgetConfigController(this);
-
-  @state() private authDismissed = false;
 
   static override styles = css`
     :host {
@@ -110,9 +109,21 @@ export class LoyaltyWidget extends LitElement {
   }
 
   private onAuthRequired = (): void => {
-    this.authDismissed = false;
     this.requestUpdate();
   };
+
+  /**
+   * Programmatically set the member auth token (e.g. after your backend issues
+   * a short-lived member token). Pass null to return to the visitor/catalog view.
+   */
+  setAuthToken(token: string | null): void {
+    if (token) {
+      this.setAttribute("auth-token", token);
+    } else {
+      this.removeAttribute("auth-token");
+    }
+    this.requestUpdate();
+  }
 
   private handleSignIn = (): void => {
     const config = this.controller.config;
@@ -138,6 +149,28 @@ export class LoyaltyWidget extends LitElement {
     s.setProperty("--loy-color-border", isDark ? "#334155" : "#e2e8f0");
   }
 
+  private renderVisitor(locale: WidgetLocale): TemplateResult {
+    const hasCatalog = this.controller.hasClientKey;
+    return html`
+      <div class="widget-inner">
+        ${hasCatalog
+          ? html`
+              <div class="widget-section">
+                <div class="section-title">${widgetT("widget.topRewards", undefined, locale)}</div>
+                <loyalty-rewards-top3></loyalty-rewards-top3>
+              </div>
+            `
+          : ""}
+        <div class="auth-cta">
+          <p>${widgetT("widget.signInPrompt", undefined, locale)}</p>
+          <button @click=${this.handleSignIn}>
+            ${widgetT("widget.signIn", undefined, locale)}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
   override render() {
     if (!this.controller.hasConfig) {
       return html`<div class="widget-inner">
@@ -149,25 +182,8 @@ export class LoyaltyWidget extends LitElement {
     const config = this.controller.config;
     const locale = this.controller.locale;
 
-    if (!this.controller.isAuthenticated && !this.authDismissed) {
-      return html`
-        <div class="auth-cta">
-          <p>${widgetT("widget.signInPrompt", undefined, locale)}</p>
-          <button @click=${this.handleSignIn}>
-            ${widgetT("widget.signIn", undefined, locale)}
-          </button>
-          <a
-            href="#"
-            style="font-size:12px;color:var(--loy-color-text-secondary);text-decoration:underline"
-            @click=${(e: Event) => {
-              e.preventDefault();
-              this.authDismissed = true;
-              this.requestUpdate();
-            }}
-            >${widgetT("widget.notNow", undefined, locale)}</a
-          >
-        </div>
-      `;
+    if (!this.controller.isAuthenticated) {
+      return this.renderVisitor(locale);
     }
 
     const portalBase = config.apiBase.replace(/\/api$/, "");

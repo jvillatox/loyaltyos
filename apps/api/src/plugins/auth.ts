@@ -11,6 +11,7 @@ import type { AuditActor } from "../lib/audit.js";
 import { adminLucia } from "../lib/auth/admin-lucia.js";
 import { lucia } from "../lib/auth/lucia.js";
 import { LoyaltyError } from "../lib/errors.js";
+import { MEMBER_TOKEN_PREFIX } from "../lib/member-session-token.js";
 import { hashToken, PAT_PREFIX } from "../lib/personal-access-token.js";
 
 declare module "fastify" {
@@ -21,6 +22,7 @@ declare module "fastify" {
     adminId: string | null;
     adminRole: AdminRole | null;
     patId: string | null;
+    memberTokenReadOnly: boolean;
     actor: AuditActor;
   }
 }
@@ -39,6 +41,7 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
   app.decorateRequest("adminId", null);
   app.decorateRequest("adminRole", null);
   app.decorateRequest("patId", null);
+  app.decorateRequest("memberTokenReadOnly", false);
   app.decorateRequest("actor", { type: "SYSTEM" as AuditActorType, id: "anonymous" });
 
   app.addHook("preHandler", async (request, reply) => {
@@ -167,6 +170,34 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
       request.apiKeyScope = "SERVER";
       request.patId = token.id;
       request.actor = { type: "ADMIN_USER", id: token.adminUser.id, patId: token.id };
+      return;
+    }
+
+    // 2c. Member session token (Authorization: Bearer lomem_…)
+    if (bearerToken.startsWith(MEMBER_TOKEN_PREFIX)) {
+      const token = await prisma.memberSessionToken.findUnique({
+        where: { tokenHash: hashToken(bearerToken) },
+        include: { member: true },
+      });
+
+      if (!token || token.revokedAt !== null || token.member.deletedAt !== null) {
+        throw Object.assign(new Error("Invalid token"), { statusCode: 401 });
+      }
+      if (token.expiresAt < new Date()) {
+        throw Object.assign(new Error("Token has expired"), { statusCode: 401 });
+      }
+
+      // A token is bound to its member's program; a client must not switch tenants.
+      const tokenProgramId = request.headers["x-program-id"] as string | undefined;
+      if (tokenProgramId && tokenProgramId !== token.member.programId) {
+        throw new LoyaltyError("FORBIDDEN", 403);
+      }
+
+      request.memberId = token.member.id;
+      request.programId = token.member.programId;
+      request.apiKeyScope = "MEMBER";
+      request.memberTokenReadOnly = token.readOnly;
+      request.actor = { type: "MEMBER", id: token.member.id };
       return;
     }
 
