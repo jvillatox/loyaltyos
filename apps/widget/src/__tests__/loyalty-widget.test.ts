@@ -68,22 +68,39 @@ describe("LoyaltyWidget", () => {
     expect(el.shadowRoot!.textContent).toContain("Please provide configuration");
   });
 
-  it("dismisses auth CTA when 'Not now' is clicked", async () => {
+  it("shows rewards catalog + sign-in for a visitor with client-key", async () => {
     const el = await fixture<LoyaltyWidget>(html`
-      <loyalty-widget program-id="pgm" api-base="http://localhost"></loyalty-widget>
+      <loyalty-widget
+        program-id="pgm"
+        api-base="http://localhost/api/v1"
+        client-key="ck"
+      ></loyalty-widget>
     `);
 
     const root = el.shadowRoot!;
     expect(root.querySelector(".auth-cta")).not.toBeNull();
+    expect(root.querySelector("loyalty-rewards-top3")).not.toBeNull();
+    expect(root.querySelector("loyalty-points-card")).toBeNull();
+  });
 
-    // Click "Not now"
-    const notNow = root.querySelector("a")!;
-    notNow.click();
+  it("setAuthToken switches from visitor to authenticated view", async () => {
+    const el = await fixture<LoyaltyWidget>(html`
+      <loyalty-widget
+        program-id="pgm"
+        api-base="http://localhost/api/v1"
+        client-key="ck"
+      ></loyalty-widget>
+    `);
+
+    expect(el.shadowRoot!.querySelector(".auth-cta")).not.toBeNull();
+    expect(el.shadowRoot!.querySelector("loyalty-points-card")).toBeNull();
+
+    el.setAuthToken("member-token");
     await el.updateComplete;
 
-    // Auth CTA should be hidden, widget content shown
-    expect(root.querySelector(".auth-cta")).toBeNull();
-    expect(root.querySelector("loyalty-points-card")).not.toBeNull();
+    expect(el.getAttribute("auth-token")).toBe("member-token");
+    expect(el.shadowRoot!.querySelector(".auth-cta")).toBeNull();
+    expect(el.shadowRoot!.querySelector("loyalty-points-card")).not.toBeNull();
   });
 });
 

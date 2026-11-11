@@ -76,7 +76,12 @@ export class LoyaltyRewardsTop3 extends LitElement {
   }
 
   private fetchData = async (): Promise<void> => {
-    if (!this.controller.hasConfig || !this.controller.isAuthenticated) return;
+    if (
+      !this.controller.hasConfig ||
+      (!this.controller.isAuthenticated && !this.controller.hasClientKey)
+    ) {
+      return;
+    }
     this.loading = true;
     this.error = "";
     try {
@@ -92,7 +97,7 @@ export class LoyaltyRewardsTop3 extends LitElement {
   };
 
   override render() {
-    if (!this.controller.isAuthenticated) return null;
+    if (!this.controller.isAuthenticated && !this.controller.hasClientKey) return null;
     const locale = this.controller.locale;
     if (this.loading) return html`<loy-spinner .locale=${locale}></loy-spinner>`;
     if (this.error)

@@ -76,6 +76,7 @@ model Member {
   events             Event[]
   sessions           Session[]
   magicLinkTokens    MagicLinkToken[]
+  memberSessionTokens MemberSessionToken[]
   giftCardTransactions GiftCardTransaction[]
 
   @@unique([programId, externalId])
@@ -743,6 +744,22 @@ model MagicLinkToken {
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([tokenHash])
+}
+
+model MemberSessionToken {
+  id         String    @id @default(cuid())
+  memberId   String
+  programId  String
+  tokenHash  String    @unique
+  readOnly   Boolean   @default(true)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, programId])
+  @@index([expiresAt])
 }
 
 model ApiKey {

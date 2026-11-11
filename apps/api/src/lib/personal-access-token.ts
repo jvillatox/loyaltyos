@@ -25,12 +25,21 @@ export function hashToken(token: string): string {
 }
 
 /**
- * Generate a new personal access token. Returns the plaintext token (shown to
- * the caller exactly once), its hash, and a short identifying prefix of the
- * secret portion (the first 8 base62 characters).
+ * Generate an opaque, base62-encoded secret token with a caller-supplied prefix.
+ * Returns the plaintext token (shown to the caller exactly once), its SHA-256
+ * hash (the only value persisted), and a short identifying prefix of the secret
+ * portion (the first 8 base62 characters).
  */
-export function generateToken(): { token: string; tokenHash: string; prefix: string } {
-  const secret = toBase62(randomBytes(PAT_TOKEN_BYTES));
-  const token = `${PAT_PREFIX}${secret}`;
+export function generateOpaqueToken(
+  prefix: string,
+  bytes: number,
+): { token: string; tokenHash: string; prefix: string } {
+  const secret = toBase62(randomBytes(bytes));
+  const token = `${prefix}${secret}`;
   return { token, tokenHash: hashToken(token), prefix: secret.slice(0, 8) };
+}
+
+/** Generate a new personal access token (see {@link generateOpaqueToken}). */
+export function generateToken(): { token: string; tokenHash: string; prefix: string } {
+  return generateOpaqueToken(PAT_PREFIX, PAT_TOKEN_BYTES);
 }

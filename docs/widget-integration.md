@@ -2,6 +2,15 @@
 
 The LoyaltyOS Widget (`apps/widget`) is an embeddable Web Component built with Lit. Add a loyalty panel to any website with a single script tag. Themes via CSS custom properties. ~45 KB gzipped.
 
+## Security model
+
+The widget never holds a long-lived credential. There are two scoped API keys, and only the safe one ever reaches the browser:
+
+- **`SERVER` key** — full program access. **Never ship this to the browser.** It stays on your backend and is used only to mint short-lived member tokens.
+- **`CLIENT` key** — read-only, public-catalog only. This is the key you embed in a page to show rewards to anonymous visitors.
+
+A member is authenticated with a **short-lived, read-only member token** (`lomem_…`, default 15-minute TTL). Your backend issues it with the `SERVER` key and hands it to the widget via `setAuthToken()`. The widget sends it as `Authorization: Bearer lomem_…`.
+
 ## Quick Start
 
 ### Script tag (CDN or self-hosted)
@@ -10,13 +19,10 @@ The LoyaltyOS Widget (`apps/widget`) is an embeddable Web Component built with L
 <script type="module" src="https://cdn.example.com/loyalty-widget.js"></script>
 
 <loyalty-widget
-  api-url="https://api.example.com"
-  api-key="dev-key"
   program-id="prog_dev"
-  member-id="mem_001"
-  token="jwt-session-token"
+  api-base="https://api.example.com/api/v1"
+  client-key="ck_live_…"
   mode="full"
-  lang="en"
 ></loyalty-widget>
 ```
 
@@ -32,27 +38,100 @@ import "@loyaltyos/widget";
 
 ```html
 <loyalty-widget
-  api-url="https://api.example.com"
-  api-key="dev-key"
   program-id="prog_dev"
-  member-id="mem_001"
-  token="jwt-token"
+  api-base="https://api.example.com/api/v1"
+  client-key="ck_live_…"
   mode="full"
-  lang="en"
 ></loyalty-widget>
 ```
 
 ## Attributes
 
-| Attribute    | Type   | Default  | Description                                    |
-| ------------ | ------ | -------- | ---------------------------------------------- |
-| `api-url`    | string | —        | LoyaltyOS API base URL (required)              |
-| `api-key`    | string | —        | API key for authentication (required)          |
-| `program-id` | string | —        | Program ID for multi-tenant scoping (required) |
-| `member-id`  | string | —        | Member ID for personalization                  |
-| `token`      | string | —        | JWT session token (from magic-link auth)       |
-| `mode`       | string | `"full"` | Display mode: `"full"` or `"mini"`             |
-| `lang`       | string | `"en"`   | Language for static strings (`"en"` or `"es"`) |
+| Attribute      | Type    | Default     | Description                                                 |
+| -------------- | ------- | ----------- | ----------------------------------------------------------- |
+| `program-id`   | string  | —           | Program ID for multi-tenant scoping (required)              |
+| `api-base`     | string  | —           | API base URL, must end in `/api/v1` (required)              |
+| `auth-token`   | string  | —           | Short-lived member token (`lomem_…`) for authenticated view |
+| `client-key`   | string  | —           | CLIENT key for the anonymous rewards catalog                |
+| `theme`        | string  | `"auto"`    | `"light"`, `"dark"`, or `"auto"`                            |
+| `accent-color` | string  | `"#7c3aed"` | Primary accent color                                        |
+| `locale`       | string  | auto        | `"es-MX"` or `"en-US"` (alias: `data-lang`)                 |
+| `compact`      | boolean | `false`     | Compact spacing                                             |
+| `mode`         | string  | `"full"`    | Display mode: `"full"` or `"mini"`                          |
+
+If `api-base` does not end in `/api/v1`, the widget logs a `console.warn`.
+
+## Authenticating a member
+
+The widget renders two views:
+
+1. **Visitor view** (no `auth-token`) — shows the public rewards catalog (when a `client-key` is set) plus a "Sign in" button.
+2. **Member view** (`auth-token` set) — shows points, badges, rewards, and tier.
+
+Your backend issues the member token, then you hand it to the widget:
+
+```javascript
+const widget = document.querySelector("loyalty-widget");
+widget.setAuthToken(memberToken); // switches to the member view
+```
+
+Pass `null` to return to the visitor view:
+
+```javascript
+widget.setAuthToken(null);
+```
+
+### Issuing a member token from your backend
+
+`POST /api/v1/members/:id/session-token` is **SERVER-only**. It returns a `lomem_…` token that is read-only and expires (default 900 s, max 3600 s).
+
+```bash
+curl -X POST "https://api.example.com/api/v1/members/mem_001/session-token" \
+  -H "x-api-key: sk_live_…" \
+  -H "x-program-id: prog_dev" \
+  -H "content-type: application/json" \
+  -d '{"ttlSeconds": 900}'
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "token": "lomem_…",
+    "expiresAt": "2026-11-11T00:15:00.000Z",
+    "memberId": "mem_001"
+  }
+}
+```
+
+Node (fetch):
+
+```javascript
+const res = await fetch("https://api.example.com/api/v1/members/mem_001/session-token", {
+  method: "POST",
+  headers: {
+    "x-api-key": process.env.LOYALTYOS_SERVER_KEY,
+    "x-program-id": process.env.LOYALTYOS_PROGRAM_ID,
+    "content-type": "application/json",
+  },
+  body: JSON.stringify({ ttlSeconds: 900 }),
+});
+
+const { data } = await res.json();
+// data.token -> hand to the widget via setAuthToken(data.token)
+```
+
+### Handling token expiry
+
+Member tokens are short-lived by design. When a token is expired or revoked, the API returns `401` and the widget dispatches the `loyaltyos:auth-required` event. Listen for it as the moment to request a fresh token from your backend:
+
+```javascript
+widget.addEventListener("loyaltyos:auth-required", async () => {
+  const token = await yourBackend.issueMemberToken();
+  widget.setAuthToken(token);
+});
+```
 
 ## Display Modes
 
@@ -70,43 +149,35 @@ Shows all sub-components stacked vertically:
 Compact single-card view:
 
 - Points balance
-- Current tier name
 - Quick "View rewards" link
 
 ## Standalone Components
 
-Each sub-component can be used independently:
+Each sub-component reads the same attributes from itself or its closest `loyalty-widget` ancestor:
 
 ```html
 <loyalty-points-card
-  api-url="https://api.example.com"
-  api-key="dev-key"
   program-id="prog_dev"
-  member-id="mem_001"
-  token="jwt-token"
+  api-base="https://api.example.com/api/v1"
+  auth-token="lomem_…"
 ></loyalty-points-card>
 
 <loyalty-tier-card
-  api-url="https://api.example.com"
-  api-key="dev-key"
   program-id="prog_dev"
-  member-id="mem_001"
-  token="jwt-token"
+  api-base="https://api.example.com/api/v1"
+  auth-token="lomem_…"
 ></loyalty-tier-card>
 
 <loyalty-rewards-top3
-  api-url="https://api.example.com"
-  api-key="dev-key"
   program-id="prog_dev"
-  token="jwt-token"
+  api-base="https://api.example.com/api/v1"
+  client-key="ck_live_…"
 ></loyalty-rewards-top3>
 
 <loyalty-badges-gallery
-  api-url="https://api.example.com"
-  api-key="dev-key"
   program-id="prog_dev"
-  member-id="mem_001"
-  token="jwt-token"
+  api-base="https://api.example.com/api/v1"
+  auth-token="lomem_…"
 ></loyalty-badges-gallery>
 ```
 
@@ -138,31 +209,11 @@ loyalty-widget {
 
 ## Events
 
-The widget dispatches custom DOM events:
+The widget dispatches one custom DOM event:
 
-| Event                      | When                                 |
-| -------------------------- | ------------------------------------ |
-| `loyalty:ready`            | Widget has finished loading data     |
-| `loyalty:error`            | API call failed                      |
-| `loyalty:redeem-success`   | Reward was redeemed successfully     |
-| `loyalty:wishlist-updated` | Wishlist state changed (portal only) |
-
-```javascript
-document.querySelector("loyalty-widget").addEventListener("loyalty:ready", () => {
-  console.log("Widget is ready");
-});
-
-document.querySelector("loyalty-widget").addEventListener("loyalty:error", (e) => {
-  console.error("Widget error:", e.detail);
-});
-```
-
-## Auth Flow
-
-1. Your backend calls `POST /api/v1/auth/login` with the member's email.
-2. Member clicks the magic link → token is verified.
-3. Pass the resulting JWT as the `token` attribute to the widget.
-4. Widget includes the token in all API requests via `Authorization: Bearer <token>`.
+| Event                     | When                                         |
+| ------------------------- | -------------------------------------------- |
+| `loyaltyos:auth-required` | The API returned 401 (token expired/revoked) |
 
 ## Build
 

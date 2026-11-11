@@ -6,6 +6,7 @@ export interface WidgetConfig {
   programId: string;
   apiBase: string;
   authToken: string | null;
+  clientKey: string | null;
   theme: "light" | "dark" | "auto";
   accentColor: string;
   locale: WidgetLocale;

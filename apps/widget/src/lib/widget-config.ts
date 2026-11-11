@@ -12,6 +12,7 @@ const ATTRS: AttributeDef[] = [
   { attr: "program-id", key: "programId", parse: String },
   { attr: "api-base", key: "apiBase", parse: String },
   { attr: "auth-token", key: "authToken", parse: (s) => s || null },
+  { attr: "client-key", key: "clientKey", parse: (s) => s || null },
   {
     attr: "theme",
     key: "theme",
@@ -62,6 +63,7 @@ function resolveDefaultLocale(): WidgetLocale {
 export class WidgetConfigController implements ReactiveController {
   private host: ReactiveControllerHost & HTMLElement;
   private _config: WidgetConfig | null = null;
+  private _warnedApiBase = false;
 
   constructor(host: ReactiveControllerHost & HTMLElement) {
     this.host = host;
@@ -91,6 +93,10 @@ export class WidgetConfigController implements ReactiveController {
     return this._config?.authToken != null && this._config.authToken.length > 0;
   }
 
+  get hasClientKey(): boolean {
+    return this._config?.clientKey != null && this._config.clientKey.length > 0;
+  }
+
   /** Resolved locale from attributes, query string, or navigator. */
   get locale(): WidgetLocale {
     return this._config?.locale ?? resolveDefaultLocale();
@@ -116,6 +122,13 @@ export class WidgetConfigController implements ReactiveController {
     }
 
     if (typeof partial.programId === "string" && typeof partial.apiBase === "string") {
+      if (!partial.apiBase.endsWith("/api/v1") && !this._warnedApiBase) {
+        console.warn(
+          "[loyaltyos-widget] `api-base` should end with /api/v1, got:",
+          partial.apiBase,
+        );
+        this._warnedApiBase = true;
+      }
       this._config = partial as unknown as WidgetConfig;
     }
   }
