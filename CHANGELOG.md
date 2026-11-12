@@ -23,11 +23,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the anonymous rewards catalog, a public `setAuthToken()` method, and a
   `loyaltyos:auth-required` event fired on 401. (#58)
 
+### Fixed
+
+- **Widget documentation matches the real widget.** The integration guides now
+  list the actual attributes (`program-id`, `api-base`, `auth-token`,
+  `client-key`, `theme`, `accent-color`, `locale`, `compact`, `mode`) and use an
+  `api-base` ending in `/api/v1`; the widget logs a console warning when it does
+  not. Previously the `auth-token` attribute had no effect and every widget
+  request returned 401. (#58)
+
 ### Upgrade notes
 
 1. **Run the migration before deploying.** This release adds the
    `MemberSessionToken` table. Run `prisma migrate deploy` as part of the
    upgrade. No data backfill is required.
+2. **Existing widget embeds.** To show a member's points, badges and tier, your
+   backend must mint a member session token with a `SERVER` key and pass it in
+   `auth-token`; cache it in the user's session and reuse it until shortly
+   before `expiresAt`. Never expose the `SERVER` key in the browser.
+3. **Anonymous rewards catalog (optional).** Create a `CLIENT`-scope API key and
+   set it in the widget's `client-key` attribute to show the rewards catalog to
+   visitors who are not signed in.
+4. Make sure `api-base` ends in `/api/v1`. See docs/widget-integration.md for a
+   complete example.
 
 ### Known limitations
 
