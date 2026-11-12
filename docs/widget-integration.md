@@ -108,27 +108,44 @@ Response:
 Node (fetch):
 
 ```javascript
-const res = await fetch("https://api.example.com/api/v1/members/mem_001/session-token", {
-  method: "POST",
-  headers: {
-    "x-api-key": process.env.LOYALTYOS_SERVER_KEY,
-    "x-program-id": process.env.LOYALTYOS_PROGRAM_ID,
-    "content-type": "application/json",
-  },
-  body: JSON.stringify({ ttlSeconds: 900 }),
-});
+// Keep the token in the member's session on your backend and reuse it until
+// it is close to expiring. Mint a new one only when needed.
 
-const { data } = await res.json();
-// data.token -> hand to the widget via setAuthToken(data.token)
+async function issueMemberToken(session) {
+  const MARGIN_MS = 60_000; // refresh when fewer than 60s remain
+  const cached = session.loyaltyToken;
+
+  if (cached && new Date(cached.expiresAt).getTime() - Date.now() > MARGIN_MS) {
+    return cached.token;
+  }
+
+  const res = await fetch("https://api.example.com/api/v1/members/mem_001/session-token", {
+    method: "POST",
+    headers: {
+      "x-api-key": process.env.LOYALTYOS_SERVER_KEY,
+      "x-program-id": process.env.LOYALTYOS_PROGRAM_ID,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ ttlSeconds: 900 }),
+  });
+
+  const { data } = await res.json();
+  session.loyaltyToken = { token: data.token, expiresAt: data.expiresAt };
+  return data.token;
+}
 ```
 
 ### Handling token expiry
 
-Member tokens are short-lived by design. When a token is expired or revoked, the API returns `401` and the widget dispatches the `loyaltyos:auth-required` event. Listen for it as the moment to request a fresh token from your backend:
+Member tokens are short-lived by design. Don't mint a new one on every page load.
+Store the token (and its `expiresAt`) in the member's session on your backend and
+reuse it until shortly before it expires, as in the `issueMemberToken` helper above.
+Request a fresh token only when that margin is crossed, or when the widget emits
+`loyaltyos:auth-required` — the signal that the token was revoked or already expired:
 
 ```javascript
 widget.addEventListener("loyaltyos:auth-required", async () => {
-  const token = await yourBackend.issueMemberToken();
+  const token = await issueMemberToken(session); // reissues only if needed
   widget.setAuthToken(token);
 });
 ```

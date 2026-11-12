@@ -99,6 +99,7 @@ describe("issuance", () => {
     expect(data.memberId).toBe(memberId);
     expect(new Date(data.expiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(data.token.startsWith("lomem_")).toBe(true);
+    expect(res.headers["cache-control"]).toBe("no-store");
   });
 
   it("rejects a CLIENT key with 403", async () => {
