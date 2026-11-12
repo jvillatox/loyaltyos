@@ -421,12 +421,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
       },
     });
 
-    await audit(request.programId, request.actor, "OTHER", "member_session_token", record.id, {
-      memberId: member.id,
-      ttlSeconds,
-      expiresAt: expiresAt.toISOString(),
-    });
-
+    void reply.header("cache-control", "no-store");
     return reply.status(201).send({
       data: { token, expiresAt: record.expiresAt, memberId: record.memberId },
     });
