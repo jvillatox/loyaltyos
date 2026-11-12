@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   worker. `SUPER_ADMIN` adjusts directly with no caps. Every adjustment requires
   a reason category and (for admins) a comment of at least 10 characters. (#44)
 
+### Deprecated
+
+- **The `reason` field on `POST /api/v1/members/:id/adjust`.** Sending `reason`
+  without `reasonCategory` is accepted as `reasonCategory: "OTHER"` with
+  `comment` set to `reason`, and the response carries a `Deprecation: true`
+  header. This field is removed in 2.0 — migrate to `reasonCategory` +
+  `comment`. (#44)
+
 ### Upgrade notes
 
 1. **Run the migration before deploying.** This adds the
@@ -33,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    1000 points/transaction and 5000 points/day; SERVER 10000 points/transaction.
    SUPER_ADMIN can tune these per program via
    `PATCH /api/v1/admin/programs/:id`.
+3. **The daily cap is counted by UTC day.** The OPERATOR daily limit resets at
+   midnight UTC, not in the program's local timezone.
 
 ## [1.5.0] - 2026-11-12
 

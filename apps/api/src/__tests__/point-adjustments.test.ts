@@ -210,6 +210,24 @@ describe("point adjustments — reason validation", () => {
     });
     expect(res.statusCode).toBe(201);
   });
+
+  it("accepts a deprecated 'reason' field (SERVER) with a Deprecation header", async () => {
+    const key = idemKey("srv-reason");
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/members/${memberId}/adjust`,
+      headers: { ...serverHeaders(), "idempotency-key": key },
+      payload: { amount: 10, reason: "legacy reason text" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.headers.deprecation).toBe("true");
+
+    const request = await prisma.pointAdjustmentRequest.findUniqueOrThrow({
+      where: { programId_idempotencyKey: { programId, idempotencyKey: key } },
+    });
+    expect(request.reasonCategory).toBe("OTHER");
+    expect(request.comment).toBe("legacy reason text");
+  });
 });
 
 describe("point adjustments — role × caps", () => {
@@ -367,7 +385,7 @@ describe("point adjustments — approval flow", () => {
 
     expect(await balanceOf(memberId)).toBe(before + 150);
     const txCount = await prisma.pointTransaction.count({
-      where: { idempotencyKey: `adjust-${requestId}` },
+      where: { idempotencyKey: `adjust:${requestId}` },
     });
     expect(txCount).toBe(1);
   });
@@ -425,6 +443,36 @@ describe("point adjustments — approval flow", () => {
       payload: {},
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it("approving an already-expired pending request returns 409 and marks it EXPIRED", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/members/${memberId}/adjust`,
+      headers: { cookie: cookies.OPERATOR, "idempotency-key": idemKey("op-exp-approve") },
+      payload: { amount: 150, reasonCategory: "OTHER", comment: "expires before approval" },
+    });
+    expect(res.statusCode).toBe(202);
+    const { requestId } = (res.json() as { data: { requestId: string } }).data;
+
+    await prisma.pointAdjustmentRequest.update({
+      where: { id: requestId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const approve = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/point-adjustments/${requestId}/approve`,
+      headers: { cookie: cookies.SUPER_ADMIN },
+      payload: {},
+    });
+    expect(approve.statusCode).toBe(409);
+    expect((approve.json() as { data: { status: string } }).data.status).toBe("EXPIRED");
+
+    const after = await prisma.pointAdjustmentRequest.findUniqueOrThrow({
+      where: { id: requestId },
+    });
+    expect(after.status).toBe("EXPIRED");
   });
 });
 
@@ -496,5 +544,50 @@ describe("point adjustments — expiry, negatives, idempotency", () => {
     expect(b.requestId).toBe(a.requestId);
 
     expect(await balanceOf(memberId)).toBe(before + 25);
+  });
+
+  it("a client idempotency key equal to an existing ledger transaction is not returned", async () => {
+    const key = idemKey("ledger-collide");
+    const before = await balanceOf(memberId);
+
+    // Seed an unrelated ledger transaction under the same key (simulates an
+    // event that was already processed with this idempotency key).
+    const account = await prisma.pointAccount.findUniqueOrThrow({ where: { memberId } });
+    await prisma.pointTransaction.create({
+      data: {
+        accountId: account.id,
+        programId,
+        type: "EARN",
+        amount: 999,
+        balanceAfter: before + 999,
+        source: "event",
+        idempotencyKey: key,
+        description: "unrelated event earn",
+        settledAt: new Date(),
+      },
+    });
+    await prisma.pointAccount.update({
+      where: { id: account.id },
+      data: { balance: before + 999 },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/members/${memberId}/adjust`,
+      headers: { ...serverHeaders(), "idempotency-key": key },
+      payload: { amount: 25, reasonCategory: "OTHER" },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // A fresh 25-point adjustment, not the 999-point event transaction.
+    expect(await balanceOf(memberId)).toBe(before + 999 + 25);
+
+    const { requestId } = (res.json() as { data: { requestId: string } }).data;
+    const ledgerTx = await prisma.pointTransaction.findUniqueOrThrow({
+      where: {
+        programId_idempotencyKey: { programId, idempotencyKey: `adjust:${requestId}` },
+      },
+    });
+    expect(ledgerTx.amount).toBe(25);
   });
 });

@@ -7,7 +7,7 @@ import { prisma } from "../../db.js";
 import { audit } from "../../lib/audit.js";
 import { adaptPointsMetrics, getBusinessMetrics } from "../../lib/business-metrics.js";
 import { LoyaltyError } from "../../lib/errors.js";
-import { composeLedgerReason } from "../../lib/point-adjustments.js";
+import { composeLedgerReason, ledgerIdempotencyKey } from "../../lib/point-adjustments.js";
 
 const points = new PointsService(prisma, adaptPointsMetrics(getBusinessMetrics()));
 
@@ -31,7 +31,7 @@ async function applyPendingPoints(adjustment: PointAdjustmentRequest): Promise<v
     amount: adjustment.amount,
     reason: composeLedgerReason(adjustment.reasonCategory, adjustment.comment),
     adminUserId: approverId,
-    idempotencyKey: `adjust-${adjustment.id}`,
+    idempotencyKey: ledgerIdempotencyKey(adjustment.id),
   });
   await prisma.pointAdjustmentRequest.update({
     where: { id: adjustment.id },
@@ -95,6 +95,8 @@ export function adminPointAdjustmentsRoutes(
       throw new LoyaltyError("ADJUST_SELF_DECIDE", 403);
     }
 
+    const now = new Date();
+
     if (adjustment.status !== "PENDING") {
       // Double-click safe. Recover a crash window where the approval committed
       // but the points were never applied.
@@ -104,18 +106,34 @@ export function adminPointAdjustmentsRoutes(
       return reply.send({ data: { requestId: adjustment.id, status: adjustment.status } });
     }
 
+    // Expired while pending: mark it EXPIRED now and reject the decision.
+    if (adjustment.expiresAt <= now) {
+      await prisma.pointAdjustmentRequest.updateMany({
+        where: { id, status: "PENDING" },
+        data: { status: "EXPIRED", decidedAt: now },
+      });
+      return reply.status(409).send({ data: { requestId: adjustment.id, status: "EXPIRED" } });
+    }
+
     const claimed = await prisma.pointAdjustmentRequest.updateMany({
-      where: { id, status: "PENDING" },
+      where: { id, status: "PENDING", expiresAt: { gt: now } },
       data: {
         status: "APPROVED",
         decidedById: adminId,
-        decidedAt: new Date(),
+        decidedAt: now,
         decisionComment: body.decisionComment,
       },
     });
 
     if (claimed.count === 0) {
       const fresh = await prisma.pointAdjustmentRequest.findUniqueOrThrow({ where: { id } });
+      if (fresh.status === "PENDING" && fresh.expiresAt <= now) {
+        await prisma.pointAdjustmentRequest.updateMany({
+          where: { id, status: "PENDING" },
+          data: { status: "EXPIRED", decidedAt: new Date() },
+        });
+        return reply.status(409).send({ data: { requestId: fresh.id, status: "EXPIRED" } });
+      }
       if (fresh.status === "APPROVED" && fresh.transactionId == null) {
         await applyPendingPoints(fresh);
       }

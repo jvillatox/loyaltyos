@@ -24,6 +24,7 @@ import {
   composeLedgerReason,
   decideAdjustment,
   directAdjustmentTotalToday,
+  ledgerIdempotencyKey,
 } from "../lib/point-adjustments.js";
 
 const points = new PointsService(prisma, adaptPointsMetrics(getBusinessMetrics()));
@@ -45,7 +46,9 @@ const adjustSchema = z.object({
     .number()
     .int()
     .refine((amount) => amount !== 0, "amount must be non-zero"),
-  reasonCategory: z.enum(ADJUSTMENT_REASON_CATEGORIES),
+  reasonCategory: z.enum(ADJUSTMENT_REASON_CATEGORIES).optional(),
+  // Deprecated alias: `reason` becomes reasonCategory=OTHER + comment=reason.
+  reason: z.string().max(1000).optional(),
   comment: z.string().max(1000).optional(),
 });
 
@@ -61,7 +64,6 @@ function isUniqueViolation(err: unknown): boolean {
 async function handleExistingAdjustment(
   existing: PointAdjustmentRequest,
   reply: FastifyReply,
-  idempotencyKey: string,
 ): Promise<FastifyReply> {
   if (existing.status === "PENDING") {
     return reply.status(202).send({ data: { requestId: existing.id, status: "PENDING" } });
@@ -75,7 +77,7 @@ async function handleExistingAdjustment(
         amount: existing.amount,
         reason: composeLedgerReason(existing.reasonCategory, existing.comment),
         adminUserId: existing.requestedById,
-        idempotencyKey,
+        idempotencyKey: ledgerIdempotencyKey(existing.id),
       });
       await prisma.pointAdjustmentRequest.update({
         where: { id: existing.id },
@@ -359,7 +361,21 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
             }
           : { type: "API_KEY", id: request.actor.id };
 
-      const comment = body.comment?.trim() ?? "";
+      // `reason` is a deprecated alias for reasonCategory=OTHER + comment=reason.
+      let reasonCategory = body.reasonCategory;
+      let comment = body.comment?.trim() ?? "";
+
+      if (reasonCategory === undefined && body.reason !== undefined) {
+        reasonCategory = "OTHER";
+        comment = body.reason.trim();
+        void reply.header("Deprecation", "true");
+        request.log.warn(
+          { memberId: id, programId: request.programId },
+          "adjustment uses deprecated 'reason' field",
+        );
+      } else if (reasonCategory === undefined) {
+        throw new LoyaltyError("INVALID_INPUT", 400);
+      }
 
       // Admins must justify the adjustment; SERVER keys may omit the comment.
       if (requester.type === "ADMIN_USER" && comment.length < 10) {
@@ -385,7 +401,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         where: { programId_idempotencyKey: { programId: request.programId, idempotencyKey } },
       });
       if (existing) {
-        return handleExistingAdjustment(existing, reply, idempotencyKey);
+        return handleExistingAdjustment(existing, reply);
       }
 
       // A SERVER key over its per-transaction cap is a hard rejection — never pending.
@@ -419,7 +435,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
               programId: request.programId,
               memberId: id,
               amount: body.amount,
-              reasonCategory: body.reasonCategory,
+              reasonCategory: reasonCategory,
               comment,
               requestedById: requester.id,
               requestedByType: "ADMIN_USER",
@@ -431,7 +447,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
           return { created };
         });
         if (result.seen) {
-          return handleExistingAdjustment(result.seen, reply, idempotencyKey);
+          return handleExistingAdjustment(result.seen, reply);
         }
         requestRow = result.created;
       } else {
@@ -442,7 +458,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
               programId: request.programId,
               memberId: id,
               amount: body.amount,
-              reasonCategory: body.reasonCategory,
+              reasonCategory: reasonCategory,
               comment,
               requestedById: requester.id,
               requestedByType: requester.type,
@@ -456,7 +472,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
             const winner = await prisma.pointAdjustmentRequest.findUnique({
               where: { programId_idempotencyKey: { programId: request.programId, idempotencyKey } },
             });
-            if (winner) return handleExistingAdjustment(winner, reply, idempotencyKey);
+            if (winner) return handleExistingAdjustment(winner, reply);
           }
           throw err;
         }
@@ -473,7 +489,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
             action: "adjust.request",
             status: "PENDING",
             amount: body.amount,
-            reasonCategory: body.reasonCategory,
+            reasonCategory: reasonCategory,
             comment,
           },
         );
@@ -485,9 +501,9 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         memberId: id,
         programId: request.programId,
         amount: body.amount,
-        reason: composeLedgerReason(body.reasonCategory, comment),
+        reason: composeLedgerReason(reasonCategory, comment),
         adminUserId: request.adminId ?? request.actor.id,
-        idempotencyKey,
+        idempotencyKey: ledgerIdempotencyKey(requestRow.id),
       });
       await prisma.pointAdjustmentRequest.update({
         where: { id: requestRow.id },
@@ -496,7 +512,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
 
       await audit(request.programId, request.actor, "ADJUST_POINTS", "member", id, {
         amount: body.amount,
-        reasonCategory: body.reasonCategory,
+        reasonCategory: reasonCategory,
         comment,
       });
 
