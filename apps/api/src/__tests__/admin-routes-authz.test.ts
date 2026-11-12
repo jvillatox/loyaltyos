@@ -69,6 +69,10 @@ const ADMIN_ROUTES: Array<[string, string]> = [
   // programs
   ["GET", "/admin/programs/:id"],
   ["PATCH", "/admin/programs/:id"],
+  // point adjustments
+  ["GET", "/admin/point-adjustments"],
+  ["POST", "/admin/point-adjustments/:id/approve"],
+  ["POST", "/admin/point-adjustments/:id/reject"],
   // campaigns
   ["POST", "/admin/campaigns"],
   ["GET", "/admin/campaigns"],

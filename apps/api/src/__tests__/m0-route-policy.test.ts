@@ -119,7 +119,7 @@ const ROUTES: readonly RouteEntry[] = [
     url: "/api/v1/members/:id/adjust",
     allow: P_MUTATE,
     idem: true,
-    body: () => ({ amount: 10, reason: "test" }),
+    body: () => ({ amount: 10, reasonCategory: "OTHER", comment: "test adjustment" }),
   },
   { method: "GET", url: "/api/v1/members/:id/badges", allow: P_READ, self: true },
   { method: "GET", url: "/api/v1/members/:id/tier", allow: P_READ, self: true },
@@ -367,6 +367,9 @@ afterAll(async () => {
     .deleteMany({ where: { userId: { in: [memberId, otherMemberId] } } })
     .catch(() => {});
   await prisma.reward.deleteMany({ where: { programId } }).catch(() => {});
+  await prisma.pointAdjustmentRequest
+    .deleteMany({ where: { memberId: { in: [memberId, otherMemberId] } } })
+    .catch(() => {});
   await prisma.member.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.apiKey.deleteMany({ where: { programId } }).catch(() => {});
   for (const role of ADMIN_ROLES) {

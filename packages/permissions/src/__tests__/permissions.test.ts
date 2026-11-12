@@ -23,11 +23,13 @@ describe("can", () => {
     expect(can("SUPER_ADMIN", "giftcards.financial")).toBe(true);
     expect(can("SUPER_ADMIN", "coalition.write")).toBe(true);
     expect(can("SUPER_ADMIN", "program.write")).toBe(true);
+    expect(can("SUPER_ADMIN", "members.adjust.approve")).toBe(true);
 
     expect(can("OPERATOR", "webhooks.manage")).toBe(false);
     expect(can("OPERATOR", "giftcards.financial")).toBe(false);
     expect(can("OPERATOR", "coalition.write")).toBe(false);
     expect(can("OPERATOR", "program.write")).toBe(false);
+    expect(can("OPERATOR", "members.adjust.approve")).toBe(false);
 
     expect(can("ANALYST", "webhooks.manage")).toBe(false);
   });

@@ -380,6 +380,9 @@
     "GIFT_CARD_CODE_COLLISION": "Error al generar códigos: demasiadas colisiones",
     "GIFT_CARD_CONCURRENT_UPDATE": "Actualización concurrente detectada; reintenta la operación",
     "INVALID_TOKEN": "Token inválido o expirado",
-    "INVALID_CREDENTIALS": "Correo o contraseña inválidos"
+    "INVALID_CREDENTIALS": "Correo o contraseña inválidos",
+    "ADJUST_LIMIT_EXCEEDED": "El ajuste supera el límite permitido",
+    "ADJUST_COMMENT_REQUIRED": "Se requiere un comentario de al menos 10 caracteres",
+    "ADJUST_SELF_DECIDE": "No puedes decidir sobre tus propios ajustes"
   }
 }

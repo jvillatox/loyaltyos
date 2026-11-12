@@ -81,6 +81,9 @@ afterAll(async () => {
   await prisma.pointAccount
     .deleteMany({ where: { memberId: { in: [aMemberId, bMemberId] } } })
     .catch(() => {});
+  await prisma.pointAdjustmentRequest
+    .deleteMany({ where: { memberId: { in: [aMemberId, bMemberId] } } })
+    .catch(() => {});
   await prisma.event.deleteMany({ where: { programId: { in: [progA, progB] } } }).catch(() => {});
   await prisma.member.deleteMany({ where: { programId: { in: [progA, progB] } } }).catch(() => {});
   await prisma.apiKey.deleteMany({ where: { programId: { in: [progA, progB] } } }).catch(() => {});
@@ -124,13 +127,13 @@ describe("M0 idempotency — keys are scoped per program", () => {
       method: "POST",
       url: `/api/v1/members/${aMemberId}/adjust`,
       headers: { ...aHeaders, "idempotency-key": key },
-      payload: { amount: 5, reason: "test" },
+      payload: { amount: 5, reasonCategory: "OTHER" },
     });
     await app.inject({
       method: "POST",
       url: `/api/v1/members/${bMemberId}/adjust`,
       headers: { ...bHeaders, "idempotency-key": key },
-      payload: { amount: 5, reason: "test" },
+      payload: { amount: 5, reasonCategory: "OTHER" },
     });
 
     const count = await prisma.pointTransaction.count({ where: { idempotencyKey: key } });

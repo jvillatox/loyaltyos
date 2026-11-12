@@ -64,6 +64,10 @@ export const ADMIN_ROUTE_ENTRIES: readonly (readonly [HttpMethod, string, Permis
   // programs
   ["GET", "/api/v1/admin/programs/:id", "read"],
   ["PATCH", "/api/v1/admin/programs/:id", "program.write"],
+  // point adjustments
+  ["GET", "/api/v1/admin/point-adjustments", "read"],
+  ["POST", "/api/v1/admin/point-adjustments/:id/approve", "members.adjust.approve"],
+  ["POST", "/api/v1/admin/point-adjustments/:id/reject", "members.adjust.approve"],
   // campaigns
   ["POST", "/api/v1/admin/campaigns", "campaigns.write"],
   ["GET", "/api/v1/admin/campaigns", "read"],
