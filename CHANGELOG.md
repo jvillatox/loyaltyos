@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-12
+
 ### Added
 
 - **Member session tokens for the widget.** The widget can now authenticate a
@@ -26,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 1. **Run the migration before deploying.** This release adds the
    `MemberSessionToken` table. Run `prisma migrate deploy` as part of the
    upgrade. No data backfill is required.
+
+### Known limitations
+
+- Points expiry is not FIFO; expiry removes from the account's current
+  spendable balance rather than per-lot (#33).
+- `holdDays` is a service-wide setting, not per-program, and
+  `settlePending()` / `expire()` are not scheduled automatically (#34).
+- `verifyConsistency()` still flags held EARNs as inconsistent until they
+  settle (#35).
+- The Apprecio adapter uses the environment credential, not the per-program
+  stored credential (#59).
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
 
 ## [1.4.1] - 2026-11-10
 
