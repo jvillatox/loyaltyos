@@ -136,8 +136,17 @@ describe("M0 idempotency — keys are scoped per program", () => {
       payload: { amount: 5, reasonCategory: "OTHER" },
     });
 
-    const count = await prisma.pointTransaction.count({ where: { idempotencyKey: key } });
-    expect(count).toBe(2);
+    // Two independent requests (one per program), and each applies its own
+    // ledger transaction keyed by request id — never the other program's data.
+    const requestCount = await prisma.pointAdjustmentRequest.count({
+      where: { idempotencyKey: key },
+    });
+    expect(requestCount).toBe(2);
+
+    const txCount = await prisma.pointTransaction.count({
+      where: { account: { memberId: { in: [aMemberId, bMemberId] } }, type: "ADJUST" },
+    });
+    expect(txCount).toBe(2);
   });
 
   it("coalition: same txRef in A and B → two independent transactions", async () => {

@@ -119,6 +119,16 @@ export function composeLedgerReason(category: AdjustmentReasonCategory, comment:
   return comment ? `${category}: ${comment}` : category;
 }
 
+/**
+ * Deterministic ledger idempotency key for the points applied by a request.
+ * The client's Idempotency-Key only identifies the request; the ledger key is
+ * derived from the request id so it can never collide with a key an unrelated
+ * event or adjustment already used.
+ */
+export function ledgerIdempotencyKey(requestId: string): string {
+  return `adjust:${requestId}`;
+}
+
 /** Marks overdue PENDING requests EXPIRED (worker job). Returns the count. */
 export async function expirePendingAdjustments(now = new Date()): Promise<number> {
   const due = await prisma.pointAdjustmentRequest.findMany({
