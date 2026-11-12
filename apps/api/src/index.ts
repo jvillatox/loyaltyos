@@ -11,6 +11,7 @@ import {
   scheduleOutstandingBalanceRefresh,
 } from "./lib/giftcard-setup.js";
 import { scheduleMemberTokenCleanup } from "./lib/member-session-token-setup.js";
+import { schedulePointAdjustmentExpiry } from "./lib/point-adjustment-setup.js";
 import { createQueue } from "./lib/queue.js";
 import {
   startGiftCardExpireWorker,
@@ -19,6 +20,7 @@ import {
 } from "./workers/giftcards.js";
 import { startMemberTokenCleanupWorker } from "./workers/member-session-tokens.js";
 import { startNotificationsWorker } from "./workers/notifications.js";
+import { startPointAdjustmentExpiryWorker } from "./workers/point-adjustments.js";
 
 const app = await buildApp();
 
@@ -44,9 +46,11 @@ try {
   startGiftCardExpireWorker();
   startOutstandingBalanceWorker();
   startMemberTokenCleanupWorker();
+  startPointAdjustmentExpiryWorker();
   await scheduleGiftCardExpiration();
   await scheduleOutstandingBalanceRefresh();
   await scheduleMemberTokenCleanup();
+  await schedulePointAdjustmentExpiry();
 
   // Collect BullMQ queue depth metrics periodically
   const bullmqMetrics = getBullMQMetrics();
@@ -58,6 +62,7 @@ try {
       "giftcards.expire",
       "giftcards.outstanding-balance.refresh",
       "member-session-tokens.cleanup",
+      "point-adjustments.expire",
     ];
     const queues = queueNames.map((name) => createQueue(name));
 

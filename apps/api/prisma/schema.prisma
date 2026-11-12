@@ -17,6 +17,9 @@ model Program {
   isActive    Boolean   @default(true)
   defaultLocale String  @default("es-MX")
   supportedLocales String[] @default(["es-MX", "en-US"])
+  adjustOperatorPerTxLimit  Int  @default(1000)
+  adjustOperatorDailyLimit  Int  @default(5000)
+  adjustServerPerTxLimit    Int  @default(10000)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -41,6 +44,7 @@ model Program {
   auditLogs          AuditLog[]
   termsTemplates     TermsTemplate[]
   giftCardBatches    GiftCardBatch[]
+  pointAdjustmentRequests PointAdjustmentRequest[]
 
   @@index([isActive])
 }
@@ -78,6 +82,7 @@ model Member {
   magicLinkTokens    MagicLinkToken[]
   memberSessionTokens MemberSessionToken[]
   giftCardTransactions GiftCardTransaction[]
+  pointAdjustmentRequests PointAdjustmentRequest[]
 
   @@unique([programId, externalId])
   @@index([programId])
@@ -139,6 +144,49 @@ model PointTransaction {
   @@index([expiresAt])
   @@index([createdAt])
   @@index([source])
+}
+
+enum AdjustmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum AdjustmentReasonCategory {
+  CUSTOMER_SERVICE
+  ERROR_CORRECTION
+  PROMOTION
+  FRAUD
+  OTHER
+}
+
+model PointAdjustmentRequest {
+  id              String                   @id @default(cuid())
+  programId       String
+  memberId        String
+  amount          Int
+  reasonCategory  AdjustmentReasonCategory
+  comment         String
+  requestedById   String
+  requestedByType String // ADMIN_USER or API_KEY
+  status          AdjustmentStatus         @default(PENDING)
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionComment String?
+  transactionId   String?
+  idempotencyKey  String
+  expiresAt       DateTime
+  createdAt       DateTime                 @default(now())
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Restrict)
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([programId, idempotencyKey])
+  @@index([programId, status])
+  @@index([memberId])
+  @@index([requestedById, createdAt])
+  @@index([expiresAt])
 }
 
 model PointRule {

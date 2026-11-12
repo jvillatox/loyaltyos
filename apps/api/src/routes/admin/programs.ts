@@ -11,6 +11,9 @@ const updateProgramSchema = z.object({
   description: z.string().nullable().optional(),
   pointsUnit: z.string().optional(),
   logoUrl: z.string().nullable().optional(),
+  adjustOperatorPerTxLimit: z.number().int().min(1).optional(),
+  adjustOperatorDailyLimit: z.number().int().min(1).optional(),
+  adjustServerPerTxLimit: z.number().int().min(1).optional(),
 });
 
 export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
@@ -35,6 +38,9 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
         isActive: true,
         defaultLocale: true,
         supportedLocales: true,
+        adjustOperatorPerTxLimit: true,
+        adjustOperatorDailyLimit: true,
+        adjustServerPerTxLimit: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -72,6 +78,9 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
         isActive: true,
         defaultLocale: true,
         supportedLocales: true,
+        adjustOperatorPerTxLimit: true,
+        adjustOperatorDailyLimit: true,
+        adjustServerPerTxLimit: true,
         createdAt: true,
         updatedAt: true,
       },

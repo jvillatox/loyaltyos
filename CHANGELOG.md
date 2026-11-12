@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Manual point adjustments with per-program caps and a pending-approval
+  flow.** `POST /api/v1/members/:id/adjust` now records why points change and
+  enforces configurable per-program limits. A `SERVER` key is capped per
+  transaction (`adjustServerPerTxLimit`, default 10000) and gets a 422
+  `ADJUST_LIMIT_EXCEEDED` beyond it. An `OPERATOR` is capped per transaction and
+  per day (`adjustOperatorPerTxLimit` default 1000, `adjustOperatorDailyLimit`
+  default 5000); exceeding either files a PENDING request instead of applying,
+  and a `SUPER_ADMIN` (same program, different from the requester) must approve
+  or reject it via `POST /api/v1/admin/point-adjustments/:id/approve` and
+  `.../reject`. Pending requests left undecided for 7 days expire via a daily
+  worker. `SUPER_ADMIN` adjusts directly with no caps. Every adjustment requires
+  a reason category and (for admins) a comment of at least 10 characters. (#44)
+
+### Upgrade notes
+
+1. **Run the migration before deploying.** This adds the
+   `PointAdjustmentRequest` table and three per-program limit columns
+   (`adjustOperatorPerTxLimit`, `adjustOperatorDailyLimit`,
+   `adjustServerPerTxLimit`). Run `prisma migrate deploy` as part of the
+   upgrade.
+2. **Default caps.** Existing programs get the defaults on migration: OPERATOR
+   1000 points/transaction and 5000 points/day; SERVER 10000 points/transaction.
+   SUPER_ADMIN can tune these per program via
+   `PATCH /api/v1/admin/programs/:id`.
+
 ## [1.5.0] - 2026-11-12
 
 ### Added

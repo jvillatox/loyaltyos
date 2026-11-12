@@ -1,8 +1,8 @@
 import { memberListQuerySchema, memberTransactionsQuerySchema } from "@loyaltyos/api-contract";
 import { BadgesService, TiersService } from "@loyaltyos/badges";
 import { PointsService } from "@loyaltyos/core";
-import type { Prisma } from "@prisma/client";
-import type { FastifyInstance } from "fastify";
+import { type PointAdjustmentRequest, Prisma } from "@prisma/client";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
@@ -15,6 +15,16 @@ import {
   MEMBER_TOKEN_MAX_TTL_SECONDS,
 } from "../lib/member-session-token.js";
 import { notificationsService } from "../lib/notifications-setup.js";
+import {
+  acquireAdjustmentLock,
+  ADJUSTMENT_EXPIRY_DAYS,
+  ADJUSTMENT_REASON_CATEGORIES,
+  adjustmentLimits,
+  type AdjustmentRequester,
+  composeLedgerReason,
+  decideAdjustment,
+  directAdjustmentTotalToday,
+} from "../lib/point-adjustments.js";
 
 const points = new PointsService(prisma, adaptPointsMetrics(getBusinessMetrics()));
 const badges = new BadgesService(prisma);
@@ -31,9 +41,69 @@ const createMemberSchema = z.object({
 });
 
 const adjustSchema = z.object({
-  amount: z.number().int(),
-  reason: z.string().min(1),
+  amount: z
+    .number()
+    .int()
+    .refine((amount) => amount !== 0, "amount must be non-zero"),
+  reasonCategory: z.enum(ADJUSTMENT_REASON_CATEGORIES),
+  comment: z.string().max(1000).optional(),
 });
+
+function isUniqueViolation(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+}
+
+/**
+ * Reuses a previously-recorded request for a repeated idempotency key. Recovers
+ * the crash window where the APPROVED row committed but the points apply never
+ * linked its transaction.
+ */
+async function handleExistingAdjustment(
+  existing: PointAdjustmentRequest,
+  reply: FastifyReply,
+  idempotencyKey: string,
+): Promise<FastifyReply> {
+  if (existing.status === "PENDING") {
+    return reply.status(202).send({ data: { requestId: existing.id, status: "PENDING" } });
+  }
+
+  if (existing.status === "APPROVED") {
+    if (existing.transactionId == null) {
+      const result = await points.adjust({
+        memberId: existing.memberId,
+        programId: existing.programId,
+        amount: existing.amount,
+        reason: composeLedgerReason(existing.reasonCategory, existing.comment),
+        adminUserId: existing.requestedById,
+        idempotencyKey,
+      });
+      await prisma.pointAdjustmentRequest.update({
+        where: { id: existing.id },
+        data: { transactionId: result.transactionId },
+      });
+      return reply.status(201).send({
+        data: {
+          requestId: existing.id,
+          status: "APPROVED",
+          transactionId: result.transactionId,
+          amount: result.amount,
+          balanceAfter: result.balanceAfter,
+        },
+      });
+    }
+    return reply.status(201).send({
+      data: {
+        requestId: existing.id,
+        status: "APPROVED",
+        transactionId: existing.transactionId,
+        amount: existing.amount,
+      },
+    });
+  }
+
+  // REJECTED or EXPIRED — the key is consumed in a terminal, non-applied state.
+  return reply.status(409).send({ data: { requestId: existing.id, status: existing.status } });
+}
 
 export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.post("/members", async (request, reply) => {
@@ -278,22 +348,167 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         });
       }
 
+      // An admin session/PAT, or a SERVER-scope API key. MEMBER and CLIENT are
+      // excluded by the route policy; ANALYST is read-only on non-admin routes.
+      const requester: AdjustmentRequester =
+        request.adminId != null
+          ? {
+              type: "ADMIN_USER",
+              id: request.adminId,
+              role: request.adminRole === "SUPER_ADMIN" ? "SUPER_ADMIN" : "OPERATOR",
+            }
+          : { type: "API_KEY", id: request.actor.id };
+
+      const comment = body.comment?.trim() ?? "";
+
+      // Admins must justify the adjustment; SERVER keys may omit the comment.
+      if (requester.type === "ADMIN_USER" && comment.length < 10) {
+        throw new LoyaltyError("ADJUST_COMMENT_REQUIRED", 400);
+      }
+
+      const member = await prisma.member.findFirst({
+        where: { id, programId: request.programId, deletedAt: null },
+      });
+      if (!member) {
+        return reply
+          .status(404)
+          .send({ error: { code: "NOT_FOUND", message: "Member not found" } });
+      }
+
+      const program = await prisma.program.findUniqueOrThrow({
+        where: { id: request.programId },
+      });
+      const limits = adjustmentLimits(program);
+      const expiresAt = new Date(Date.now() + ADJUSTMENT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+      const existing = await prisma.pointAdjustmentRequest.findUnique({
+        where: { programId_idempotencyKey: { programId: request.programId, idempotencyKey } },
+      });
+      if (existing) {
+        return handleExistingAdjustment(existing, reply, idempotencyKey);
+      }
+
+      // A SERVER key over its per-transaction cap is a hard rejection — never pending.
+      if (
+        requester.type === "API_KEY" &&
+        decideAdjustment(requester, body.amount, limits, 0) === "REJECT"
+      ) {
+        throw new LoyaltyError("ADJUST_LIMIT_EXCEEDED", 422);
+      }
+
+      let requestRow: PointAdjustmentRequest;
+
+      if (requester.type === "ADMIN_USER" && requester.role === "OPERATOR") {
+        // Serialize the daily-limit check with the request creation so two
+        // concurrent adjustments from the same operator cannot both pass.
+        const result = await prisma.$transaction(async (db) => {
+          await acquireAdjustmentLock(db, request.programId, requester.id);
+          const seen = await db.pointAdjustmentRequest.findUnique({
+            where: { programId_idempotencyKey: { programId: request.programId, idempotencyKey } },
+          });
+          if (seen) return { seen };
+          const dailyTotal = await directAdjustmentTotalToday(
+            db,
+            request.programId,
+            requester.id,
+            new Date(),
+          );
+          const decision = decideAdjustment(requester, body.amount, limits, dailyTotal);
+          const created = await db.pointAdjustmentRequest.create({
+            data: {
+              programId: request.programId,
+              memberId: id,
+              amount: body.amount,
+              reasonCategory: body.reasonCategory,
+              comment,
+              requestedById: requester.id,
+              requestedByType: "ADMIN_USER",
+              status: decision === "PENDING" ? "PENDING" : "APPROVED",
+              idempotencyKey,
+              expiresAt,
+            },
+          });
+          return { created };
+        });
+        if (result.seen) {
+          return handleExistingAdjustment(result.seen, reply, idempotencyKey);
+        }
+        requestRow = result.created;
+      } else {
+        // SUPER_ADMIN (direct) or SERVER key within its per-tx cap (direct).
+        try {
+          requestRow = await prisma.pointAdjustmentRequest.create({
+            data: {
+              programId: request.programId,
+              memberId: id,
+              amount: body.amount,
+              reasonCategory: body.reasonCategory,
+              comment,
+              requestedById: requester.id,
+              requestedByType: requester.type,
+              status: "APPROVED",
+              idempotencyKey,
+              expiresAt,
+            },
+          });
+        } catch (err) {
+          if (isUniqueViolation(err)) {
+            const winner = await prisma.pointAdjustmentRequest.findUnique({
+              where: { programId_idempotencyKey: { programId: request.programId, idempotencyKey } },
+            });
+            if (winner) return handleExistingAdjustment(winner, reply, idempotencyKey);
+          }
+          throw err;
+        }
+      }
+
+      if (requestRow.status === "PENDING") {
+        await audit(
+          request.programId,
+          request.actor,
+          "OTHER",
+          "point_adjustment_request",
+          requestRow.id,
+          {
+            action: "adjust.request",
+            status: "PENDING",
+            amount: body.amount,
+            reasonCategory: body.reasonCategory,
+            comment,
+          },
+        );
+        return reply.status(202).send({ data: { requestId: requestRow.id, status: "PENDING" } });
+      }
+
+      // DIRECT: apply points (idempotent) and link the transaction.
       const result = await points.adjust({
         memberId: id,
         programId: request.programId,
         amount: body.amount,
-        reason: body.reason,
+        reason: composeLedgerReason(body.reasonCategory, comment),
         adminUserId: request.adminId ?? request.actor.id,
         idempotencyKey,
       });
-
-      // Record the real actor (admin session, PAT or API key) in the audit log.
-      await audit(request.programId, request.actor, "ADJUST_POINTS", "member", id, {
-        amount: body.amount,
-        reason: body.reason,
+      await prisma.pointAdjustmentRequest.update({
+        where: { id: requestRow.id },
+        data: { transactionId: result.transactionId },
       });
 
-      return reply.status(201).send({ data: result });
+      await audit(request.programId, request.actor, "ADJUST_POINTS", "member", id, {
+        amount: body.amount,
+        reasonCategory: body.reasonCategory,
+        comment,
+      });
+
+      return reply.status(201).send({
+        data: {
+          requestId: requestRow.id,
+          status: "APPROVED",
+          transactionId: result.transactionId,
+          amount: result.amount,
+          balanceAfter: result.balanceAfter,
+        },
+      });
     },
   );
 

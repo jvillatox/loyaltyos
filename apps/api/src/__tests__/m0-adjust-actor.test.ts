@@ -59,6 +59,7 @@ afterAll(async () => {
   await prisma.auditLog.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.pointTransaction.deleteMany({ where: { account: { memberId } } }).catch(() => {});
   await prisma.pointAccount.deleteMany({ where: { memberId } }).catch(() => {});
+  await prisma.pointAdjustmentRequest.deleteMany({ where: { memberId } }).catch(() => {});
   await prisma.member.deleteMany({ where: { programId } }).catch(() => {});
   const admin = await prisma.adminUser.findUnique({
     where: { email: `m0a-admin-${suffix}@loyaltyos.dev` },
@@ -77,7 +78,7 @@ describe("M0 adjust — real actor in the audit log", () => {
       method: "POST",
       url: `/api/v1/members/${memberId}/adjust`,
       headers: { cookie: adminCookie, "idempotency-key": `m0a-adj-${suffix}` },
-      payload: { amount: 10, reason: "test" },
+      payload: { amount: 10, reasonCategory: "OTHER", comment: "test adjustment" },
     });
     expect(res.statusCode).toBe(201);
 

@@ -30,6 +30,7 @@ import { adminCoalitionRoutes } from "./routes/admin/coalition.js";
 import { adminCouponsRoutes } from "./routes/admin/coupons.js";
 import { adminGiftCardsRoutes } from "./routes/admin/giftcards.js";
 import { adminNotificationsRoutes } from "./routes/admin/notifications.js";
+import { adminPointAdjustmentsRoutes } from "./routes/admin/point-adjustments.js";
 import { adminProgramsRoutes } from "./routes/admin/programs.js";
 import { adminRewardsRoutes } from "./routes/admin/rewards.js";
 import { adminSegmentsRoutes } from "./routes/admin/segments.js";
@@ -238,6 +239,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   await app.register(coalitionRoutes, { prefix: "/api/v1" });
   await app.register(adminCoalitionRoutes, { prefix: "/api/v1" });
   await app.register(adminProgramsRoutes, { prefix: "/api/v1" });
+  await app.register(adminPointAdjustmentsRoutes, { prefix: "/api/v1" });
 
   return app;
 }

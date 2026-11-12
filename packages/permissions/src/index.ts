@@ -34,6 +34,7 @@ export type Permission =
   | "giftcards.codes.reveal"
   | "coalition.write"
   | "program.write"
+  | "members.adjust.approve"
   | "ai.chat";
 
 const ALL: readonly AdminRole[] = ["SUPER_ADMIN", "OPERATOR", "ANALYST"];
@@ -57,6 +58,7 @@ export const PERMISSIONS: Record<Permission, readonly AdminRole[]> = {
   "giftcards.codes.reveal": SUPER_ADMIN_ONLY,
   "coalition.write": SUPER_ADMIN_ONLY,
   "program.write": SUPER_ADMIN_ONLY,
+  "members.adjust.approve": SUPER_ADMIN_ONLY,
   "ai.chat": ALL,
 };
 
