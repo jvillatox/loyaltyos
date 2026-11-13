@@ -33,6 +33,9 @@ const rewardSchema = z.object({
 
 type RewardFormData = z.infer<typeof rewardSchema>;
 
+// UI-only sentinel: API/form values remain empty for no restriction.
+const NO_SELECTION = "__loyaltyos_none__";
+
 const CATEGORIES = [
   { value: "", label: "None" },
   { value: "DISCOUNT_FUTURE", label: "Discount" },
@@ -264,9 +267,9 @@ export function RewardsEditorPage(): JSX.Element {
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Select
-                  value={form.watch("category")}
+                  value={form.watch("category") || NO_SELECTION}
                   onValueChange={(v) => {
-                    form.setValue("category", v);
+                    form.setValue("category", v === NO_SELECTION ? "" : v);
                   }}
                 >
                   <SelectTrigger>
@@ -274,7 +277,7 @@ export function RewardsEditorPage(): JSX.Element {
                   </SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>
+                      <SelectItem key={c.value} value={c.value || NO_SELECTION}>
                         {c.label}
                       </SelectItem>
                     ))}
@@ -287,16 +290,16 @@ export function RewardsEditorPage(): JSX.Element {
                   Tier Required <span className="text-muted-foreground text-xs">(optional)</span>
                 </Label>
                 <Select
-                  value={form.watch("tierRequired")}
+                  value={form.watch("tierRequired") || NO_SELECTION}
                   onValueChange={(v) => {
-                    form.setValue("tierRequired", v);
+                    form.setValue("tierRequired", v === NO_SELECTION ? "" : v);
                   }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="All tiers" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All tiers</SelectItem>
+                    <SelectItem value={NO_SELECTION}>All tiers</SelectItem>
                     {(tiers ?? []).map((t) => (
                       <SelectItem key={t.id} value={t.name}>
                         {t.name}
