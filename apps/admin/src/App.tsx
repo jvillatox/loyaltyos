@@ -25,6 +25,8 @@ import { TermsListPage } from "@/pages/giftcards/terms-list";
 import { LoginPage } from "@/pages/login";
 import { MemberDetailPage } from "@/pages/member-detail";
 import { MembersListPage } from "@/pages/members-list";
+import { PointAdjustmentsPage } from "@/pages/point-adjustments";
+import { ProgramSettingsPage } from "@/pages/program-settings";
 import { RewardsEditorPage } from "@/pages/rewards/rewards-editor";
 import { RewardsListPage } from "@/pages/rewards/rewards-list";
 import { RewardsRedemptionsPage } from "@/pages/rewards/rewards-redemptions";
@@ -48,6 +50,15 @@ export function App(): JSX.Element {
         <Route path="/api-tokens" element={<ApiTokensPage />} />
         <Route path="/members" element={<MembersListPage />} />
         <Route path="/members/:id" element={<MemberDetailPage />} />
+        <Route path="/point-adjustments" element={<PointAdjustmentsPage />} />
+        <Route
+          path="/settings"
+          element={
+            <RequirePermission permission="program.write">
+              <ProgramSettingsPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/campaigns" element={<CampaignsListPage />} />
         <Route
           path="/campaigns/new"

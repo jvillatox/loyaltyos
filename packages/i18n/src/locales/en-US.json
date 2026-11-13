@@ -150,7 +150,9 @@
     "pageNotFound": "Page not found",
     "backToDashboard": "Back to Dashboard",
     "forbiddenTitle": "No permission",
-    "forbiddenDescription": "You don't have permission to view this page."
+    "forbiddenDescription": "You don't have permission to view this page.",
+    "pointAdjustments": "Point adjustments",
+    "settings": "Settings"
   },
   "widget": {
     "signInPrompt": "Sign in to view your loyalty rewards",
@@ -384,5 +386,68 @@
     "ADJUST_LIMIT_EXCEEDED": "Adjustment exceeds the allowed limit",
     "ADJUST_COMMENT_REQUIRED": "A comment of at least 10 characters is required",
     "ADJUST_SELF_DECIDE": "You cannot decide on your own adjustments"
+  },
+  "pointAdjustments": {
+    "title": "Point adjustments",
+    "subtitle": "Review and decide on manual point adjustment requests.",
+    "allStatuses": "All statuses",
+    "member": "Member",
+    "amount": "Amount",
+    "category": "Category",
+    "comment": "Comment",
+    "requestedAt": "Requested",
+    "expiresAt": "Expires",
+    "status": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "EXPIRED": "Expired"
+    },
+    "categories": {
+      "CUSTOMER_SERVICE": "Customer service",
+      "ERROR_CORRECTION": "Error correction",
+      "PROMOTION": "Promotion",
+      "FRAUD": "Fraud",
+      "OTHER": "Other"
+    },
+    "approve": "Approve",
+    "reject": "Reject",
+    "decisionComment": "Decision comment (optional)",
+    "decisionCommentPlaceholder": "Add a note for the audit log…",
+    "expiryWarning": "This request expires soon and can no longer be approved after that.",
+    "approved": "Adjustment approved and points applied.",
+    "rejected": "Adjustment rejected.",
+    "failedToLoad": "Failed to load adjustment requests",
+    "noAdjustments": "No adjustment requests found",
+    "dialog": {
+      "title": "Adjust points",
+      "description": "Enter a positive amount to credit points, or a negative amount to deduct them.",
+      "amount": "Amount",
+      "category": "Category",
+      "comment": "Comment (min. 10 characters)",
+      "commentPlaceholder": "Reason for the adjustment…",
+      "resultingBalance": "Resulting balance",
+      "currentBalance": "Current balance",
+      "submit": "Submit",
+      "submitting": "Submitting…",
+      "sentForApproval": "Sent for approval",
+      "applied": "Points applied"
+    }
+  },
+  "programSettings": {
+    "title": "Program settings",
+    "subtitle": "Configure limits for manual point adjustments.",
+    "adjustmentLimits": "Point adjustment limits",
+    "adjustmentLimitsDescription": "These limits control how manual point adjustments are handled.",
+    "operatorPerTx": "Operator per-transaction limit",
+    "operatorPerTxDescription": "Maximum points an operator can adjust in a single request. Above this, the request is sent to a super admin for approval.",
+    "operatorDaily": "Operator daily limit",
+    "operatorDailyDescription": "Maximum total points an operator can self-approve per day (counted by UTC day).",
+    "serverPerTx": "Server per-transaction limit",
+    "serverPerTxDescription": "Maximum points a SERVER API key can adjust per request. Above this, the request is rejected.",
+    "save": "Save",
+    "saved": "Settings saved",
+    "failedToLoad": "Failed to load program settings",
+    "failedToSave": "Failed to save settings"
   }
 }

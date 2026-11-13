@@ -150,7 +150,9 @@
     "pageNotFound": "Página no encontrada",
     "backToDashboard": "Volver al Dashboard",
     "forbiddenTitle": "Sin permiso",
-    "forbiddenDescription": "No tienes permiso para ver esta página."
+    "forbiddenDescription": "No tienes permiso para ver esta página.",
+    "pointAdjustments": "Ajustes de puntos",
+    "settings": "Configuración"
   },
   "widget": {
     "signInPrompt": "Inicia sesión para ver tus recompensas",
@@ -384,5 +386,68 @@
     "ADJUST_LIMIT_EXCEEDED": "El ajuste supera el límite permitido",
     "ADJUST_COMMENT_REQUIRED": "Se requiere un comentario de al menos 10 caracteres",
     "ADJUST_SELF_DECIDE": "No puedes decidir sobre tus propios ajustes"
+  },
+  "pointAdjustments": {
+    "title": "Ajustes de puntos",
+    "subtitle": "Revisa y decide sobre las solicitudes de ajuste manual de puntos.",
+    "allStatuses": "Todos los estados",
+    "member": "Miembro",
+    "amount": "Monto",
+    "category": "Categoría",
+    "comment": "Comentario",
+    "requestedAt": "Solicitado",
+    "expiresAt": "Vence",
+    "status": {
+      "PENDING": "Pendiente",
+      "APPROVED": "Aprobado",
+      "REJECTED": "Rechazado",
+      "EXPIRED": "Expirado"
+    },
+    "categories": {
+      "CUSTOMER_SERVICE": "Atención al cliente",
+      "ERROR_CORRECTION": "Corrección de error",
+      "PROMOTION": "Promoción",
+      "FRAUD": "Fraude",
+      "OTHER": "Otro"
+    },
+    "approve": "Aprobar",
+    "reject": "Rechazar",
+    "decisionComment": "Comentario de decisión (opcional)",
+    "decisionCommentPlaceholder": "Agrega una nota para la bitácora…",
+    "expiryWarning": "Esta solicitud vence pronto y ya no podrá aprobarse después.",
+    "approved": "Ajuste aprobado y puntos aplicados.",
+    "rejected": "Ajuste rechazado.",
+    "failedToLoad": "No se pudieron cargar las solicitudes de ajuste",
+    "noAdjustments": "No se encontraron solicitudes de ajuste",
+    "dialog": {
+      "title": "Ajustar puntos",
+      "description": "Ingresa un monto positivo para sumar puntos, o negativo para restarlos.",
+      "amount": "Monto",
+      "category": "Categoría",
+      "comment": "Comentario (mín. 10 caracteres)",
+      "commentPlaceholder": "Motivo del ajuste…",
+      "resultingBalance": "Saldo resultante",
+      "currentBalance": "Saldo actual",
+      "submit": "Enviar",
+      "submitting": "Enviando…",
+      "sentForApproval": "Enviado para aprobación",
+      "applied": "Puntos aplicados"
+    }
+  },
+  "programSettings": {
+    "title": "Configuración del programa",
+    "subtitle": "Configura los límites para los ajustes manuales de puntos.",
+    "adjustmentLimits": "Límites de ajuste de puntos",
+    "adjustmentLimitsDescription": "Estos límites controlan cómo se manejan los ajustes manuales de puntos.",
+    "operatorPerTx": "Límite por transacción del operador",
+    "operatorPerTxDescription": "Máximo de puntos que un operador puede ajustar en una sola solicitud. Por encima de esto, la solicitud se envía a un super administrador para aprobación.",
+    "operatorDaily": "Límite diario del operador",
+    "operatorDailyDescription": "Máximo total de puntos que un operador puede autoaprobar por día (contado por día UTC).",
+    "serverPerTx": "Límite por transacción del servidor",
+    "serverPerTxDescription": "Máximo de puntos que una clave de API SERVER puede ajustar por solicitud. Por encima de esto, la solicitud se rechaza.",
+    "save": "Guardar",
+    "saved": "Ajustes guardados",
+    "failedToLoad": "No se pudieron cargar los ajustes del programa",
+    "failedToSave": "No se pudieron guardar los ajustes"
   }
 }
