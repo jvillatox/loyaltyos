@@ -219,8 +219,8 @@ export interface TermsTemplate {
 
 export interface GiftCardMetrics {
   outstandingBalances: { programId: string; currency: string; total: number }[];
-  activeCards: number;
-  redeemedLast30d: number;
+  active: number;
+  outstandingBalance: number;
 }
 
 export type AdjustmentStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
