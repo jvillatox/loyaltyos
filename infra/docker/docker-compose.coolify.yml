@@ -44,6 +44,12 @@ services:
       GIFTCARD_HMAC_SECRET: ${GIFTCARD_HMAC_SECRET}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.resend.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-resend}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-Lazzos <acceso@lazzos.co>}
+      PORTAL_URL: ${PORTAL_URL:-https://lazzos.co}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
