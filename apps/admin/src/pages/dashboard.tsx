@@ -139,7 +139,7 @@ export function DashboardPage(): JSX.Element {
           <CardContent>
             <p className="text-2xl font-bold">
               {gcMetrics
-                ? `${gcMetrics.activeCards.toLocaleString()} ${t("giftcards.cards").toLowerCase()}`
+                ? `${gcMetrics.active.toLocaleString()} ${t("giftcards.cards").toLowerCase()}`
                 : "—"}
             </p>
           </CardContent>
