@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { z } from "zod";
@@ -21,6 +21,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -30,16 +37,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
-import type { Balance, Member, PaginatedResponse, PointTransaction } from "@/types";
+import type {
+  AdjustmentReasonCategory,
+  AdjustResult,
+  Balance,
+  Member,
+  PaginatedResponse,
+  PointTransaction,
+} from "@/types";
+
+const ADJUSTMENT_CATEGORIES: AdjustmentReasonCategory[] = [
+  "CUSTOMER_SERVICE",
+  "ERROR_CORRECTION",
+  "PROMOTION",
+  "FRAUD",
+  "OTHER",
+];
 
 const adjustSchema = z.object({
   amount: z.coerce
     .number()
     .int()
     .refine((v) => v !== 0, "Amount must not be zero"),
-  reason: z.string().min(1, "Reason is required"),
+  reasonCategory: z.enum(["CUSTOMER_SERVICE", "ERROR_CORRECTION", "PROMOTION", "FRAUD", "OTHER"]),
+  comment: z.string().trim().min(10, "Comment must be at least 10 characters").max(1000),
 });
 
 type AdjustFormValues = z.infer<typeof adjustSchema>;
@@ -59,6 +83,7 @@ export function MemberDetailPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [adjustError, setAdjustError] = useState<string | null>(null);
+  const [adjustResult, setAdjustResult] = useState<"applied" | "sentForApproval" | null>(null);
   const [adjusting, setAdjusting] = useState(false);
   const canWrite = usePermission("members.write");
 
@@ -66,10 +91,15 @@ export function MemberDetailPage(): JSX.Element {
     register,
     handleSubmit,
     reset,
+    control,
+    watch,
     formState: { errors },
   } = useForm<AdjustFormValues>({
     resolver: zodResolver(adjustSchema),
+    defaultValues: { reasonCategory: "CUSTOMER_SERVICE", comment: "" },
   });
+
+  const watchedAmount = watch("amount");
 
   const {
     data: member,
@@ -104,8 +134,9 @@ export function MemberDetailPage(): JSX.Element {
   const onSubmit = async (values: AdjustFormValues): Promise<void> => {
     setAdjusting(true);
     setAdjustError(null);
+    setAdjustResult(null);
     try {
-      await fetchApi(`/members/${memberId}/adjust`, {
+      const result = await fetchApi<AdjustResult>(`/members/${memberId}/adjust`, {
         method: "POST",
         body: JSON.stringify(values),
         headers: {
@@ -114,6 +145,7 @@ export function MemberDetailPage(): JSX.Element {
       });
       setDialogOpen(false);
       reset();
+      setAdjustResult(result.status === "PENDING" ? "sentForApproval" : "applied");
       void queryClient.invalidateQueries({ queryKey: ["member-balance", memberId] });
       void queryClient.invalidateQueries({ queryKey: ["member-transactions", memberId] });
     } catch (err) {
@@ -245,13 +277,13 @@ export function MemberDetailPage(): JSX.Element {
         {canWrite && (
           <Card>
             <CardHeader>
-              <CardTitle>Adjust Points</CardTitle>
-              <CardDescription>Manually add or remove points for this member.</CardDescription>
+              <CardTitle>{t("pointAdjustments.dialog.title")}</CardTitle>
+              <CardDescription>{t("pointAdjustments.dialog.description")}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="w-full">Adjust Points</Button>
+                  <Button className="w-full">{t("pointAdjustments.dialog.title")}</Button>
                 </DialogTrigger>
                 <DialogContent>
                   <form
@@ -261,36 +293,93 @@ export function MemberDetailPage(): JSX.Element {
                     }}
                   >
                     <DialogHeader>
-                      <DialogTitle>Adjust Points</DialogTitle>
+                      <DialogTitle>{t("pointAdjustments.dialog.title")}</DialogTitle>
                       <DialogDescription>
-                        Enter a positive amount to add points or negative to deduct.
+                        {t("pointAdjustments.dialog.description")}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div>
-                        <Label htmlFor="amount">Amount</Label>
+                        <Label htmlFor="amount">{t("pointAdjustments.dialog.amount")}</Label>
                         <Input id="amount" type="number" {...register("amount")} />
                         {errors.amount && (
                           <p className="mt-1 text-sm text-destructive">{errors.amount.message}</p>
                         )}
                       </div>
                       <div>
-                        <Label htmlFor="reason">Reason</Label>
-                        <Input id="reason" {...register("reason")} />
-                        {errors.reason && (
-                          <p className="mt-1 text-sm text-destructive">{errors.reason.message}</p>
+                        <Label>{t("pointAdjustments.dialog.category")}</Label>
+                        <Controller
+                          control={control}
+                          name="reasonCategory"
+                          render={({ field }) => (
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ADJUSTMENT_CATEGORIES.map((category) => (
+                                  <SelectItem key={category} value={category}>
+                                    {t(`pointAdjustments.categories.${category}`)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="comment">{t("pointAdjustments.dialog.comment")}</Label>
+                        <Textarea
+                          id="comment"
+                          placeholder={t("pointAdjustments.dialog.commentPlaceholder")}
+                          {...register("comment")}
+                        />
+                        {errors.comment && (
+                          <p className="mt-1 text-sm text-destructive">{errors.comment.message}</p>
                         )}
+                      </div>
+                      <div className="rounded-md bg-muted p-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            {t("pointAdjustments.dialog.currentBalance")}
+                          </span>
+                          <span className="font-medium">
+                            {(balance?.confirmed ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex justify-between">
+                          <span className="text-muted-foreground">
+                            {t("pointAdjustments.dialog.resultingBalance")}
+                          </span>
+                          <span className="font-medium">
+                            {(
+                              (balance?.confirmed ?? 0) + (Number(watchedAmount) || 0)
+                            ).toLocaleString()}
+                          </span>
+                        </div>
                       </div>
                       {adjustError && <p className="text-sm text-destructive">{adjustError}</p>}
                     </div>
                     <DialogFooter>
                       <Button type="submit" disabled={adjusting}>
-                        {adjusting ? "Submitting..." : "Submit"}
+                        {adjusting
+                          ? t("pointAdjustments.dialog.submitting")
+                          : t("pointAdjustments.dialog.submit")}
                       </Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>
+              {adjustResult === "sentForApproval" && (
+                <p className="text-sm font-medium text-amber-600">
+                  {t("pointAdjustments.dialog.sentForApproval")}
+                </p>
+              )}
+              {adjustResult === "applied" && (
+                <p className="text-sm font-medium text-green-600">
+                  {t("pointAdjustments.dialog.applied")}
+                </p>
+              )}
             </CardContent>
           </Card>
         )}

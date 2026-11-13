@@ -222,3 +222,46 @@ export interface GiftCardMetrics {
   activeCards: number;
   redeemedLast30d: number;
 }
+
+export type AdjustmentStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+
+export type AdjustmentReasonCategory =
+  | "CUSTOMER_SERVICE"
+  | "ERROR_CORRECTION"
+  | "PROMOTION"
+  | "FRAUD"
+  | "OTHER";
+
+export interface PointAdjustmentRequest {
+  id: string;
+  programId: string;
+  memberId: string;
+  amount: number;
+  reasonCategory: AdjustmentReasonCategory;
+  comment: string | null;
+  requestedById: string;
+  requestedByType: "ADMIN_USER" | "API_KEY";
+  status: AdjustmentStatus;
+  decidedById: string | null;
+  decidedAt: string | null;
+  decisionComment: string | null;
+  transactionId: string | null;
+  idempotencyKey: string;
+  expiresAt: string;
+  createdAt: string;
+  member: {
+    id: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    externalId: string | null;
+  };
+}
+
+export interface AdjustResult {
+  requestId: string;
+  status: AdjustmentStatus;
+  transactionId?: string;
+  amount?: number;
+  balanceAfter?: number;
+}
