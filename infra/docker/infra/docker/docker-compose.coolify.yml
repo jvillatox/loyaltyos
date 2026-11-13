@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-loyaltyos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-loyaltyos}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loyaltyos} -d ${POSTGRES_DB:-loyaltyos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT_API: ${PORT_API:-3002}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-loyaltyos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-loyaltyos}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      API_KEY_SALT: ${API_KEY_SALT}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY}
+      GIFTCARD_HMAC_SECRET: ${GIFTCARD_HMAC_SECRET}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY:-}
+      APPRECIO_API_BASE: ${APPRECIO_API_BASE:-https://apiv2.dcanje.mx/api}
+      APPRECIO_PUBLIC_TOKEN: ${APPRECIO_PUBLIC_TOKEN:-}
+      APPRECIO_PRIVATE_TOKEN: ${APPRECIO_PRIVATE_TOKEN:-}
+      APPRECIO_IDENTIFIER_TYPE: ${APPRECIO_IDENTIFIER_TYPE:-email}
+      APPRECIO_TIMEOUT_MS: ${APPRECIO_TIMEOUT_MS:-10000}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-haiku-4-5}
+      AI_COMPANION_ENABLED: ${AI_COMPANION_ENABLED:-false}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+    restart: unless-stopped
+
+  portal:
+    build:
+      context: ../..
+      dockerfile: apps/portal/Dockerfile
+    restart: unless-stopped
+
+  # ── Monitoring (start with: docker compose --profile monitoring up) ──────
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./otel-collector-config.yml:/etc/otelcol/config.yml:ro
+    command: ["--config=/etc/otelcol/config.yml"]
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  prometheus_data:
+  grafana_data:
