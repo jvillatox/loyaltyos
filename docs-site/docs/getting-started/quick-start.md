@@ -59,7 +59,7 @@ The seed script creates a demo program with:
 - **API Key:** `dev-key`
 - **Program ID:** `prog_dev`
 - **Admin Email:** `admin@loyaltyos.dev`
-- **Admin Password:** `demo1234`
+- **Admin Password:** `admin123`
 
 ## Sign in to the Admin UI
 

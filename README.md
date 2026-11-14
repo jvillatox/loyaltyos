@@ -151,6 +151,7 @@ The seed script creates a demo program with:
 - **API Key:** `dev-key`
 - **Program ID:** `prog_dev`
 - **Admin User:** `admin@loyaltyos.dev`
+- **Admin Password:** `admin123`
 
 ```bash
 # Test the API

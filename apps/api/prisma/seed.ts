@@ -21,6 +21,8 @@ async function main(): Promise<void> {
   await prisma.notification.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.pointAccount.deleteMany();
+  await prisma.pointAdjustmentRequest.deleteMany();
+  await prisma.memberSessionToken.deleteMany();
   await prisma.member.deleteMany();
   await prisma.adminUser.deleteMany();
   await prisma.campaignVariant.deleteMany();
@@ -670,14 +672,14 @@ async function main(): Promise<void> {
   console.log(`Program Name:         ${program.name}`);
   console.log(`API Key (X-API-Key):  ${apiKey.key}`);
   console.log(`Admin Email:          ${admin.email}`);
-  console.log(`Admin Password:       demo1234   (dev only)`);
+  console.log(`Admin Password:       ${adminPassword}   (dev only)`);
   console.log(`Demo Member ID:       ${members[0]!.id}`);
   console.log(`Demo Member Email:    ${members[0]!.email ?? ""}`);
   console.log(`Notification Templates:  ${String(await prisma.notificationTemplate.count())}`);
   console.log("=".repeat(60));
   console.log("\nNext steps:");
-  console.log("  Portal:   http://localhost:5173");
-  console.log("  Admin:    http://localhost:5174");
+  console.log("  Portal:   http://localhost:5174");
+  console.log("  Admin:    http://localhost:5173");
   console.log("  API docs: http://localhost:3002/docs");
   console.log("  MailHog:  http://localhost:8025");
   console.log("  Adminer:  http://localhost:8080");
