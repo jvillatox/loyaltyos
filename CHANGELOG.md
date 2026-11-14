@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-11-14
 
 ### Added
 
@@ -21,6 +21,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.../reject`. Pending requests left undecided for 7 days expire via a daily
   worker. `SUPER_ADMIN` adjusts directly with no caps. Every adjustment requires
   a reason category and (for admins) a comment of at least 10 characters. (#44)
+
+- **Admin UI for point adjustments.** A new _Point adjustments_ screen lists
+  pending requests with an expiry warning and a pending count in the sidebar;
+  `SUPER_ADMIN` can approve or reject each request with a comment. A _Program
+  settings_ screen tunes the three per-program caps, and the member detail
+  page's _Adjust points_ dialog shows the current and resulting balance and
+  tells the operator whether the request was applied immediately or sent for
+  approval.
+
+### Fixed
+
+- **The dashboard no longer shows a blank screen.** It read the gift-card
+  metrics from fields missing from the API response (`activeCards` and
+  `redeemedLast30d`), which threw at render time; it now reads the API's
+  `active` and `outstandingBalance` fields. Thanks to @rogerv2-ops for
+  reporting and fixing it.
+- **The rewards editor no longer crashes on empty selectors.** Opening a reward
+  with no category or tier rendered empty-value select items that crashed at
+  render time. Thanks to @rogerv2-ops for reporting and fixing it.
+- **The seed cleans up and reports credentials correctly.** It now deletes
+  `PointAdjustmentRequest` and `MemberSessionToken` rows before members (fixing
+  a foreign-key error on re-seed) and prints the actual admin password instead
+  of a hardcoded one.
+- **The member detail page is fully translated.** The remaining hardcoded
+  English labels (profile, points balance, transaction history, and table
+  headers) now use es-MX and en-US translations.
 
 ### Deprecated
 
@@ -43,6 +69,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `PATCH /api/v1/admin/programs/:id`.
 3. **The daily cap is counted by UTC day.** The OPERATOR daily limit resets at
    midnight UTC, not in the program's local timezone.
+
+### Known limitations
+
+- Points expiry is not FIFO; expiry removes from the account's current
+  spendable balance rather than per-lot (#33).
+- `holdDays` is a service-wide setting, not per-program, and
+  `settlePending()` / `expire()` are not scheduled automatically (#34).
+- `verifyConsistency()` still flags held EARNs as inconsistent until they
+  settle (#35).
+- The Apprecio adapter uses the environment credential, not the per-program
+  stored credential (#59).
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
 
 ## [1.5.0] - 2026-11-12
 
@@ -528,3 +567,5 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 [1.3.0]: https://github.com/jvillatox/loyaltyos/compare/v1.2.0...v1.3.0
 [1.4.0]: https://github.com/jvillatox/loyaltyos/compare/v1.3.0...v1.4.0
 [1.4.1]: https://github.com/jvillatox/loyaltyos/compare/v1.4.0...v1.4.1
+[1.5.0]: https://github.com/jvillatox/loyaltyos/compare/v1.4.1...v1.5.0
+[1.6.0]: https://github.com/jvillatox/loyaltyos/compare/v1.5.0...v1.6.0
