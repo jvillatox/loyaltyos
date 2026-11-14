@@ -166,7 +166,7 @@ export function MemberDetailPage(): JSX.Element {
         </Button>
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-destructive">Member not found</p>
+            <p className="text-destructive">{t("memberDetail.memberNotFound")}</p>
           </CardContent>
         </Card>
       </div>
@@ -194,7 +194,7 @@ export function MemberDetailPage(): JSX.Element {
               `${member?.firstName ?? ""} ${member?.lastName ?? ""}`.trim() || "N/A"
             )}
           </CardTitle>
-          <CardDescription>Member Profile</CardDescription>
+          <CardDescription>{t("memberDetail.profile")}</CardDescription>
         </CardHeader>
         <CardContent>
           {memberLoading ? (
@@ -206,24 +206,24 @@ export function MemberDetailPage(): JSX.Element {
           ) : (
             <dl className="grid gap-2 sm:grid-cols-2">
               <div>
-                <dt className="text-sm text-muted-foreground">Email</dt>
+                <dt className="text-sm text-muted-foreground">{t("memberDetail.email")}</dt>
                 <dd>{member?.email ?? "N/A"}</dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">Phone</dt>
+                <dt className="text-sm text-muted-foreground">{t("memberDetail.phone")}</dt>
                 <dd>{member?.phone ?? "N/A"}</dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">External ID</dt>
+                <dt className="text-sm text-muted-foreground">{t("memberDetail.externalId")}</dt>
                 <dd>{member?.externalId ?? "--"}</dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">Joined</dt>
+                <dt className="text-sm text-muted-foreground">{t("memberDetail.joined")}</dt>
                 <dd>{member ? new Date(member.joinedAt).toLocaleDateString() : "--"}</dd>
               </div>
               {member?.tags && member.tags.length > 0 && (
                 <div className="sm:col-span-2">
-                  <dt className="mb-1 text-sm text-muted-foreground">Tags</dt>
+                  <dt className="mb-1 text-sm text-muted-foreground">{t("memberDetail.tags")}</dt>
                   <dd className="flex flex-wrap gap-1">
                     {member.tags.map((tag) => (
                       <Badge key={tag} variant="secondary">
@@ -242,7 +242,7 @@ export function MemberDetailPage(): JSX.Element {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Points Balance</CardTitle>
+            <CardTitle>{t("memberDetail.pointsBalance")}</CardTitle>
           </CardHeader>
           <CardContent>
             {balanceLoading ? (
@@ -254,19 +254,19 @@ export function MemberDetailPage(): JSX.Element {
             ) : (
               <div className="grid grid-cols-3 gap-4">
                 <div className="rounded-lg bg-muted p-4 text-center">
-                  <p className="text-sm text-muted-foreground">Confirmed</p>
+                  <p className="text-sm text-muted-foreground">{t("memberDetail.confirmed")}</p>
                   <p className="text-2xl font-bold text-green-600">
                     {(balance?.confirmed ?? 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted p-4 text-center">
-                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-sm text-muted-foreground">{t("memberDetail.pending")}</p>
                   <p className="text-2xl font-bold text-yellow-600">
                     {(balance?.pending ?? 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted p-4 text-center">
-                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="text-sm text-muted-foreground">{t("memberDetail.total")}</p>
                   <p className="text-2xl font-bold">{(balance?.total ?? 0).toLocaleString()}</p>
                 </div>
               </div>
@@ -388,18 +388,18 @@ export function MemberDetailPage(): JSX.Element {
       {/* Transactions */}
       <Card>
         <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
+          <CardTitle>{t("memberDetail.transactionHistory")}</CardTitle>
         </CardHeader>
         <CardContent>
           {txsLoading ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Balance After</TableHead>
-                  <TableHead>Source</TableHead>
+                  <TableHead>{t("memberDetail.date")}</TableHead>
+                  <TableHead>{t("memberDetail.type")}</TableHead>
+                  <TableHead>{t("memberDetail.amount")}</TableHead>
+                  <TableHead>{t("memberDetail.balanceAfter")}</TableHead>
+                  <TableHead>{t("memberDetail.source")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -426,7 +426,7 @@ export function MemberDetailPage(): JSX.Element {
             </Table>
           ) : !transactions || transactions.items.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-muted-foreground">No transactions yet</p>
+              <p className="text-muted-foreground">{t("memberDetail.noTransactions")}</p>
             </div>
           ) : (
             <>
@@ -470,7 +470,10 @@ export function MemberDetailPage(): JSX.Element {
 
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Page {transactions.page} of {transactions.totalPages}
+                  {t("memberDetail.pageInfo", {
+                    page: transactions.page,
+                    totalPages: transactions.totalPages,
+                  })}
                 </p>
                 <div className="flex gap-2">
                   <Button
