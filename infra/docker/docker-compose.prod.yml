@@ -49,6 +49,11 @@ services:
       GIFTCARD_HMAC_SECRET: ${GIFTCARD_HMAC_SECRET}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@loyaltyos.dev}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
@@ -63,6 +68,7 @@ services:
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-haiku-4-5}
       AI_COMPANION_ENABLED: ${AI_COMPANION_ENABLED:-false}
       APP_URL: ${APP_URL:-http://localhost:5173}
+      PORTAL_URL: ${PORTAL_URL:-http://localhost:5174}
     depends_on:
       postgres:
         condition: service_healthy

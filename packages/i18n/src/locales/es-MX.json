@@ -82,6 +82,27 @@
       "platinum": "Platino"
     }
   },
+  "memberDetail": {
+    "memberNotFound": "Miembro no encontrado",
+    "profile": "Perfil del miembro",
+    "email": "Correo electrónico",
+    "phone": "Teléfono",
+    "externalId": "ID externo",
+    "joined": "Inscripción",
+    "tags": "Etiquetas",
+    "pointsBalance": "Saldo de puntos",
+    "confirmed": "Confirmado",
+    "pending": "Pendiente",
+    "total": "Total",
+    "transactionHistory": "Historial de transacciones",
+    "date": "Fecha",
+    "type": "Tipo",
+    "amount": "Monto",
+    "balanceAfter": "Saldo posterior",
+    "source": "Origen",
+    "noTransactions": "Sin transacciones aún",
+    "pageInfo": "Página {{page}} de {{totalPages}}"
+  },
   "campaigns": {
     "title": "Campañas",
     "createCampaign": "Crear campaña",
