@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The member detail page is fully translated.** The remaining hardcoded
   English labels (profile, points balance, transaction history, and table
   headers) now use es-MX and en-US translations.
+- **Production compose forwards SMTP, the public portal URL and the CORS
+  allowlist.** Magic-link emails now point at `PORTAL_URL` instead of
+  localhost, SMTP settings reach the API, and `CORS_ORIGINS` is forwarded; the
+  previous `CORS_ORIGIN=*` default blocked every cross-origin request,
+  including the widget on merchant sites. Thanks to @rogerv2-ops for finding
+  these during a real deployment.
 
 ### Deprecated
 
@@ -69,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `PATCH /api/v1/admin/programs/:id`.
 3. **The daily cap is counted by UTC day.** The OPERATOR daily limit resets at
    midnight UTC, not in the program's local timezone.
+4. **Set `PORTAL_URL`, the `SMTP_*` variables and `CORS_ORIGINS`** in your
+   production environment. `CORS_ORIGINS` must list the admin and portal
+   origins and every merchant site that embeds the widget; `*` is not
+   supported.
 
 ### Known limitations
 
