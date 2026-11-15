@@ -41,6 +41,20 @@ pnpm add @loyaltyos/widget
 import "@loyaltyos/widget";
 ```
 
+## CORS
+
+The API rejects cross-origin requests by default. Before the widget works on a
+merchant site, add that site's origin to `CORS_ORIGINS` on the LoyaltyOS server —
+a comma-separated list of the admin origin, the portal origin, and every merchant
+domain that embeds the widget:
+
+```bash
+CORS_ORIGINS=https://admin.example.com,https://portal.example.com,https://shop.example.com
+```
+
+The wildcard `*` is not supported (with `credentials: true` it would never match),
+so list each origin explicitly.
+
 ## Attributes
 
 | Attribute      | Type    | Default     | Description                                                 |
