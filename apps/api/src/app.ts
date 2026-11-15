@@ -131,15 +131,33 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   });
 
-  // CORS — whitelist from env var, default to restrictive
-  const corsOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim())
+  // CORS — allowlist from env var, default to restrictive. `credentials: true`
+  // forbids the wildcard `*`, so we drop it with a warning instead of passing it
+  // to the cors plugin (which would treat it as a literal, non-matching origin).
+  const rawCorsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(",")
     : process.env.CORS_ORIGIN
       ? [process.env.CORS_ORIGIN]
-      : null;
+      : [];
+
+  const corsOrigins = rawCorsOrigins.map((s) => s.trim()).filter(Boolean);
+
+  if (corsOrigins.includes("*")) {
+    app.log.warn(
+      "CORS_ORIGINS contains the wildcard '*', which is not supported with credentials: true. " +
+        "Ignoring it — list the admin and portal origins and every merchant site that embeds the widget.",
+    );
+  }
+
+  const allowedCorsOrigins = corsOrigins.filter((o) => o !== "*");
 
   await app.register(cors, {
-    origin: corsOrigins ?? (process.env.NODE_ENV === "production" ? false : true),
+    origin:
+      allowedCorsOrigins.length > 0
+        ? allowedCorsOrigins
+        : process.env.NODE_ENV === "production"
+          ? false
+          : true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
