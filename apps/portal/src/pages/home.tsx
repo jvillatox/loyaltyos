@@ -12,19 +12,11 @@ function BalanceCard({ balance }: { balance: Balance }) {
   return (
     <div className="rounded-2xl bg-[var(--color-primary)] p-6 text-white shadow-lg">
       <p className="text-sm font-medium opacity-80">{t("balance")}</p>
-      <p className="mt-1 text-4xl font-bold">{balance.total.toLocaleString()}</p>
-      <div className="mt-3 flex gap-4 text-xs opacity-75">
-        <span>
-          {t("confirmed")}: {balance.confirmed.toLocaleString()}
-        </span>
-        <span>
-          {t("pending")}: {balance.pendingBalance.toLocaleString()}
-        </span>
-      </div>
+      <p className="mt-1 text-4xl font-bold">{balance.confirmed.toLocaleString()}</p>
       {balance.pendingBalance > 0 && balance.nextAvailableAt && (
         <p className="mt-2 text-xs opacity-90">
           {t("pointsToRelease", {
-            points: balance.pendingBalance,
+            points: balance.pendingBalance.toLocaleString(i18n.language),
             date: new Date(balance.nextAvailableAt).toLocaleDateString(i18n.language),
           })}
         </p>

@@ -23,35 +23,23 @@ export class LoyaltyPointsCard extends LitElement {
       display: block;
       font-family: var(--loy-font-family);
     }
-    .balance-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--loy-space-md);
-    }
-    .stat {
+    .balance-card {
       background: var(--loy-color-surface);
       border: 1px solid var(--loy-color-border);
       border-radius: var(--loy-radius-lg);
       padding: var(--loy-space-lg);
-      text-align: center;
     }
-    .stat-label {
+    .balance-label {
       font-size: var(--loy-font-size-sm);
       color: var(--loy-color-text-secondary);
       margin-bottom: var(--loy-space-xs);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .stat-value {
+    .balance-value {
       font-size: var(--loy-font-size-xl);
       font-weight: var(--loy-font-weight-bold);
       color: var(--loy-color-text);
-    }
-    .stat-value.confirmed {
-      color: var(--loy-color-success);
-    }
-    .stat-value.pending {
-      color: var(--loy-color-warning);
     }
     .release-note {
       margin: var(--loy-space-md) 0 0;
@@ -105,32 +93,22 @@ export class LoyaltyPointsCard extends LitElement {
     if (!this.data) return null;
 
     return html`
-      <div class="balance-grid">
-        <div class="stat">
-          <div class="stat-label">${widgetT("widget.confirmed", undefined, locale)}</div>
-          <div class="stat-value confirmed">${formatPoints(this.data.confirmed, locale)}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">${widgetT("widget.pending", undefined, locale)}</div>
-          <div class="stat-value pending">${formatPoints(this.data.pendingBalance, locale)}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">${widgetT("widget.total", undefined, locale)}</div>
-          <div class="stat-value">${formatPoints(this.data.total, locale)}</div>
-        </div>
+      <div class="balance-card">
+        <div class="balance-label">${widgetT("widget.availableBalance", undefined, locale)}</div>
+        <div class="balance-value">${formatPoints(this.data.confirmed, locale)}</div>
+        ${this.data.pendingBalance > 0 && this.data.nextAvailableAt
+          ? html`<p class="release-note">
+              ${widgetT(
+                "widget.pointsToRelease",
+                {
+                  points: formatPoints(this.data.pendingBalance, locale),
+                  date: new Date(this.data.nextAvailableAt).toLocaleDateString(locale),
+                },
+                locale,
+              )}
+            </p>`
+          : ""}
       </div>
-      ${this.data.pendingBalance > 0 && this.data.nextAvailableAt
-        ? html`<p class="release-note">
-            ${widgetT(
-              "widget.pointsToRelease",
-              {
-                points: this.data.pendingBalance,
-                date: new Date(this.data.nextAvailableAt).toLocaleDateString(locale),
-              },
-              locale,
-            )}
-          </p>`
-        : ""}
     `;
   }
 }
