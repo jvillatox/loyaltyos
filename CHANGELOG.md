@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   member). The `member_adjust_points` description instructs the model to confirm
   the amount, member, and reason with the user before calling. (#44)
 
+### Fixed
+
+- **`verifyConsistency()` no longer flags held EARNs as inconsistent.** Points on
+  hold are written with `settledAt = null` and settlement writes no ledger entry,
+  so the checker now compares the confirmed balance against the transactions that
+  affect it (settled EARNs, REDEEM, ADJUST, REVERSE, EXPIRE) and the pending
+  balance against the still-unsettled EARNs, reporting the two differences
+  separately. (#35)
+
 ## [1.6.0] - 2026-11-14
 
 ### Added
