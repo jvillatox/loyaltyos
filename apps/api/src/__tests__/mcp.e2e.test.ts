@@ -176,6 +176,9 @@ afterAll(async () => {
   await prisma.segment.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.reward.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.campaign.deleteMany({ where: { programId } }).catch(() => {});
+  await prisma.pointAdjustmentRequest.deleteMany({ where: { programId } }).catch(() => {});
+  await prisma.pointTransaction.deleteMany({ where: { programId } }).catch(() => {});
+  await prisma.pointAccount.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.member.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.auditLog.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.adminUser.deleteMany({ where: { programId } }).catch(() => {});
@@ -193,6 +196,7 @@ const READ_TOOLS: ReadonlyArray<{ name: string; args: () => Record<string, unkno
   { name: "members_list", args: () => ({}) },
   { name: "member_points_history", args: () => ({ memberId }) },
   { name: "member_badges", args: () => ({ memberId }) },
+  { name: "point_adjustments_list", args: () => ({}) },
   { name: "program_config_get", args: () => ({}) },
   { name: "rewards_catalog", args: () => ({}) },
   { name: "segments_list", args: () => ({}) },
@@ -342,5 +346,79 @@ describe("coupon code masking", () => {
     expect(body.data.code).not.toBe(couponCode);
     expect(body.data.code).toContain("•");
     expect(body.data.code.endsWith(couponCode.slice(-4))).toBe(true);
+  });
+});
+
+describe("member_adjust_points", () => {
+  interface AdjustResult {
+    idempotencyKey: string;
+    outcome: "applied" | "sent_for_approval";
+    requestId: string;
+    status: "APPROVED" | "PENDING";
+    transactionId?: string;
+    amount?: number;
+    balanceAfter?: number;
+  }
+
+  const adjustArgs = (amount: number, idempotencyKey?: string) => ({
+    memberId,
+    amount,
+    reasonCategory: "CUSTOMER_SERVICE",
+    comment: "Manual adjustment for E2E testing",
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  });
+
+  it("OPERATOR within cap applies immediately with the resulting balance", async () => {
+    const res = await mcps.OPERATOR.callTool("member_adjust_points", adjustArgs(100));
+    expect(res.isError, res.text).toBe(false);
+    const body = JSON.parse(res.text) as AdjustResult;
+    expect(body.outcome).toBe("applied");
+    expect(body.status).toBe("APPROVED");
+    expect(typeof body.balanceAfter).toBe("number");
+    expect(body.amount).toBe(100);
+  });
+
+  it("OPERATOR over cap is sent for approval without applying points", async () => {
+    const res = await mcps.OPERATOR.callTool("member_adjust_points", adjustArgs(2000));
+    expect(res.isError, res.text).toBe(false);
+    const body = JSON.parse(res.text) as AdjustResult;
+    expect(body.outcome).toBe("sent_for_approval");
+    expect(body.status).toBe("PENDING");
+    expect(body.requestId).toBeTruthy();
+    expect(body.balanceAfter).toBeUndefined();
+  });
+
+  it("SUPER_ADMIN applies over the OPERATOR cap directly", async () => {
+    const res = await mcps.SUPER_ADMIN.callTool("member_adjust_points", adjustArgs(2000));
+    expect(res.isError, res.text).toBe(false);
+    const body = JSON.parse(res.text) as AdjustResult;
+    expect(body.outcome).toBe("applied");
+    expect(body.status).toBe("APPROVED");
+    expect(typeof body.balanceAfter).toBe("number");
+  });
+
+  it("is denied (403 FORBIDDEN) for ANALYST", async () => {
+    const res = await mcps.ANALYST.callTool("member_adjust_points", adjustArgs(100));
+    expect(res.isError, res.text).toBe(true);
+    expect(res.text).toContain("FORBIDDEN");
+  });
+
+  it("reuses the same idempotency key to apply a single adjustment", async () => {
+    const key = `mcp-idem-${suffix}`;
+    const first = await mcps.OPERATOR.callTool("member_adjust_points", adjustArgs(50, key));
+    const second = await mcps.OPERATOR.callTool("member_adjust_points", adjustArgs(50, key));
+    expect(first.isError, first.text).toBe(false);
+    expect(second.isError, second.text).toBe(false);
+
+    const a = JSON.parse(first.text) as AdjustResult;
+    const b = JSON.parse(second.text) as AdjustResult;
+    expect(a.requestId).toBe(b.requestId);
+    expect(a.idempotencyKey).toBe(key);
+    expect(b.idempotencyKey).toBe(key);
+
+    const rows = await prisma.pointAdjustmentRequest.count({
+      where: { programId, idempotencyKey: key },
+    });
+    expect(rows).toBe(1);
   });
 });
