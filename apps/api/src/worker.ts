@@ -20,6 +20,7 @@ import {
 import { startMemberTokenCleanupWorker } from "./workers/member-session-tokens.js";
 import { startNotificationsWorker } from "./workers/notifications.js";
 import { startPointAdjustmentExpiryWorker } from "./workers/point-adjustments.js";
+import { startPointsExpiryWorker, startPointsSettlementWorker } from "./workers/points-jobs.js";
 
 // Metrics
 const metricsRegistry = createMetricsRegistry();
@@ -32,6 +33,8 @@ startGiftCardExpireWorker();
 startOutstandingBalanceWorker();
 startMemberTokenCleanupWorker();
 startPointAdjustmentExpiryWorker();
+startPointsSettlementWorker();
+startPointsExpiryWorker();
 
 // Minimal HTTP server for health check and metrics (Prometheus scrape target)
 const metricsPort = Number(process.env.WORKER_METRICS_PORT) || 3003;

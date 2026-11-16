@@ -16,31 +16,38 @@ interface ProgramSettingsData {
   adjustOperatorPerTxLimit: number;
   adjustOperatorDailyLimit: number;
   adjustServerPerTxLimit: number;
+  holdDays: number;
 }
 
-interface Limits {
+interface SettingsForm {
   adjustOperatorPerTxLimit: number;
   adjustOperatorDailyLimit: number;
   adjustServerPerTxLimit: number;
+  holdDays: number;
 }
 
-function LimitField({
+function NumberField({
   label,
   description,
   value,
   onChange,
+  min = 1,
+  max,
 }: {
   label: string;
   description: string;
   value: number;
   onChange: (value: number) => void;
+  min?: number;
+  max?: number;
 }): JSX.Element {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
       <Input
         type="number"
-        min={1}
+        min={min}
+        max={max}
         value={value}
         onChange={(e) => {
           onChange(Number(e.target.value));
@@ -55,7 +62,7 @@ export function ProgramSettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const { admin } = useAdminAuth();
   const queryClient = useQueryClient();
-  const [limits, setLimits] = useState<Limits | null>(null);
+  const [settings, setSettings] = useState<SettingsForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -70,23 +77,24 @@ export function ProgramSettingsPage(): JSX.Element {
 
   useEffect(() => {
     if (data) {
-      setLimits({
+      setSettings({
         adjustOperatorPerTxLimit: data.adjustOperatorPerTxLimit,
         adjustOperatorDailyLimit: data.adjustOperatorDailyLimit,
         adjustServerPerTxLimit: data.adjustServerPerTxLimit,
+        holdDays: data.holdDays,
       });
     }
   }, [data]);
 
   const save = async (): Promise<void> => {
-    if (!limits) return;
+    if (!settings) return;
     setSaving(true);
     setSaveError(null);
     setSaved(false);
     try {
       await fetchApi(`/admin/programs/${programId}`, {
         method: "PATCH",
-        body: JSON.stringify(limits),
+        body: JSON.stringify(settings),
       });
       setSaved(true);
       void queryClient.invalidateQueries({ queryKey: ["program-settings", programId] });
@@ -97,8 +105,8 @@ export function ProgramSettingsPage(): JSX.Element {
     }
   };
 
-  const update = (key: keyof Limits, value: number): void => {
-    setLimits((prev) => (prev ? { ...prev, [key]: value } : prev));
+  const update = (key: keyof SettingsForm, value: number): void => {
+    setSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
     setSaved(false);
   };
 
@@ -108,6 +116,49 @@ export function ProgramSettingsPage(): JSX.Element {
         <h1 className="text-3xl font-bold">{t("programSettings.title")}</h1>
         <p className="mt-1 text-muted-foreground">{t("programSettings.subtitle")}</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("programSettings.holdPeriod")}</CardTitle>
+          <CardDescription>{t("programSettings.holdPeriodDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : isError || !settings ? (
+            <p className="text-destructive">{t("programSettings.failedToLoad")}</p>
+          ) : (
+            <div className="space-y-6">
+              <NumberField
+                label={t("programSettings.holdDays")}
+                description={t("programSettings.holdDaysDescription")}
+                value={settings.holdDays}
+                min={0}
+                max={90}
+                onChange={(value) => {
+                  update("holdDays", value);
+                }}
+              />
+              <div className="flex items-center gap-3">
+                <Button
+                  disabled={saving}
+                  onClick={() => {
+                    void save();
+                  }}
+                >
+                  {t("programSettings.save")}
+                </Button>
+                {saved && (
+                  <span className="text-sm text-green-600">{t("programSettings.saved")}</span>
+                )}
+                {saveError && <span className="text-sm text-destructive">{saveError}</span>}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -121,30 +172,30 @@ export function ProgramSettingsPage(): JSX.Element {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : isError || !limits ? (
+          ) : isError || !settings ? (
             <p className="text-destructive">{t("programSettings.failedToLoad")}</p>
           ) : (
             <div className="space-y-6">
-              <LimitField
+              <NumberField
                 label={t("programSettings.operatorPerTx")}
                 description={t("programSettings.operatorPerTxDescription")}
-                value={limits.adjustOperatorPerTxLimit}
+                value={settings.adjustOperatorPerTxLimit}
                 onChange={(value) => {
                   update("adjustOperatorPerTxLimit", value);
                 }}
               />
-              <LimitField
+              <NumberField
                 label={t("programSettings.operatorDaily")}
                 description={t("programSettings.operatorDailyDescription")}
-                value={limits.adjustOperatorDailyLimit}
+                value={settings.adjustOperatorDailyLimit}
                 onChange={(value) => {
                   update("adjustOperatorDailyLimit", value);
                 }}
               />
-              <LimitField
+              <NumberField
                 label={t("programSettings.serverPerTx")}
                 description={t("programSettings.serverPerTxDescription")}
-                value={limits.adjustServerPerTxLimit}
+                value={settings.adjustServerPerTxLimit}
                 onChange={(value) => {
                   update("adjustServerPerTxLimit", value);
                 }}

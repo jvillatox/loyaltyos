@@ -4,7 +4,7 @@ import "../components/loyalty-widget.js";
 import { fixture } from "@open-wc/testing";
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { LoyaltyWidget } from "../components/loyalty-widget.js";
 import { WidgetConfigController } from "../lib/widget-config.js";
@@ -30,6 +30,45 @@ describe("LoyaltyWidget", () => {
     // Points card is present
     const pointsCard = root.querySelector("loyalty-points-card");
     expect(pointsCard).not.toBeNull();
+  });
+
+  it("nested points card inherits config across the shadow root", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              confirmed: 5000,
+              pendingBalance: 0,
+              total: 5000,
+              nextAvailableAt: null,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    const el = await fixture<LoyaltyWidget>(html`
+      <loyalty-widget
+        program-id="pgm"
+        api-base="http://localhost"
+        auth-token="tok"
+        mode="mini"
+        data-lang="en-US"
+      ></loyalty-widget>
+    `);
+
+    await new Promise((r) => setTimeout(r, 50));
+    await el.updateComplete;
+
+    const card = el.shadowRoot!.querySelector("loyalty-points-card")!;
+    const value = card.shadowRoot!.querySelector(".balance-value");
+    expect(value).not.toBeNull();
+    expect(value!.textContent.trim()).toBe("5,000");
+
+    vi.unstubAllGlobals();
   });
 
   it("renders full mode with sections", async () => {

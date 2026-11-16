@@ -26,8 +26,9 @@ export const DEFAULT_CONFIG: Partial<WidgetConfig> = {
 
 export interface Balance {
   confirmed: number;
-  pending: number;
+  pendingBalance: number;
   total: number;
+  nextAvailableAt: string | null;
 }
 
 export interface BadgeProgress {

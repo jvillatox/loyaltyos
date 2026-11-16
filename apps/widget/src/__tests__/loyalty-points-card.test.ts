@@ -30,7 +30,7 @@ describe("LoyaltyPointsCard", () => {
     `);
 
     expect(el.shadowRoot!.querySelector("loy-spinner")).toBeNull();
-    expect(el.shadowRoot!.querySelector(".balance-grid")).toBeNull();
+    expect(el.shadowRoot!.querySelector(".balance-card")).toBeNull();
   });
 
   it("shows spinner while loading", async () => {
@@ -58,8 +58,13 @@ describe("LoyaltyPointsCard", () => {
     expect(spinner).not.toBeNull();
   });
 
-  it("renders balance stats after fetch succeeds", async () => {
-    const balance: Balance = { confirmed: 5000, pending: 1000, total: 6000 };
+  it("renders the available balance and no release note when nothing is pending", async () => {
+    const balance: Balance = {
+      confirmed: 5000,
+      pendingBalance: 0,
+      total: 5000,
+      nextAvailableAt: null,
+    };
     const mock = mockFetchWithData(balance);
 
     const el = await fixture<LoyaltyPointsCard>(html`
@@ -67,6 +72,7 @@ describe("LoyaltyPointsCard", () => {
         program-id="pgm"
         api-base="http://localhost"
         auth-token="tok"
+        data-lang="en-US"
       ></loyalty-points-card>
     `);
 
@@ -75,8 +81,36 @@ describe("LoyaltyPointsCard", () => {
     await el.updateComplete;
 
     expect(mock.mock.calls.length).toBeGreaterThan(0);
-    const stats = el.shadowRoot!.querySelectorAll(".stat-value");
-    expect(stats.length).toBe(3);
+    const value = el.shadowRoot!.querySelector(".balance-value");
+    expect(value).not.toBeNull();
+    expect(value!.textContent.trim()).toBe("5,000");
+    expect(el.shadowRoot!.querySelector(".release-note")).toBeNull();
+  });
+
+  it("shows a release note when points are pending", async () => {
+    const balance: Balance = {
+      confirmed: 5000,
+      pendingBalance: 1000,
+      total: 6000,
+      nextAvailableAt: "2026-11-26T13:22:31.877Z",
+    };
+    mockFetchWithData(balance);
+
+    const el = await fixture<LoyaltyPointsCard>(html`
+      <loyalty-points-card
+        program-id="pgm"
+        api-base="http://localhost"
+        auth-token="tok"
+        data-lang="en-US"
+      ></loyalty-points-card>
+    `);
+
+    await new Promise((r) => setTimeout(r, 50));
+    await el.updateComplete;
+
+    const note = el.shadowRoot!.querySelector(".release-note");
+    expect(note).not.toBeNull();
+    expect(note!.textContent.trim()).toBe("+1,000 points to be released on 11/26/2026");
   });
 
   it("shows error message on fetch failure", async () => {
@@ -98,7 +132,12 @@ describe("LoyaltyPointsCard", () => {
   });
 
   it("re-fetches on loyaltyos:balance-updated event", async () => {
-    const balance: Balance = { confirmed: 5000, pending: 0, total: 5000 };
+    const balance: Balance = {
+      confirmed: 5000,
+      pendingBalance: 0,
+      total: 5000,
+      nextAvailableAt: null,
+    };
     const mock = vi
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ data: balance }), { status: 200 }));

@@ -33,9 +33,9 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     await prisma.$disconnect();
   });
 
-  async function newMember() {
+  async function newMember(holdDays = 0) {
     const program = await prisma.program.create({
-      data: { name: `test-${String(Date.now())}-${String(Math.random())}` },
+      data: { name: `test-${String(Date.now())}-${String(Math.random())}`, holdDays },
     });
     const member = await prisma.member.create({ data: { programId: program.id } });
     return { programId: program.id, memberId: member.id };
@@ -255,14 +255,15 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
 
   describe("with a hold period (F4)", () => {
     it("keeps new points pending and not spendable", async () => {
-      const ids = await newMember();
-      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      const ids = await newMember(HOLD_DAYS);
+      const svc = new PointsService(prisma);
       await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
       expect(await svc.balance(ids.memberId, ids.programId)).toEqual({
         confirmed: 0,
-        pending: 100,
+        pendingBalance: 100,
         total: 100,
+        nextAvailableAt: expect.any(Date),
       });
       await expect(redeem(svc, ids, 1, `spend-${ids.memberId}`)).rejects.toBeInstanceOf(
         InsufficientBalanceError,
@@ -270,8 +271,8 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     });
 
     it("settles pending points once the hold has passed", async () => {
-      const ids = await newMember();
-      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      const ids = await newMember(HOLD_DAYS);
+      const svc = new PointsService(prisma);
       await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
       const settledEarly = await svc.settlePending(ids.programId, new Date());
@@ -284,8 +285,9 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
       expect(settled).toBe(1);
       expect(await svc.balance(ids.memberId, ids.programId)).toEqual({
         confirmed: 100,
-        pending: 0,
+        pendingBalance: 0,
         total: 100,
+        nextAvailableAt: null,
       });
 
       const again = await svc.settlePending(
@@ -296,16 +298,17 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     });
 
     it("reverses a still-pending earn from the pending balance", async () => {
-      const ids = await newMember();
-      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      const ids = await newMember(HOLD_DAYS);
+      const svc = new PointsService(prisma);
       const earned = await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
       await svc.reverse(ids.programId, earned.transactionId, "refund", "admin-1");
 
       expect(await svc.balance(ids.memberId, ids.programId)).toEqual({
         confirmed: 0,
-        pending: 0,
+        pendingBalance: 0,
         total: 0,
+        nextAvailableAt: null,
       });
       const settled = await svc.settlePending(
         ids.programId,
@@ -350,8 +353,8 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     }
 
     it("accepts a held EARN as consistent", async () => {
-      const ids = await newMember();
-      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      const ids = await newMember(HOLD_DAYS);
+      const svc = new PointsService(prisma);
       await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
       const result = await verify(ids.memberId, ids.programId);
@@ -361,8 +364,8 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     });
 
     it("stays consistent after the held EARN settles", async () => {
-      const ids = await newMember();
-      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      const ids = await newMember(HOLD_DAYS);
+      const svc = new PointsService(prisma);
       await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
       const settled = await svc.settlePending(
@@ -378,8 +381,8 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     });
 
     it("reports the pending difference when pendingBalance is tampered with", async () => {
-      const ids = await newMember();
-      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      const ids = await newMember(HOLD_DAYS);
+      const svc = new PointsService(prisma);
       await earn(svc, ids, 100, `seed-${ids.memberId}`);
 
       const account = await prisma.pointAccount.findFirstOrThrow({ where: ids });
@@ -395,8 +398,8 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     });
 
     it("reports the confirmed difference when balance is tampered with", async () => {
-      const ids = await newMember();
-      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      const ids = await newMember(HOLD_DAYS);
+      const svc = new PointsService(prisma);
       await earn(svc, ids, 100, `seed-${ids.memberId}`);
       await svc.settlePending(ids.programId, new Date(Date.now() + (HOLD_DAYS + 1) * DAY_MS));
 

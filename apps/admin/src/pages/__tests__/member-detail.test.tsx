@@ -41,7 +41,10 @@ vi.mock("@tanstack/react-query", () => ({
       };
     }
     if (queryKey[0] === "member-balance") {
-      return { data: { confirmed: 100, pending: 0, total: 100 }, isLoading: false };
+      return {
+        data: { confirmed: 100, pendingBalance: 0, total: 100, nextAvailableAt: null },
+        isLoading: false,
+      };
     }
     if (queryKey[0] === "member-transactions") {
       return {

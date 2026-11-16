@@ -14,6 +14,7 @@ const updateProgramSchema = z.object({
   adjustOperatorPerTxLimit: z.number().int().min(1).optional(),
   adjustOperatorDailyLimit: z.number().int().min(1).optional(),
   adjustServerPerTxLimit: z.number().int().min(1).optional(),
+  holdDays: z.number().int().min(0).max(90).optional(),
 });
 
 export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
@@ -41,6 +42,7 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
         adjustOperatorPerTxLimit: true,
         adjustOperatorDailyLimit: true,
         adjustServerPerTxLimit: true,
+        holdDays: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -81,6 +83,7 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
         adjustOperatorPerTxLimit: true,
         adjustOperatorDailyLimit: true,
         adjustServerPerTxLimit: true,
+        holdDays: true,
         createdAt: true,
         updatedAt: true,
       },

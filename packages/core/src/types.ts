@@ -33,8 +33,10 @@ export interface AdjustInput {
 
 export interface Balance {
   confirmed: number;
-  pending: number;
+  pendingBalance: number;
   total: number;
+  /** Earliest timestamp at which the currently held points become spendable. */
+  nextAvailableAt: Date | null;
 }
 
 export interface PaginationParams {

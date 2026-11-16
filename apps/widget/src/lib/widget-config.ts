@@ -37,6 +37,25 @@ const ATTRS: AttributeDef[] = [
   },
 ];
 
+/**
+ * Like `Element.closest`, but also crosses shadow-root boundaries so a
+ * sub-component rendered inside `loyalty-widget`'s shadow root can read the
+ * widget's config attributes. `Element.closest` alone stops at the shadow root.
+ */
+function closestComposed(host: Element, selector: string): Element | null {
+  let node: Element | null = host;
+  while (node) {
+    if (node.matches(selector)) return node;
+    if (node.parentElement) {
+      node = node.parentElement;
+    } else {
+      const root = node.getRootNode();
+      node = root instanceof ShadowRoot && root.host instanceof Element ? root.host : null;
+    }
+  }
+  return null;
+}
+
 function resolveDefaultLocale(): WidgetLocale {
   // 1. URL ?lang=
   try {
@@ -108,7 +127,7 @@ export class WidgetConfigController implements ReactiveController {
     for (const { attr, key, parse } of ATTRS) {
       let value: string | null = this.host.getAttribute(attr);
       if (value === null) {
-        const parent = this.host.closest("loyalty-widget");
+        const parent = closestComposed(this.host, "loyalty-widget");
         if (parent) value = parent.getAttribute(attr);
       }
       if (value !== null) {
