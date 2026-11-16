@@ -117,9 +117,15 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     const account = await prisma.pointAccount.findFirstOrThrow({ where: ids });
     const txs = await prisma.pointTransaction.findMany({
       where: { accountId: account.id },
-      orderBy: { balanceAfter: "asc" },
+      orderBy: { createdAt: "asc" },
     });
-    expect(verifyConsistency(txs).valid).toBe(true);
+    expect(
+      verifyConsistency({
+        transactions: txs,
+        balance: account.balance,
+        pendingBalance: account.pendingBalance,
+      }).valid,
+    ).toBe(true);
   });
 
   it("returns the original result for a concurrent duplicate idempotency key", async () => {
@@ -325,5 +331,85 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
     expect(await svc.expire(ids.programId)).toBe(1);
     expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(0);
     expect(await svc.expire(ids.programId)).toBe(0);
+  });
+
+  describe("verifyConsistency with holds (#35)", () => {
+    async function verify(memberId: string, programId: string) {
+      const account = await prisma.pointAccount.findFirstOrThrow({
+        where: { memberId, programId },
+      });
+      const txs = await prisma.pointTransaction.findMany({
+        where: { accountId: account.id },
+        orderBy: { createdAt: "asc" },
+      });
+      return verifyConsistency({
+        transactions: txs,
+        balance: account.balance,
+        pendingBalance: account.pendingBalance,
+      });
+    }
+
+    it("accepts a held EARN as consistent", async () => {
+      const ids = await newMember();
+      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      await earn(svc, ids, 100, `seed-${ids.memberId}`);
+
+      const result = await verify(ids.memberId, ids.programId);
+      expect(result.valid).toBe(true);
+      expect(result.confirmedBalance).toBe(0);
+      expect(result.pendingBalance).toBe(100);
+    });
+
+    it("stays consistent after the held EARN settles", async () => {
+      const ids = await newMember();
+      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      await earn(svc, ids, 100, `seed-${ids.memberId}`);
+
+      const settled = await svc.settlePending(
+        ids.programId,
+        new Date(Date.now() + (HOLD_DAYS + 1) * DAY_MS),
+      );
+      expect(settled).toBe(1);
+
+      const result = await verify(ids.memberId, ids.programId);
+      expect(result.valid).toBe(true);
+      expect(result.confirmedBalance).toBe(100);
+      expect(result.pendingBalance).toBe(0);
+    });
+
+    it("reports the pending difference when pendingBalance is tampered with", async () => {
+      const ids = await newMember();
+      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      await earn(svc, ids, 100, `seed-${ids.memberId}`);
+
+      const account = await prisma.pointAccount.findFirstOrThrow({ where: ids });
+      await prisma.pointAccount.update({
+        where: { id: account.id },
+        data: { pendingBalance: 90 },
+      });
+
+      const result = await verify(ids.memberId, ids.programId);
+      expect(result.valid).toBe(false);
+      expect(result.confirmedDifference).toBe(0);
+      expect(result.pendingDifference).toBe(10);
+    });
+
+    it("reports the confirmed difference when balance is tampered with", async () => {
+      const ids = await newMember();
+      const svc = new PointsService(prisma, undefined, { holdDays: HOLD_DAYS });
+      await earn(svc, ids, 100, `seed-${ids.memberId}`);
+      await svc.settlePending(ids.programId, new Date(Date.now() + (HOLD_DAYS + 1) * DAY_MS));
+
+      const account = await prisma.pointAccount.findFirstOrThrow({ where: ids });
+      await prisma.pointAccount.update({
+        where: { id: account.id },
+        data: { balance: 120 },
+      });
+
+      const result = await verify(ids.memberId, ids.programId);
+      expect(result.valid).toBe(false);
+      expect(result.confirmedDifference).toBe(-20);
+      expect(result.pendingDifference).toBe(0);
+    });
   });
 });
