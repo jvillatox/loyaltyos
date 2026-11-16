@@ -134,6 +134,7 @@ export const MEMBER_ROUTE_ENTRIES: readonly (readonly [HttpMethod, string, Permi
   ["GET", "/api/v1/members/:id", "read"],
   ["GET", "/api/v1/members/:id/transactions", "read"],
   ["GET", "/api/v1/members/:id/badges", "read"],
+  ["POST", "/api/v1/members/:id/adjust", "members.write"],
 ];
 
 /** Full inventory of routes (admin + member) with their permission. */
