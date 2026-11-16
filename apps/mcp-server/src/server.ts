@@ -8,6 +8,7 @@ import {
   registerCouponTools,
   registerGiftCardTools,
   registerMemberTools,
+  registerPointAdjustmentTools,
   registerProgramTools,
   registerRewardTools,
   registerSegmentTools,
@@ -20,6 +21,7 @@ export function createMcpServer(client: LoyaltyOSClient): McpServer {
   });
 
   registerMemberTools(server, client);
+  registerPointAdjustmentTools(server, client);
   registerAnalyticsTools(server, client);
   registerCampaignTools(server, client);
   registerSegmentTools(server, client);
