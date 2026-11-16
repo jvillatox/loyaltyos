@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockPrisma = vi.hoisted(() => ({
+  program: {
+    findUnique: vi.fn(),
+  },
   campaign: {
     create: vi.fn(),
     update: vi.fn(),
@@ -64,6 +67,7 @@ mockPrisma.apiKey.findUnique.mockResolvedValue({
 });
 mockPrisma.apiKey.update.mockResolvedValue({});
 mockPrisma.pointRule.findMany.mockResolvedValue([]);
+mockPrisma.program.findUnique.mockResolvedValue({ holdDays: 0 });
 mockPrisma.member.update.mockResolvedValue({});
 mockPrisma.member.findFirst.mockResolvedValue({ id: "mem-1", programId: "prog-1" });
 mockPrisma.$transaction.mockImplementation((fn: never) => fn(mockPrisma));
@@ -95,6 +99,7 @@ beforeEach(async () => {
   });
   mockPrisma.apiKey.update.mockResolvedValue({});
   mockPrisma.pointRule.findMany.mockResolvedValue([]);
+  mockPrisma.program.findUnique.mockResolvedValue({ holdDays: 0 });
   mockPrisma.$transaction.mockImplementation((fn: never) => fn(mockPrisma));
   app = await buildApp({ logger: false });
 
