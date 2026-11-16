@@ -18,6 +18,30 @@ export class LoyaltyWidget extends LitElement {
 
   static override styles = css`
     :host {
+      /* Base design tokens. Theme colors are overridden at runtime by applyTheme(). */
+      --loy-space-xs: 4px;
+      --loy-space-sm: 8px;
+      --loy-space-md: 16px;
+      --loy-space-lg: 24px;
+      --loy-space-xl: 32px;
+      --loy-font-size-sm: 12px;
+      --loy-font-size-md: 14px;
+      --loy-font-size-lg: 18px;
+      --loy-font-size-xl: 24px;
+      --loy-font-weight-normal: 400;
+      --loy-font-weight-semibold: 600;
+      --loy-font-weight-bold: 700;
+      --loy-radius-sm: 6px;
+      --loy-radius-md: 8px;
+      --loy-radius-lg: 12px;
+      --loy-radius-full: 9999px;
+      --loy-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --loy-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      --loy-transition: 150ms ease;
+      --loy-color-success: #22c55e;
+      --loy-color-danger: #ef4444;
+      --loy-color-warning: #f59e0b;
+
       display: block;
       font-family: var(
         --loy-font-family,
