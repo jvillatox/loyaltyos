@@ -262,7 +262,7 @@ export function MemberDetailPage(): JSX.Element {
                 <div className="rounded-lg bg-muted p-4 text-center">
                   <p className="text-sm text-muted-foreground">{t("memberDetail.pending")}</p>
                   <p className="text-2xl font-bold text-yellow-600">
-                    {(balance?.pending ?? 0).toLocaleString()}
+                    {(balance?.pendingBalance ?? 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted p-4 text-center">

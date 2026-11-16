@@ -10,6 +10,22 @@ export function createRepository(prisma: PrismaClient) {
       });
     },
 
+    async findProgramHoldDays(programId: string) {
+      const program = await prisma.program.findUnique({
+        where: { id: programId },
+        select: { holdDays: true },
+      });
+      return program?.holdDays ?? null;
+    },
+
+    async findNextAvailableAt(accountId: string) {
+      return prisma.pointTransaction.findFirst({
+        where: { accountId, type: "EARN", settledAt: null, reversedById: null },
+        orderBy: { availableAt: "asc" },
+        select: { availableAt: true },
+      });
+    },
+
     async createAccount(memberId: string, programId: string) {
       return prisma.pointAccount.create({
         data: { memberId, programId },

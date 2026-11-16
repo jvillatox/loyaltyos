@@ -28,6 +28,9 @@ const mockPrisma = {
   pointRule: {
     findMany: vi.fn(),
   },
+  program: {
+    findUnique: vi.fn(),
+  },
   $transaction: vi.fn(),
 };
 
@@ -43,6 +46,7 @@ beforeEach(async () => {
   mockPrisma.$transaction.mockImplementation((fn: (db: typeof mockPrisma) => unknown) =>
     fn(mockPrisma),
   );
+  mockPrisma.program.findUnique.mockResolvedValue({ holdDays: 0 });
   const mod = await import("../service.js");
   PointsService = mod.PointsService;
 });
@@ -404,7 +408,7 @@ describe("PointsService.balance", () => {
     const svc = new PointsService(prisma);
     const result = await svc.balance("mem-1", "prog-1");
 
-    expect(result).toEqual({ confirmed: 0, pending: 0, total: 0 });
+    expect(result).toEqual({ confirmed: 0, pendingBalance: 0, total: 0, nextAvailableAt: null });
   });
 
   it("returns balances for existing account", async () => {
@@ -418,7 +422,8 @@ describe("PointsService.balance", () => {
     const result = await svc.balance("mem-1", "prog-1");
 
     expect(result.confirmed).toBe(1000);
-    expect(result.pending).toBe(200);
+    expect(result.pendingBalance).toBe(200);
     expect(result.total).toBe(1200);
+    expect(result.nextAvailableAt).toBeNull();
   });
 });

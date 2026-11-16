@@ -20,6 +20,7 @@ model Program {
   adjustOperatorPerTxLimit  Int  @default(1000)
   adjustOperatorDailyLimit  Int  @default(5000)
   adjustServerPerTxLimit    Int  @default(10000)
+  holdDays     Int     @default(10)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -132,6 +133,7 @@ model PointTransaction {
   idempotencyKey  String
   expiresAt       DateTime?
   settledAt       DateTime?
+  availableAt     DateTime?
   reversedFromId  String?
   reversedById    String?
   createdAt       DateTime        @default(now())
@@ -142,6 +144,7 @@ model PointTransaction {
   @@index([accountId])
   @@index([type])
   @@index([expiresAt])
+  @@index([availableAt])
   @@index([createdAt])
   @@index([source])
 }

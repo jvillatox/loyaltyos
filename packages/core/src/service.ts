@@ -35,8 +35,9 @@ export interface PointsServiceMetrics {
 
 export interface PointsServiceOptions {
   /**
-   * Days before earned points become spendable. 0 (default) makes them
-   * available immediately; above 0 they sit in `pendingBalance` until
+   * Fallback hold period used only when a program has no `holdDays` value.
+   * The per-program `Program.holdDays` takes precedence; 0 makes earned points
+   * available immediately, above 0 they sit in `pendingBalance` until
    * `settlePending()` moves them.
    */
   holdDays?: number;
@@ -78,7 +79,10 @@ export class PointsService {
     const rules = await this.repo.findActiveRules(input.programId, "purchase");
     const evaluation = evaluateRules(rules, input.metadata);
     const effective = calculateEffectiveAmount(input.amount, evaluation.multiplier);
-    const held = this.holdDays > 0;
+    const holdDays = await this.programHoldDays(input.programId);
+    const held = holdDays > 0;
+    const now = new Date();
+    const availableAt = held ? new Date(now.getTime() + holdDays * DAY_MS) : null;
 
     const account = await this.ensureAccount(input.memberId, input.programId);
     try {
@@ -106,7 +110,8 @@ export class PointsService {
             idempotencyKey: input.idempotencyKey,
             metadata: input.metadata as Prisma.InputJsonValue | undefined,
             expiresAt: input.expiresAt,
-            settledAt: held ? null : new Date(),
+            settledAt: held ? null : now,
+            availableAt,
           },
         });
         return { tx: created, balanceAfter: updated.balance };
@@ -333,15 +338,13 @@ export class PointsService {
 
   /** Moves held EARN points to the spendable balance once the hold has passed. Safe to re-run. */
   async settlePending(programId: string, now: Date = new Date()): Promise<number> {
-    if (this.holdDays === 0) return 0;
-    const cutoff = new Date(now.getTime() - this.holdDays * DAY_MS);
     const due = await this.prisma.pointTransaction.findMany({
       where: {
         account: { programId },
         type: "EARN",
         settledAt: null,
         reversedById: null,
-        createdAt: { lte: cutoff },
+        availableAt: { lte: now },
       },
       select: { id: true, accountId: true, amount: true },
     });
@@ -426,12 +429,18 @@ export class PointsService {
   async balance(memberId: string, programId: string): Promise<Balance> {
     const account = await this.repo.findAccount(memberId, programId);
     if (!account) {
-      return { confirmed: 0, pending: 0, total: 0 };
+      return { confirmed: 0, pendingBalance: 0, total: 0, nextAvailableAt: null };
+    }
+    let nextAvailableAt: Date | null = null;
+    if (account.pendingBalance > 0) {
+      const earliest = await this.repo.findNextAvailableAt(account.id);
+      nextAvailableAt = earliest?.availableAt ?? null;
     }
     return {
       confirmed: account.balance,
-      pending: account.pendingBalance,
+      pendingBalance: account.pendingBalance,
       total: account.balance + account.pendingBalance,
+      nextAvailableAt,
     };
   }
 
@@ -451,6 +460,15 @@ export class PointsService {
       };
     }
     return this.repo.findHistory(account.id, pagination);
+  }
+
+  /**
+   * Hold period for a program, falling back to the constructor option when the
+   * program row is missing (e.g. during bootstrap).
+   */
+  private async programHoldDays(programId: string): Promise<number> {
+    const days = await this.repo.findProgramHoldDays(programId);
+    return days ?? this.holdDays;
   }
 
   /**

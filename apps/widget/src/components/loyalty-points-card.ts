@@ -53,6 +53,11 @@ export class LoyaltyPointsCard extends LitElement {
     .stat-value.pending {
       color: var(--loy-color-warning);
     }
+    .release-note {
+      margin: var(--loy-space-md) 0 0;
+      font-size: var(--loy-font-size-sm);
+      color: var(--loy-color-text-secondary);
+    }
   `;
 
   private onBalanceUpdated = (): void => {
@@ -107,13 +112,25 @@ export class LoyaltyPointsCard extends LitElement {
         </div>
         <div class="stat">
           <div class="stat-label">${widgetT("widget.pending", undefined, locale)}</div>
-          <div class="stat-value pending">${formatPoints(this.data.pending, locale)}</div>
+          <div class="stat-value pending">${formatPoints(this.data.pendingBalance, locale)}</div>
         </div>
         <div class="stat">
           <div class="stat-label">${widgetT("widget.total", undefined, locale)}</div>
           <div class="stat-value">${formatPoints(this.data.total, locale)}</div>
         </div>
       </div>
+      ${this.data.pendingBalance > 0 && this.data.nextAvailableAt
+        ? html`<p class="release-note">
+            ${widgetT(
+              "widget.pointsToRelease",
+              {
+                points: this.data.pendingBalance,
+                date: new Date(this.data.nextAvailableAt).toLocaleDateString(locale),
+              },
+              locale,
+            )}
+          </p>`
+        : ""}
     `;
   }
 }

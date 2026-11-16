@@ -8,7 +8,7 @@ import { isAuthenticated } from "../lib/auth";
 import type { BadgeProgress, Balance, Reward, TierStatus } from "../types";
 
 function BalanceCard({ balance }: { balance: Balance }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <div className="rounded-2xl bg-[var(--color-primary)] p-6 text-white shadow-lg">
       <p className="text-sm font-medium opacity-80">{t("balance")}</p>
@@ -18,9 +18,17 @@ function BalanceCard({ balance }: { balance: Balance }) {
           {t("confirmed")}: {balance.confirmed.toLocaleString()}
         </span>
         <span>
-          {t("pending")}: {balance.pending.toLocaleString()}
+          {t("pending")}: {balance.pendingBalance.toLocaleString()}
         </span>
       </div>
+      {balance.pendingBalance > 0 && balance.nextAvailableAt && (
+        <p className="mt-2 text-xs opacity-90">
+          {t("pointsToRelease", {
+            points: balance.pendingBalance,
+            date: new Date(balance.nextAvailableAt).toLocaleDateString(i18n.language),
+          })}
+        </p>
+      )}
     </div>
   );
 }

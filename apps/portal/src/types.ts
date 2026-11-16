@@ -9,8 +9,9 @@ export interface MemberProfile {
 
 export interface Balance {
   confirmed: number;
-  pending: number;
+  pendingBalance: number;
   total: number;
+  nextAvailableAt: string | null;
 }
 
 export interface PointTransaction {

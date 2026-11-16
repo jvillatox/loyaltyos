@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   member). The `member_adjust_points` description instructs the model to confirm
   the amount, member, and reason with the user before calling. (#44)
 
+- **Program-level point hold days.** `Program.holdDays` (default 10, range 0–90)
+  controls how long earned points sit in the pending balance before they can be
+  redeemed. The release timestamp is frozen on each EARN at the moment it is
+  written, so changing the hold later only affects points earned afterwards. A
+  new _Program settings_ field ("Días de retención de puntos") tunes it per
+  program, and the portal and widget show "X points to be released (available
+  from \<date\>)" while points are held. Settlement (`settlePending`) and expiry
+  (`expire`) now run as scheduled BullMQ jobs (hourly and daily). (#34)
+
 ### Fixed
 
 - **`verifyConsistency()` no longer flags held EARNs as inconsistent.** Points on
@@ -25,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   affect it (settled EARNs, REDEEM, ADJUST, REVERSE, EXPIRE) and the pending
   balance against the still-unsettled EARNs, reporting the two differences
   separately. (#35)
+
+### Upgrade notes
+
+1. **Run the migration before deploying.** This adds `Program.holdDays` (default 10) and `PointTransaction.availableAt`. Existing programs are backfilled to
+   `holdDays = 0` so they keep their current behaviour (points available
+   immediately); new programs default to 10 days.
+2. **Run a worker with Redis.** Settlement and expiry are now scheduled BullMQ
+   jobs (settlement hourly, expiry daily), so the API's worker process — or the
+   standalone worker — must be running with a Redis connection, otherwise held
+   points will never become spendable.
 
 ## [1.6.0] - 2026-11-14
 

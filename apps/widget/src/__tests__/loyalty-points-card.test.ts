@@ -59,7 +59,12 @@ describe("LoyaltyPointsCard", () => {
   });
 
   it("renders balance stats after fetch succeeds", async () => {
-    const balance: Balance = { confirmed: 5000, pending: 1000, total: 6000 };
+    const balance: Balance = {
+      confirmed: 5000,
+      pendingBalance: 1000,
+      total: 6000,
+      nextAvailableAt: null,
+    };
     const mock = mockFetchWithData(balance);
 
     const el = await fixture<LoyaltyPointsCard>(html`
@@ -98,7 +103,12 @@ describe("LoyaltyPointsCard", () => {
   });
 
   it("re-fetches on loyaltyos:balance-updated event", async () => {
-    const balance: Balance = { confirmed: 5000, pending: 0, total: 5000 };
+    const balance: Balance = {
+      confirmed: 5000,
+      pendingBalance: 0,
+      total: 5000,
+      nextAvailableAt: null,
+    };
     const mock = vi
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ data: balance }), { status: 200 }));
