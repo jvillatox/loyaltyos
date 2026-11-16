@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from "axios";
 
 export interface RequestOptions {
   params?: Record<string, unknown>;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -29,12 +30,18 @@ export class LoyaltyOSClient {
   }
 
   async get<T = unknown>(path: string, options?: RequestOptions): Promise<T> {
-    const { data } = await this.http.get<T>(path, { params: options?.params });
+    const { data } = await this.http.get<T>(path, {
+      params: options?.params,
+      headers: options?.headers,
+    });
     return data;
   }
 
   async post<T = unknown>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    const { data } = await this.http.post<T>(path, body, { params: options?.params });
+    const { data } = await this.http.post<T>(path, body, {
+      params: options?.params,
+      headers: options?.headers,
+    });
     return data;
   }
 }

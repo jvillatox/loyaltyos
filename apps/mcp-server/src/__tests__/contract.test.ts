@@ -27,8 +27,8 @@ function asShape(schema: z.ZodType<unknown>): Record<string, z.ZodType<unknown>>
 
 function inputShape(contract: ToolContract): Record<string, z.ZodType<unknown>> {
   const shape = asShape(contract.inputSchema);
-  const pathParams = new Set(contract.pathParams ?? []);
-  return Object.fromEntries(Object.entries(shape).filter(([key]) => !pathParams.has(key)));
+  const excluded = new Set([...(contract.pathParams ?? []), ...(contract.headerParams ?? [])]);
+  return Object.fromEntries(Object.entries(shape).filter(([key]) => !excluded.has(key)));
 }
 
 let contracts: readonly ToolContract[];
@@ -43,8 +43,8 @@ beforeAll(() => {
 });
 
 describe("MCP tool ↔ API contract", () => {
-  it("registers exactly 21 tools including the analytics tools", () => {
-    expect(toolNames).toHaveLength(21);
+  it("registers exactly 23 tools including the analytics tools", () => {
+    expect(toolNames).toHaveLength(23);
     expect(toolNames).toContain("analytics_dashboard");
     expect(toolNames).toContain("analytics_campaign");
   });

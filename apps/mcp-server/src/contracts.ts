@@ -20,6 +20,8 @@ export interface ToolContract {
   requestSchema?: z.ZodType<unknown>;
   /** Tool argument names that are URL path params, not request fields. */
   pathParams?: string[];
+  /** Tool argument names that are HTTP headers, not request fields. */
+  headerParams?: string[];
 }
 
 const registry: ToolContract[] = [];
