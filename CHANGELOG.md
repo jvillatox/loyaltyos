@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.7.0] - 2026-11-16
 
 ### Added
 
@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   affect it (settled EARNs, REDEEM, ADJUST, REVERSE, EXPIRE) and the pending
   balance against the still-unsettled EARNs, reporting the two differences
   separately. (#35)
+
+### Known limitations
+
+- Points expiry is not FIFO; expiry removes from the account's current
+  spendable balance rather than per-lot (#33).
+- `holdDays` is a service-wide setting, not per-program, and
+  `settlePending()` / `expire()` are not scheduled automatically (#34).
+- The Apprecio adapter uses the environment credential, not the per-program
+  stored credential (#59).
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
 
 ## [1.6.0] - 2026-11-14
 
@@ -600,3 +611,4 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 [1.4.1]: https://github.com/jvillatox/loyaltyos/compare/v1.4.0...v1.4.1
 [1.5.0]: https://github.com/jvillatox/loyaltyos/compare/v1.4.1...v1.5.0
 [1.6.0]: https://github.com/jvillatox/loyaltyos/compare/v1.5.0...v1.6.0
+[1.7.0]: https://github.com/jvillatox/loyaltyos/compare/v1.6.0...v1.7.0
