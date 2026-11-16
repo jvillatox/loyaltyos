@@ -177,3 +177,38 @@ export const memberTransactionsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
+
+// ── Point adjustments ──────────────────────────────────────────────────────
+
+export const ADJUSTMENT_REASON_CATEGORIES = [
+  "CUSTOMER_SERVICE",
+  "ERROR_CORRECTION",
+  "PROMOTION",
+  "FRAUD",
+  "OTHER",
+] as const;
+
+export type AdjustmentReasonCategory = (typeof ADJUSTMENT_REASON_CATEGORIES)[number];
+
+/**
+ * The canonical body for a manual point adjustment. Mirrors the API's happy
+ * path for admin-initiated adjustments: a non-zero amount, a reason category,
+ * and a justification comment of at least 10 characters. (The API additionally
+ * accepts a deprecated `reason` alias and lets SERVER keys omit the comment;
+ * those are legacy escape hatches not part of this contract.)
+ */
+export const memberAdjustBodySchema = z.object({
+  amount: z
+    .number()
+    .int()
+    .refine((amount) => amount !== 0, "amount must be non-zero"),
+  reasonCategory: z.enum(ADJUSTMENT_REASON_CATEGORIES),
+  comment: z.string().min(10).max(1000),
+});
+
+export const pointAdjustmentsListQuerySchema = z.object({
+  status: z.enum(["PENDING", "APPROVED", "REJECTED", "EXPIRED"]).optional(),
+  memberId: z.string().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
