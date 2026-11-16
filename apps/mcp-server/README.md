@@ -98,6 +98,20 @@ Connect remote agents to `http://localhost:3010/mcp`.
 | `member_points_history` | Get a member's point transaction history, paginated                |
 | `member_badges`         | Get all badges earned by a member, including locked badge progress |
 
+### Point adjustments
+
+| Tool                     | Description                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `member_adjust_points`   | Add or deduct a member's points (reason category + ≥10-char comment required) |
+| `point_adjustments_list` | List adjustment requests, filterable by status and member (read-only)         |
+
+`member_adjust_points` moves real points, so it returns whether the adjustment
+was applied immediately (with the resulting balance) or sent for approval. An
+`OPERATOR` over the program's per-transaction or daily cap gets a PENDING request
+for a `SUPER_ADMIN` to approve in the admin UI; a `SUPER_ADMIN` applies directly.
+Every call is idempotent: pass an `idempotencyKey`, or one is generated and
+returned so a retry with the same key applies a single adjustment.
+
 ### Campaigns
 
 | Tool                | Description                                                      |
@@ -156,15 +170,14 @@ The following tools were removed because they move money/points without a server
 confirmation step, or their target endpoint does not exist yet. They may return once
 the corresponding confirmation mechanism or endpoint is in place.
 
-| Removed tool              | Reason                                                                     |
-| ------------------------- | -------------------------------------------------------------------------- |
-| `member_adjust_points`    | Mutates a member balance; blocked until a server-owned confirmation exists |
-| `giftcards_create_batch`  | Creates gift cards with value (`giftcards.financial`); needs confirmation  |
-| `giftcards_redeem`        | Redeems gift card value (`giftcards.financial`); needs confirmation        |
-| `coalition_accumulate`    | Sends points to an external coalition; needs confirmation                  |
-| `coalition_convert`       | Converts points across systems; needs confirmation                         |
-| `coalition_balance`       | No admin read endpoint exists to query an external coalition balance       |
-| `reward_redemption_stats` | Endpoint does not exist in the API                                         |
+| Removed tool              | Reason                                                                    |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `giftcards_create_batch`  | Creates gift cards with value (`giftcards.financial`); needs confirmation |
+| `giftcards_redeem`        | Redeems gift card value (`giftcards.financial`); needs confirmation       |
+| `coalition_accumulate`    | Sends points to an external coalition; needs confirmation                 |
+| `coalition_convert`       | Converts points across systems; needs confirmation                        |
+| `coalition_balance`       | No admin read endpoint exists to query an external coalition balance      |
+| `reward_redemption_stats` | Endpoint does not exist in the API                                        |
 
 ## MCP Resources
 
