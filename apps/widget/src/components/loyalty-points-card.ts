@@ -28,6 +28,7 @@ export class LoyaltyPointsCard extends LitElement {
       border: 1px solid var(--loy-color-border);
       border-radius: var(--loy-radius-lg);
       padding: var(--loy-space-lg);
+      text-align: center;
     }
     .balance-label {
       font-size: var(--loy-font-size-sm);
