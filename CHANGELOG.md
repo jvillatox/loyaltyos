@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.8.0] - 2026-11-16
+## [1.7.0] - 2026-11-16
 
 ### Added
 
@@ -22,9 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   redeemed. The release timestamp is frozen on each EARN at the moment it is
   written, so changing the hold later only affects points earned afterwards. A
   new _Program settings_ field ("Días de retención de puntos") tunes it per
-  program, and the portal and widget show "X points to be released (available
-  from \<date\>)" while points are held. Settlement (`settlePending`) and expiry
-  (`expire`) now run as scheduled BullMQ jobs (hourly and daily). (#34)
+  program, and the portal and widget show the spendable balance as the main
+  figure and, while points are held, a secondary line "+X points to be released
+  on \<date\>". Settlement (`settlePending`) and expiry (`expire`) now run as
+  scheduled BullMQ jobs (hourly and daily). (#34)
 
 ### Fixed
 
@@ -34,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   affect it (settled EARNs, REDEEM, ADJUST, REVERSE, EXPIRE) and the pending
   balance against the still-unsettled EARNs, reporting the two differences
   separately. (#35)
+
+### Changed
+
+- **The portal and widget headline balance is now the spendable balance.** Held
+  points are no longer included in the main figure; they appear on a separate
+  line with their release date. (#34)
 
 ### Upgrade notes
 
@@ -628,4 +635,4 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 [1.4.1]: https://github.com/jvillatox/loyaltyos/compare/v1.4.0...v1.4.1
 [1.5.0]: https://github.com/jvillatox/loyaltyos/compare/v1.4.1...v1.5.0
 [1.6.0]: https://github.com/jvillatox/loyaltyos/compare/v1.5.0...v1.6.0
-[1.8.0]: https://github.com/jvillatox/loyaltyos/compare/v1.6.0...v1.8.0
+[1.7.0]: https://github.com/jvillatox/loyaltyos/compare/v1.6.0...v1.7.0
