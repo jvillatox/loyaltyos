@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Point adjustments in the MCP server.** Two new tools: `member_adjust_points`
+  (add or deduct a member's points with a reason category and a ≥10-character
+  comment; idempotent via an optional `idempotencyKey`; returns whether the
+  adjustment applied immediately with the resulting balance or was sent for
+  approval) and `point_adjustments_list` (read-only, filterable by status and
+  member). The `member_adjust_points` description instructs the model to confirm
+  the amount, member, and reason with the user before calling. (#44)
+
 ## [1.6.0] - 2026-11-14
 
 ### Added
