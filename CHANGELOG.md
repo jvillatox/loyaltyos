@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.8.0] - 2026-11-16
 
 ### Added
 
@@ -44,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    jobs (settlement hourly, expiry daily), so the API's worker process — or the
    standalone worker — must be running with a Redis connection, otherwise held
    points will never become spendable.
+
+### Known limitations
+
+- Points expiry is not FIFO; expiry removes from the account's current
+  spendable balance rather than per-lot (#33).
+- The Apprecio adapter uses the environment credential, not the per-program
+  stored credential (#59).
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
 
 ## [1.6.0] - 2026-11-14
 
@@ -619,3 +628,4 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 [1.4.1]: https://github.com/jvillatox/loyaltyos/compare/v1.4.0...v1.4.1
 [1.5.0]: https://github.com/jvillatox/loyaltyos/compare/v1.4.1...v1.5.0
 [1.6.0]: https://github.com/jvillatox/loyaltyos/compare/v1.5.0...v1.6.0
+[1.8.0]: https://github.com/jvillatox/loyaltyos/compare/v1.6.0...v1.8.0
