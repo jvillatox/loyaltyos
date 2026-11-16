@@ -20,7 +20,13 @@ export function createRepository(prisma: PrismaClient) {
 
     async findNextAvailableAt(accountId: string) {
       return prisma.pointTransaction.findFirst({
-        where: { accountId, type: "EARN", settledAt: null, reversedById: null },
+        where: {
+          accountId,
+          type: "EARN",
+          settledAt: null,
+          reversedById: null,
+          availableAt: { not: null },
+        },
         orderBy: { availableAt: "asc" },
         select: { availableAt: true },
       });
