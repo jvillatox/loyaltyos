@@ -213,7 +213,11 @@ export function ProgramSettingsPage(): JSX.Element {
               {settings.expiryMode !== "NONE" && (
                 <NumberField
                   label={t("programSettings.expiryMonths")}
-                  description={t("programSettings.expiryMonthsDescription")}
+                  description={
+                    settings.expiryMode === "PER_LOT"
+                      ? t("programSettings.expiryMonthsPerLotDescription")
+                      : t("programSettings.expiryMonthsInactivityDescription")
+                  }
                   value={settings.expiryMonths}
                   min={1}
                   max={60}

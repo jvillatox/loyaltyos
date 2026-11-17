@@ -642,6 +642,20 @@ async function main(): Promise<void> {
           "<h1>Points Expiring</h1><p>Hi {{member.firstName}},</p><p>You have <strong>{{points}} points</strong> expiring on {{expirationDate}}. Use them before they expire!</p>",
       },
     },
+    {
+      name: "Expiry Reminder",
+      triggerEvent: "points.expiry_reminder",
+      esMX: {
+        subject: "{{amount}} puntos por vencer",
+        bodyHtml:
+          '<h1>Tus puntos están por vencer</h1><p>Hola {{member.firstName}},</p>{{#if (eq mode "PER_LOT")}}<p>Tienes <strong>{{amount}} puntos</strong> que vencen el {{formatDate date "long" _locale}}. Úsalos antes de esa fecha en {{portalUrl}}.</p>{{else}}<p>Tus <strong>{{amount}} puntos</strong> vencen el {{formatDate date "long" _locale}} si no tienes actividad. Basta con ganar o canjear puntos para mantenerlos.</p>{{/if}}',
+      },
+      enUS: {
+        subject: "{{amount}} points expiring soon",
+        bodyHtml:
+          '<h1>Your points are expiring soon</h1><p>Hi {{member.firstName}},</p>{{#if (eq mode "PER_LOT")}}<p>You have <strong>{{amount}} points</strong> expiring on {{formatDate date "long" _locale}}. Use them before then at {{portalUrl}}.</p>{{else}}<p>Your <strong>{{amount}} points</strong> expire on {{formatDate date "long" _locale}} if you stay inactive. Earn or redeem points to keep them.</p>{{/if}}',
+      },
+    },
   ];
 
   for (const def of templateDefs) {
@@ -669,7 +683,7 @@ async function main(): Promise<void> {
     });
   }
   console.log(
-    "Created additional notification templates (both locales): Welcome, Points Redeemed, Coupon Issued, Tier Changed, Expiration Warning",
+    "Created additional notification templates (both locales): Welcome, Points Redeemed, Coupon Issued, Tier Changed, Expiration Warning, Expiry Reminder",
   );
 
   // === Summary ===

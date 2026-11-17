@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.8.0] - 2026-11-17
 
 ### Added
 
@@ -19,16 +19,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Vencimiento de puntos" section, and the portal and widget show an "X points
   expire on \<date\>" line when the next expiry falls within 90 days. (#33)
 
+- **30-day expiry reminders by email.** A daily job emails each member 30 days
+  before their points expire, once per `(member, expiry date)`. `PER_LOT`
+  members receive one email grouping the lots that share an expiry date;
+  `INACTIVITY` members receive one 30 days before their idle-account deadline
+  (`max(lastActivityAt, expiryChangedAt) + expiryMonths`). The message is the
+  per-program editable `points.expiry_reminder` template (es-MX and en-US,
+  mode-aware), and it respects member notification preferences — members who
+  opted out of email are skipped rather than emailed. Deduplication lives in a
+  `PointExpiryReminder` unique constraint, so two jobs running at once cannot
+  double-send. (#33)
+
 ### Upgrade notes
 
-1. **Run the migration before deploying.** This adds the `PointLot` table and the
-   `expiryMode` / `expiryMonths` / `expiryChangedAt` program fields, backfills one
-   never-expiring lot per account from its current balance, and drops the legacy
+1. **Run the migration before deploying.** This adds the `PointLot` and
+   `PointExpiryReminder` tables, the `PointAccount.debt` and
+   `PointAccount.lastActivityAt` columns, and the `expiryMode` / `expiryMonths`
+   / `expiryChangedAt` program fields; it backfills one never-expiring lot per
+   account from its current balance and drops the legacy
    `PointTransaction.expiresAt` column. Existing programs are backfilled to
-   `NONE` so no one loses points on upgrade; new programs default to `INACTIVITY`
-   with 12 months. To start expiring points, pick a mode on the _Program
-   settings_ page — the clock starts from that moment, so points that already
-   exist begin their expiry window when the mode is enabled or changed.
+   `NONE` so no one loses points on upgrade; new programs default to
+   `INACTIVITY` with 12 months. To start expiring points, pick a mode on the
+   _Program settings_ page — the clock starts from that moment, so points that
+   already exist begin their expiry window when the mode is enabled or changed.
+2. **Run a worker with Redis.** Expiration and the 30-day expiry reminders are
+   scheduled BullMQ jobs (expiry daily, with the reminder step running alongside
+   it), so the API's worker process — or the standalone worker — must be running
+   with a Redis connection; otherwise points never expire and no reminder is
+   emailed.
+
+### Known limitations
+
+- The Apprecio adapter uses the environment credential, not the per-program
+  stored credential (#59).
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
 
 ## [1.7.0] - 2026-11-16
 
@@ -666,3 +691,4 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 [1.5.0]: https://github.com/jvillatox/loyaltyos/compare/v1.4.1...v1.5.0
 [1.6.0]: https://github.com/jvillatox/loyaltyos/compare/v1.5.0...v1.6.0
 [1.7.0]: https://github.com/jvillatox/loyaltyos/compare/v1.6.0...v1.7.0
+[1.8.0]: https://github.com/jvillatox/loyaltyos/compare/v1.7.0...v1.8.0

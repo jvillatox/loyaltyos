@@ -16,6 +16,7 @@ import type {
   RedeemInput,
   RedeemResult,
   ReverseResult,
+  UpcomingExpiry,
 } from "./types.js";
 import {
   AlreadyReversedError,
@@ -659,6 +660,97 @@ export class PointsService {
       nextAvailableAt,
       nextExpiry,
     };
+  }
+
+  /**
+   * Returns the spendable-points deadlines that fall in `(now, now + horizonDays]`,
+   * the window that should trigger a reminder. For `PER_LOT` the lots sharing one
+   * `expiresAt` are grouped into a single deadline per member; for `INACTIVITY`
+   * the deadline is `max(lastActivityAt, expiryChangedAt) + expiryMonths`.
+   * `NONE` never expires, so it returns nothing.
+   */
+  async upcomingExpiries(
+    programId: string,
+    now: Date = new Date(),
+    horizonDays = 30,
+  ): Promise<UpcomingExpiry[]> {
+    const program = await this.programExpiry(programId);
+    if (program.mode === "NONE") return [];
+    const horizon = new Date(now.getTime() + horizonDays * DAY_MS);
+
+    if (program.mode === "PER_LOT") {
+      const lots = await this.repo.findUpcomingExpiringLots(programId, now, horizon);
+      const grouped = new Map<string, UpcomingExpiry>();
+      for (const lot of lots) {
+        if (!lot.expiresAt) continue;
+        const key = `${lot.account.memberId}|${String(lot.expiresAt.getTime())}`;
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.amount += lot.remaining;
+        } else {
+          grouped.set(key, {
+            memberId: lot.account.memberId,
+            amount: lot.remaining,
+            expiresOn: lot.expiresAt,
+            mode: "PER_LOT",
+          });
+        }
+      }
+      return [...grouped.values()];
+    }
+
+    // INACTIVITY
+    if (!program.changedAt) return [];
+    const accounts = await this.repo.findActiveAccounts(programId);
+    const deadlines: UpcomingExpiry[] = [];
+    for (const account of accounts) {
+      const anchor = account.lastActivityAt
+        ? new Date(Math.max(account.lastActivityAt.getTime(), program.changedAt.getTime()))
+        : program.changedAt;
+      const expiresOn = addMonths(anchor, program.months);
+      if (expiresOn > now && expiresOn <= horizon) {
+        deadlines.push({
+          memberId: account.memberId,
+          amount: account.balance,
+          expiresOn,
+          mode: "INACTIVITY",
+        });
+      }
+    }
+    return deadlines;
+  }
+
+  /**
+   * Sends one reminder per upcoming `(member, expiry date)` deadline, idempotently.
+   * The `PointExpiryReminder` unique constraint is the dedup mechanism: a
+   * concurrent run that loses the INSERT race skips, so `send` is invoked exactly
+   * once per deadline. Returns the number of reminders actually sent this run.
+   */
+  async remindUpcomingExpiries(
+    programId: string,
+    now: Date = new Date(),
+    send: (deadline: UpcomingExpiry) => Promise<void>,
+    horizonDays = 30,
+  ): Promise<number> {
+    const deadlines = await this.upcomingExpiries(programId, now, horizonDays);
+    let sent = 0;
+    for (const deadline of deadlines) {
+      try {
+        await this.prisma.pointExpiryReminder.create({
+          data: {
+            memberId: deadline.memberId,
+            programId,
+            expiresOn: deadline.expiresOn,
+          },
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) continue;
+        throw err;
+      }
+      await send(deadline);
+      sent++;
+    }
+    return sent;
   }
 
   async history(

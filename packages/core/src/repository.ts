@@ -133,7 +133,23 @@ export function createRepository(prisma: PrismaClient) {
     findActiveAccounts(programId: string) {
       return prisma.pointAccount.findMany({
         where: { programId, balance: { gt: 0 } },
-        select: { id: true, balance: true, lastActivityAt: true },
+        select: { id: true, memberId: true, balance: true, lastActivityAt: true },
+      });
+    },
+
+    findUpcomingExpiringLots(programId: string, from: Date, to: Date) {
+      return prisma.pointLot.findMany({
+        where: {
+          programId,
+          remaining: { gt: 0 },
+          expiresAt: { gt: from, lte: to },
+        },
+        select: {
+          account: { select: { memberId: true } },
+          expiresAt: true,
+          remaining: true,
+        },
+        orderBy: { expiresAt: "asc" },
       });
     },
 
