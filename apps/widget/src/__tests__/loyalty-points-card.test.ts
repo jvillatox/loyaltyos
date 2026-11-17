@@ -64,6 +64,7 @@ describe("LoyaltyPointsCard", () => {
       pendingBalance: 0,
       total: 5000,
       nextAvailableAt: null,
+      nextExpiry: null,
     };
     const mock = mockFetchWithData(balance);
 
@@ -93,6 +94,7 @@ describe("LoyaltyPointsCard", () => {
       pendingBalance: 1000,
       total: 6000,
       nextAvailableAt: "2026-11-26T13:22:31.877Z",
+      nextExpiry: null,
     };
     mockFetchWithData(balance);
 
@@ -137,6 +139,7 @@ describe("LoyaltyPointsCard", () => {
       pendingBalance: 0,
       total: 5000,
       nextAvailableAt: null,
+      nextExpiry: null,
     };
     const mock = vi
       .fn()

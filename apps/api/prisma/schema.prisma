@@ -144,7 +144,6 @@ model PointTransaction {
   description     String?
   metadata        Json?           @default("{}")
   idempotencyKey  String
-  expiresAt       DateTime?
   settledAt       DateTime?
   availableAt     DateTime?
   reversedFromId  String?
@@ -156,7 +155,6 @@ model PointTransaction {
   @@unique([programId, idempotencyKey])
   @@index([accountId])
   @@index([type])
-  @@index([expiresAt])
   @@index([availableAt])
   @@index([createdAt])
   @@index([source])

@@ -6,9 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchApi } from "@/lib/api-client";
 import { useAdminAuth } from "@/lib/auth-context";
+
+type ExpiryMode = "NONE" | "INACTIVITY" | "PER_LOT";
 
 interface ProgramSettingsData {
   id: string;
@@ -17,6 +26,8 @@ interface ProgramSettingsData {
   adjustOperatorDailyLimit: number;
   adjustServerPerTxLimit: number;
   holdDays: number;
+  expiryMode: ExpiryMode;
+  expiryMonths: number;
 }
 
 interface SettingsForm {
@@ -24,6 +35,8 @@ interface SettingsForm {
   adjustOperatorDailyLimit: number;
   adjustServerPerTxLimit: number;
   holdDays: number;
+  expiryMode: ExpiryMode;
+  expiryMonths: number;
 }
 
 function NumberField({
@@ -82,6 +95,8 @@ export function ProgramSettingsPage(): JSX.Element {
         adjustOperatorDailyLimit: data.adjustOperatorDailyLimit,
         adjustServerPerTxLimit: data.adjustServerPerTxLimit,
         holdDays: data.holdDays,
+        expiryMode: data.expiryMode,
+        expiryMonths: data.expiryMonths,
       });
     }
   }, [data]);
@@ -107,6 +122,11 @@ export function ProgramSettingsPage(): JSX.Element {
 
   const update = (key: keyof SettingsForm, value: number): void => {
     setSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setSaved(false);
+  };
+
+  const setExpiryMode = (mode: ExpiryMode): void => {
+    setSettings((prev) => (prev ? { ...prev, expiryMode: mode } : prev));
     setSaved(false);
   };
 
@@ -141,6 +161,70 @@ export function ProgramSettingsPage(): JSX.Element {
                   update("holdDays", value);
                 }}
               />
+              <div className="flex items-center gap-3">
+                <Button
+                  disabled={saving}
+                  onClick={() => {
+                    void save();
+                  }}
+                >
+                  {t("programSettings.save")}
+                </Button>
+                {saved && (
+                  <span className="text-sm text-green-600">{t("programSettings.saved")}</span>
+                )}
+                {saveError && <span className="text-sm text-destructive">{saveError}</span>}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("programSettings.pointExpiry")}</CardTitle>
+          <CardDescription>{t("programSettings.pointExpiryDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : isError || !settings ? (
+            <p className="text-destructive">{t("programSettings.failedToLoad")}</p>
+          ) : (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label>{t("programSettings.expiryMode")}</Label>
+                <Select value={settings.expiryMode} onValueChange={setExpiryMode}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">{t("programSettings.expiryModeNone")}</SelectItem>
+                    <SelectItem value="INACTIVITY">
+                      {t("programSettings.expiryModeInactivity")}
+                    </SelectItem>
+                    <SelectItem value="PER_LOT">{t("programSettings.expiryModePerLot")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {settings.expiryMode !== "NONE" && (
+                <NumberField
+                  label={t("programSettings.expiryMonths")}
+                  description={t("programSettings.expiryMonthsDescription")}
+                  value={settings.expiryMonths}
+                  min={1}
+                  max={60}
+                  onChange={(value) => {
+                    update("expiryMonths", value);
+                  }}
+                />
+              )}
+              <p className="text-sm text-muted-foreground">
+                {t("programSettings.expiryExplanation")}
+              </p>
               <div className="flex items-center gap-3">
                 <Button
                   disabled={saving}

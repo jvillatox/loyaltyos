@@ -9,7 +9,6 @@ export interface EarnInput {
   source: string;
   idempotencyKey: string;
   metadata?: Record<string, unknown>;
-  expiresAt?: Date;
 }
 
 export interface RedeemInput {
@@ -37,6 +36,15 @@ export interface Balance {
   total: number;
   /** Earliest timestamp at which the currently held points become spendable. */
   nextAvailableAt: Date | null;
+  /** Earliest upcoming expiry of spendable points, or null when nothing expires. */
+  nextExpiry: NextExpiry | null;
+}
+
+export interface NextExpiry {
+  /** Spendable points that will expire on `date`. */
+  amount: number;
+  date: Date;
+  mode: "PER_LOT" | "INACTIVITY";
 }
 
 export interface PaginationParams {

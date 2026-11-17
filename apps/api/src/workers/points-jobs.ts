@@ -28,7 +28,7 @@ export function startPointsExpiryWorker(): void {
     for (const { id } of programs) {
       expired += await points.expire(id);
     }
-    console.log(`[Worker] Points expiry: ${String(expired)} transactions expired`);
+    console.log(`[Worker] Points expiry: ${String(expired)} lots/accounts expired`);
   });
 
   console.log("[Worker] Points expiry worker started");

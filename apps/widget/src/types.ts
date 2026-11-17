@@ -24,11 +24,18 @@ export const DEFAULT_CONFIG: Partial<WidgetConfig> = {
 
 // ── API response types ────────────────────────────────────────────────────
 
+export interface NextExpiry {
+  amount: number;
+  date: string;
+  mode: "PER_LOT" | "INACTIVITY";
+}
+
 export interface Balance {
   confirmed: number;
   pendingBalance: number;
   total: number;
   nextAvailableAt: string | null;
+  nextExpiry: NextExpiry | null;
 }
 
 export interface BadgeProgress {

@@ -35,7 +35,11 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
 
   async function newMember(holdDays = 0) {
     const program = await prisma.program.create({
-      data: { name: `test-${String(Date.now())}-${String(Math.random())}`, holdDays },
+      data: {
+        name: `test-${String(Date.now())}-${String(Math.random())}`,
+        holdDays,
+        expiryMode: "NONE",
+      },
     });
     const member = await prisma.member.create({ data: { programId: program.id } });
     return { programId: program.id, memberId: member.id };
@@ -264,6 +268,7 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
         pendingBalance: 100,
         total: 100,
         nextAvailableAt: expect.any(Date),
+        nextExpiry: null,
       });
       await expect(redeem(svc, ids, 1, `spend-${ids.memberId}`)).rejects.toBeInstanceOf(
         InsufficientBalanceError,
@@ -288,6 +293,7 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
         pendingBalance: 0,
         total: 100,
         nextAvailableAt: null,
+        nextExpiry: null,
       });
 
       const again = await svc.settlePending(
@@ -309,6 +315,7 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
         pendingBalance: 0,
         total: 0,
         nextAvailableAt: null,
+        nextExpiry: null,
       });
       const settled = await svc.settlePending(
         ids.programId,
@@ -316,24 +323,6 @@ describe.skipIf(!databaseUrl)("PointsService ledger (PostgreSQL)", () => {
       );
       expect(settled).toBe(0);
     });
-  });
-
-  it("expires points once, never below zero, and can be re-run (F6)", async () => {
-    const ids = await newMember();
-    const svc = new PointsService(prisma);
-    const past = new Date(Date.now() - DAY_MS);
-    await svc.earn({
-      ...ids,
-      amount: 100,
-      source: "test",
-      idempotencyKey: `seed-${ids.memberId}`,
-      expiresAt: past,
-    });
-    await redeem(svc, ids, 70, `spend-${ids.memberId}`);
-
-    expect(await svc.expire(ids.programId)).toBe(1);
-    expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(0);
-    expect(await svc.expire(ids.programId)).toBe(0);
   });
 
   describe("verifyConsistency with holds (#35)", () => {

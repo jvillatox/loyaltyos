@@ -18,6 +18,13 @@ export function createRepository(prisma: PrismaClient) {
       return program?.holdDays ?? null;
     },
 
+    async findProgramExpiry(programId: string) {
+      return prisma.program.findUnique({
+        where: { id: programId },
+        select: { expiryMode: true, expiryMonths: true, expiryChangedAt: true },
+      });
+    },
+
     async findNextAvailableAt(accountId: string) {
       return prisma.pointTransaction.findFirst({
         where: {
@@ -70,7 +77,6 @@ export function createRepository(prisma: PrismaClient) {
       idempotencyKey: string;
       description?: string;
       metadata?: Prisma.InputJsonValue;
-      expiresAt?: Date;
     }) {
       return prisma.pointTransaction.create({ data: input });
     },
@@ -113,18 +119,34 @@ export function createRepository(prisma: PrismaClient) {
       });
     },
 
-    findExpiredTransactions(programId: string, now: Date) {
-      return prisma.pointTransaction.findMany({
+    findExpiredLots(programId: string, now: Date) {
+      return prisma.pointLot.findMany({
         where: {
           account: { programId },
-          type: "EARN",
+          remaining: { gt: 0 },
           expiresAt: { lte: now },
-          // Not already expired or reversed
-          AND: {
-            reversedById: null,
-          },
         },
-        include: { account: true },
+        orderBy: { expiresAt: "asc" },
+      });
+    },
+
+    findActiveAccounts(programId: string) {
+      return prisma.pointAccount.findMany({
+        where: { programId, balance: { gt: 0 } },
+        select: { id: true, balance: true, lastActivityAt: true },
+      });
+    },
+
+    findNextExpiringLot(accountId: string) {
+      return prisma.pointLot.findFirst({
+        where: { accountId, remaining: { gt: 0 }, expiresAt: { not: null } },
+        orderBy: { expiresAt: "asc" },
+      });
+    },
+
+    findLotsExpiringAt(accountId: string, expiresAt: Date) {
+      return prisma.pointLot.findMany({
+        where: { accountId, remaining: { gt: 0 }, expiresAt },
       });
     },
 
