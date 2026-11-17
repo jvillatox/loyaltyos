@@ -30,6 +30,11 @@ const mockPrisma = vi.hoisted(() => ({
     findUnique: vi.fn(),
     create: vi.fn(),
   },
+  pointLot: {
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -43,6 +48,10 @@ beforeEach(async () => {
   );
   mockPrisma.pointAccount.updateMany.mockResolvedValue({ count: 1 });
   mockPrisma.pointAccount.findUniqueOrThrow.mockResolvedValue({ id: "acc-1", balance: 500 });
+  // PointsService.redeem locks the account (`$queryRaw` → balance/debt) and then
+  // consumes lots (`$queryRaw` → []) before decrementing via pointAccount.update.
+  mockPrisma.$queryRaw.mockResolvedValueOnce([{ balance: 1000, debt: 0 }]).mockResolvedValue([]);
+  mockPrisma.pointAccount.update.mockResolvedValue({ id: "acc-1", balance: 500 });
   const mod = await import("../service.js");
   RewardsService = mod.RewardsService;
 });
