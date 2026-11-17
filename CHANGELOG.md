@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   balance against the still-unsettled EARNs, reporting the two differences
   separately. (#35)
 
+- **The widget now renders with its design styles.** The base design tokens
+  (font sizes, spacing, radius, weight) were defined in a stylesheet that was
+  never loaded, so the widget showed unstyled text; they are now defined on the
+  widget host and the points card is centered.
+
 ### Changed
 
 - **The portal and widget headline balance is now the spendable balance.** Held
