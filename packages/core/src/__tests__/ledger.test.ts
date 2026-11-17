@@ -111,4 +111,43 @@ describe("verifyConsistency", () => {
     expect(result.pendingDifference).toBe(10);
     expect(result.errors).toHaveLength(2);
   });
+
+  it("passes when lots, debt, and balance agree", () => {
+    const txs = [settled({ id: "t1", type: "EARN", amount: 100 })];
+    const result = verifyConsistency({
+      transactions: txs,
+      balance: 100,
+      pendingBalance: 0,
+      lots: [{ remaining: 100 }],
+      debt: 0,
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it("flags a lot/balance mismatch", () => {
+    const txs = [settled({ id: "t1", type: "EARN", amount: 100 })];
+    const result = verifyConsistency({
+      transactions: txs,
+      balance: 90,
+      pendingBalance: 0,
+      lots: [{ remaining: 100 }],
+      debt: 0,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.startsWith("Lot invariant mismatch"))).toBe(true);
+  });
+
+  it("flags debt coexisting with lots", () => {
+    const txs = [settled({ id: "t1", type: "REVERSE", amount: 50 })];
+    const result = verifyConsistency({
+      transactions: txs,
+      balance: -50,
+      pendingBalance: 0,
+      lots: [{ remaining: 10 }],
+      debt: 60,
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.startsWith("Debt invariant mismatch"))).toBe(true);
+  });
 });

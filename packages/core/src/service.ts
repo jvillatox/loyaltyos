@@ -54,6 +54,11 @@ function isUniqueViolation(err: unknown): boolean {
  * Points ledger. Every balance change and its ledger entry are written in one
  * database transaction, using atomic increments and balance-checked updates, so
  * concurrent requests can neither overspend nor lose updates.
+ *
+ * Spendable points live in `PointLot` rows; the account's `balance` always equals
+ * `Σ(lot.remaining) − debt`. Operations that move spendable value serialize on the
+ * account row (`SELECT … FOR UPDATE`) before touching lots, so concurrent requests
+ * cannot double-consume the same lot.
  */
 export class PointsService {
   private prisma: PrismaClient;
@@ -87,18 +92,33 @@ export class PointsService {
     const account = await this.ensureAccount(input.memberId, input.programId);
     try {
       const { tx, balanceAfter } = await this.prisma.$transaction(async (db) => {
-        const updated = await db.pointAccount.update({
-          where: { id: account.id },
-          data: held
-            ? {
-                pendingBalance: { increment: effective.total },
-                totalEarned: { increment: effective.total },
-              }
-            : {
-                balance: { increment: effective.total },
-                totalEarned: { increment: effective.total },
-              },
-        });
+        let updated: { balance: number };
+        let lotAmount = 0;
+
+        if (held) {
+          updated = await db.pointAccount.update({
+            where: { id: account.id },
+            data: {
+              pendingBalance: { increment: effective.total },
+              totalEarned: { increment: effective.total },
+              lastActivityAt: now,
+            },
+          });
+        } else {
+          const locked = await this.lockAccount(db, account.id);
+          const debtAfter = Math.max(0, locked.debt - effective.total);
+          lotAmount = Math.max(0, effective.total - locked.debt);
+          updated = await db.pointAccount.update({
+            where: { id: account.id },
+            data: {
+              balance: { increment: effective.total },
+              totalEarned: { increment: effective.total },
+              debt: debtAfter,
+              lastActivityAt: now,
+            },
+          });
+        }
+
         const created = await db.pointTransaction.create({
           data: {
             accountId: account.id,
@@ -114,6 +134,20 @@ export class PointsService {
             availableAt,
           },
         });
+
+        if (lotAmount > 0) {
+          await db.pointLot.create({
+            data: {
+              accountId: account.id,
+              programId: input.programId,
+              sourceTxId: created.id,
+              originalAmount: lotAmount,
+              remaining: lotAmount,
+              expiresAt: null,
+            },
+          });
+        }
+
         return { tx: created, balanceAfter: updated.balance };
       });
 
@@ -145,21 +179,22 @@ export class PointsService {
         });
         if (!account) throw new InsufficientBalanceError(0, input.amount);
 
-        // Balance-checked decrement: PostgreSQL re-checks the condition after
-        // acquiring the row lock, so concurrent redemptions cannot overspend.
-        const debited = await db.pointAccount.updateMany({
-          where: { id: account.id, balance: { gte: input.amount } },
+        // Serialize on the account row: a concurrent redemption blocks here and
+        // re-reads the balance once the lock is released.
+        const locked = await this.lockAccount(db, account.id);
+        if (locked.balance < input.amount) {
+          throw new InsufficientBalanceError(locked.balance, input.amount);
+        }
+        await this.consumeLots(db, account.id, input.amount);
+
+        const updated = await db.pointAccount.update({
+          where: { id: account.id },
           data: {
             balance: { decrement: input.amount },
             totalRedeemed: { increment: input.amount },
+            lastActivityAt: new Date(),
           },
         });
-        if (debited.count === 0) {
-          const current = await db.pointAccount.findUniqueOrThrow({ where: { id: account.id } });
-          throw new InsufficientBalanceError(current.balance, input.amount);
-        }
-
-        const updated = await db.pointAccount.findUniqueOrThrow({ where: { id: account.id } });
         const created = await db.pointTransaction.create({
           data: {
             accountId: account.id,
@@ -204,10 +239,26 @@ export class PointsService {
     const account = await this.ensureAccount(input.memberId, input.programId);
     try {
       const { tx, balanceAfter } = await this.prisma.$transaction(async (db) => {
-        const updated = await db.pointAccount.update({
-          where: { id: account.id },
-          data: { balance: { increment: input.amount } },
-        });
+        const locked = await this.lockAccount(db, account.id);
+
+        let updated: { balance: number };
+        let lotAmount = 0;
+
+        if (input.amount > 0) {
+          const debtAfter = Math.max(0, locked.debt - input.amount);
+          lotAmount = Math.max(0, input.amount - locked.debt);
+          updated = await db.pointAccount.update({
+            where: { id: account.id },
+            data: { balance: { increment: input.amount }, debt: debtAfter },
+          });
+        } else {
+          const shortfall = await this.consumeLots(db, account.id, Math.abs(input.amount));
+          updated = await db.pointAccount.update({
+            where: { id: account.id },
+            data: { balance: { increment: input.amount }, debt: { increment: shortfall } },
+          });
+        }
+
         const created = await db.pointTransaction.create({
           data: {
             accountId: account.id,
@@ -221,6 +272,20 @@ export class PointsService {
             settledAt: new Date(),
           },
         });
+
+        if (lotAmount > 0) {
+          await db.pointLot.create({
+            data: {
+              accountId: account.id,
+              programId: input.programId,
+              sourceTxId: created.id,
+              originalAmount: lotAmount,
+              remaining: lotAmount,
+              expiresAt: null,
+            },
+          });
+        }
+
         return { tx: created, balanceAfter: updated.balance };
       });
 
@@ -239,7 +304,8 @@ export class PointsService {
    * Undoes a transaction: an EARN removes the points (from pending if not yet
    * settled), a REDEEM or EXPIRE returns them. The REVERSE entry stores the
    * original's signed effect, so `applyTxToBalance("REVERSE", amount)` undoes it.
-   * Reversing EARN points that were already spent can take the balance negative.
+   * Reversing EARN points that were already spent consumes the EARN's own lot
+   * first, then the remaining lots FIFO, and only the shortfall becomes `debt`.
    */
   async reverse(
     programId: string,
@@ -285,12 +351,35 @@ export class PointsService {
       const current = await db.pointTransaction.findUniqueOrThrow({ where: { id: txId } });
       const fromPending = current.type === "EARN" && current.settledAt === null;
 
-      const updated = await db.pointAccount.update({
-        where: { id: original.accountId },
-        data: fromPending
-          ? { pendingBalance: { increment: -effect } }
-          : { balance: { increment: -effect } },
-      });
+      let updated: { balance: number };
+      let surplusLot = 0;
+
+      if (fromPending) {
+        updated = await db.pointAccount.update({
+          where: { id: original.accountId },
+          data: { pendingBalance: { increment: -effect } },
+        });
+      } else {
+        const locked = await this.lockAccount(db, original.accountId);
+        if (effect > 0) {
+          // Removing spendable value: consume the original's own lot first, then
+          // the rest FIFO, and turn only what remains into debt.
+          const shortfall = await this.consumeLots(db, original.accountId, effect, txId);
+          updated = await db.pointAccount.update({
+            where: { id: original.accountId },
+            data: { balance: { increment: -effect }, debt: { increment: shortfall } },
+          });
+        } else {
+          // Returning spendable value: repay debt first, surplus becomes a lot.
+          const credit = -effect;
+          const debtAfter = Math.max(0, locked.debt - credit);
+          surplusLot = Math.max(0, credit - locked.debt);
+          updated = await db.pointAccount.update({
+            where: { id: original.accountId },
+            data: { balance: { increment: credit }, debt: debtAfter },
+          });
+        }
+      }
 
       // Reversing already-spent points is allowed and can take the balance
       // negative. Record the actor and reason so the resulting debt is auditable.
@@ -325,6 +414,20 @@ export class PointsService {
         },
       });
       await db.pointTransaction.update({ where: { id: txId }, data: { reversedById: created.id } });
+
+      if (surplusLot > 0) {
+        await db.pointLot.create({
+          data: {
+            accountId: original.accountId,
+            programId,
+            sourceTxId: created.id,
+            originalAmount: surplusLot,
+            remaining: surplusLot,
+            expiresAt: null,
+          },
+        });
+      }
+
       return { reversal: created };
     });
 
@@ -346,7 +449,7 @@ export class PointsService {
         reversedById: null,
         availableAt: { lte: now },
       },
-      select: { id: true, accountId: true, amount: true },
+      select: { id: true, accountId: true, amount: true, programId: true },
     });
 
     let settled = 0;
@@ -357,10 +460,30 @@ export class PointsService {
           data: { settledAt: now },
         });
         if (claimed.count === 0) return false;
+
+        const locked = await this.lockAccount(db, tx.accountId);
+        const debtAfter = Math.max(0, locked.debt - tx.amount);
+        const lotAmount = Math.max(0, tx.amount - locked.debt);
         await db.pointAccount.update({
           where: { id: tx.accountId },
-          data: { pendingBalance: { decrement: tx.amount }, balance: { increment: tx.amount } },
+          data: {
+            pendingBalance: { decrement: tx.amount },
+            balance: { increment: tx.amount },
+            debt: debtAfter,
+          },
         });
+        if (lotAmount > 0) {
+          await db.pointLot.create({
+            data: {
+              accountId: tx.accountId,
+              programId: tx.programId,
+              sourceTxId: tx.id,
+              originalAmount: lotAmount,
+              remaining: lotAmount,
+              expiresAt: null,
+            },
+          });
+        }
         return true;
       });
       if (moved) settled++;
@@ -369,8 +492,11 @@ export class PointsService {
   }
 
   /**
-   * Expires EARN transactions past `expiresAt`. Removes at most the current
-   * spendable balance (never below zero) and marks the EARN so re-runs skip it.
+   * Expires EARN transactions past the legacy per-EARN `expiresAt`. Removes at most
+   * the current spendable balance (never below zero) and consumes the matching
+   * lots so the lot/debt invariant holds. In PR A every lot has `expiresAt = null`,
+   * so the lot-driven expiry is deferred; this keeps the legacy behaviour while
+   * still moving spendable value through lots.
    */
   async expire(programId: string): Promise<number> {
     const due = await this.repo.findExpiredTransactions(programId, new Date());
@@ -388,12 +514,9 @@ export class PointsService {
 
         // Lock the account row before reading its balance so a concurrent
         // redemption cannot spend between the read and the decrement.
-        const rows = await db.$queryRaw<{ balance: number }[]>(
-          Prisma.sql`SELECT balance FROM "PointAccount" WHERE id = ${tx.accountId} FOR UPDATE`,
-        );
-        const account = rows[0];
-        if (!account) throw new Error(`PointAccount ${tx.accountId} missing for ${tx.id}`);
+        const account = await this.lockAccount(db, tx.accountId);
         const amount = Math.min(tx.amount, Math.max(account.balance, 0));
+        await this.consumeLots(db, tx.accountId, amount, tx.id);
         const updated = await db.pointAccount.update({
           where: { id: tx.accountId },
           data: { balance: { decrement: amount } },
@@ -460,6 +583,65 @@ export class PointsService {
       };
     }
     return this.repo.findHistory(account.id, pagination);
+  }
+
+  /**
+   * Locks the account row inside the current transaction. Every operation that
+   * touches lots takes this lock first, so concurrent requests serialize and
+   * cannot double-consume the same lot.
+   */
+  private async lockAccount(
+    db: Prisma.TransactionClient,
+    accountId: string,
+  ): Promise<{ balance: number; debt: number }> {
+    const rows = await db.$queryRaw<{ balance: number; debt: number }[]>(
+      Prisma.sql`SELECT "balance", "debt" FROM "PointAccount" WHERE "id" = ${accountId} FOR UPDATE`,
+    );
+    const account = rows[0];
+    if (!account) throw new Error(`PointAccount ${accountId} missing`);
+    return account;
+  }
+
+  /**
+   * Consumes `amount` of spendable value from the account's lots in FIFO order
+   * (`expiresAt ASC NULLS LAST, createdAt ASC`). When `ownSourceTxId` is given, that
+   * lot is consumed first. Returns the shortfall (the amount no lot could cover).
+   */
+  private async consumeLots(
+    db: Prisma.TransactionClient,
+    accountId: string,
+    amount: number,
+    ownSourceTxId?: string,
+  ): Promise<number> {
+    const rows = await db.$queryRaw<{ id: string; sourceTxId: string | null; remaining: number }[]>(
+      Prisma.sql`SELECT "id", "sourceTxId", "remaining" FROM "PointLot"
+        WHERE "accountId" = ${accountId} AND "remaining" > 0
+        ORDER BY "expiresAt" ASC NULLS LAST, "createdAt" ASC, "id" ASC
+        FOR UPDATE`,
+    );
+
+    const lots = [...rows];
+    if (ownSourceTxId) {
+      const idx = lots.findIndex((lot) => lot.sourceTxId === ownSourceTxId);
+      if (idx > 0) {
+        const [own] = lots.splice(idx, 1);
+        if (own) lots.unshift(own);
+      }
+    }
+
+    let toConsume = amount;
+    for (const lot of lots) {
+      if (toConsume <= 0) break;
+      const take = Math.min(lot.remaining, toConsume);
+      if (take > 0) {
+        await db.pointLot.update({
+          where: { id: lot.id },
+          data: { remaining: { decrement: take } },
+        });
+        toConsume -= take;
+      }
+    }
+    return toConsume;
   }
 
   /**

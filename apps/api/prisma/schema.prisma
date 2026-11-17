@@ -21,6 +21,9 @@ model Program {
   adjustOperatorDailyLimit  Int  @default(5000)
   adjustServerPerTxLimit    Int  @default(10000)
   holdDays     Int     @default(10)
+  expiryMode      ExpiryMode @default(INACTIVITY)
+  expiryMonths    Int        @default(12)
+  expiryChangedAt DateTime   @default(now())
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -105,6 +108,10 @@ model PointAccount {
   member       Member              @relation(fields: [memberId], references: [id], onDelete: Restrict)
   program      Program             @relation(fields: [programId], references: [id], onDelete: Restrict)
   transactions PointTransaction[]
+  lots         PointLot[]
+
+  debt          Int       @default(0)
+  lastActivityAt DateTime?
 
   @@index([memberId, programId])
   @@index([programId])
@@ -118,6 +125,12 @@ enum TransactionType {
   ADJUST
   CONVERT_OUT
   CONVERT_IN
+}
+
+enum ExpiryMode {
+  NONE
+  INACTIVITY
+  PER_LOT
 }
 
 model PointTransaction {
@@ -147,6 +160,23 @@ model PointTransaction {
   @@index([availableAt])
   @@index([createdAt])
   @@index([source])
+}
+
+model PointLot {
+  id             String    @id @default(cuid())
+  accountId      String
+  programId      String
+  sourceTxId     String?
+  originalAmount Int
+  remaining      Int
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  account PointAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+  @@index([accountId, createdAt])
+  @@index([expiresAt])
 }
 
 enum AdjustmentStatus {

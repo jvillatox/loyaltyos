@@ -1,4 +1,4 @@
-import type { PointTransaction, TransactionType } from "@prisma/client";
+import type { PointLot, PointTransaction, TransactionType } from "@prisma/client";
 
 /**
  * Ledger verification helpers. The ledger is immutable — rows are never deleted.
@@ -32,8 +32,10 @@ export function verifyConsistency(input: {
   transactions: PointTransaction[];
   balance: number;
   pendingBalance: number;
+  lots?: Pick<PointLot, "remaining">[];
+  debt?: number;
 }): LedgerConsistencyResult {
-  const { transactions, balance, pendingBalance } = input;
+  const { transactions, balance, pendingBalance, lots, debt = 0 } = input;
 
   let confirmed = 0;
   let pending = 0;
@@ -60,6 +62,21 @@ export function verifyConsistency(input: {
     errors.push(
       `Pending balance mismatch: ledger=${String(pending)} account=${String(pendingBalance)} difference=${String(pendingDifference)}`,
     );
+  }
+
+  if (lots) {
+    const totalRemaining = lots.reduce((sum, lot) => sum + lot.remaining, 0);
+    const expectedBalance = totalRemaining - debt;
+    if (expectedBalance !== balance) {
+      errors.push(
+        `Lot invariant mismatch: Σremaining=${String(totalRemaining)} debt=${String(debt)} expected=${String(expectedBalance)} actual=${String(balance)}`,
+      );
+    }
+    if (debt > 0 && totalRemaining !== 0) {
+      errors.push(
+        `Debt invariant mismatch: debt=${String(debt)} but Σremaining=${String(totalRemaining)} (must be 0 when debt > 0)`,
+      );
+    }
   }
 
   return {

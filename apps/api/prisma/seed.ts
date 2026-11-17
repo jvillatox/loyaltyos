@@ -315,6 +315,31 @@ async function main(): Promise<void> {
   }
   console.log("Created point transactions");
 
+  // === Legacy lots (keep the lot invariant: balance = Σ(remaining) − debt) ===
+  const seededAccounts = await prisma.pointAccount.findMany({
+    where: { programId: program.id },
+  });
+  for (const account of seededAccounts) {
+    if (account.balance > 0) {
+      await prisma.pointLot.create({
+        data: {
+          accountId: account.id,
+          programId: program.id,
+          sourceTxId: null,
+          originalAmount: account.balance,
+          remaining: account.balance,
+          expiresAt: null,
+        },
+      });
+    } else if (account.balance < 0) {
+      await prisma.pointAccount.update({
+        where: { id: account.id },
+        data: { debt: -account.balance },
+      });
+    }
+  }
+  console.log("Created legacy lots for seeded balances");
+
   // === Campaigns ===
   const campaigns = await Promise.all([
     prisma.campaign.create({
