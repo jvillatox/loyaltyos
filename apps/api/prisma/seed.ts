@@ -646,14 +646,14 @@ async function main(): Promise<void> {
       name: "Expiry Reminder",
       triggerEvent: "points.expiry_reminder",
       esMX: {
-        subject: "{{amount}} puntos por vencer",
+        subject: "{{programName}}: {{amount}} puntos por vencer",
         bodyHtml:
-          '<h1>Tus puntos están por vencer</h1><p>Hola {{member.firstName}},</p>{{#if (eq mode "PER_LOT")}}<p>Tienes <strong>{{amount}} puntos</strong> que vencen el {{formatDate date "long" _locale}}. Úsalos antes de esa fecha en {{portalUrl}}.</p>{{else}}<p>Tus <strong>{{amount}} puntos</strong> vencen el {{formatDate date "long" _locale}} si no tienes actividad. Basta con ganar o canjear puntos para mantenerlos.</p>{{/if}}',
+          '<h1>Tus puntos de {{programName}} están por vencer</h1><p>Hola {{member.firstName}},</p>{{#if (eq mode "PER_LOT")}}<p>Tienes <strong>{{amount}} puntos</strong> que vencen el {{formatDate date "long" _locale}}. Úsalos antes de esa fecha.</p>{{else}}<p>Tus <strong>{{amount}} puntos</strong> vencen el {{formatDate date "long" _locale}} si no tienes actividad. Basta con ganar o canjear puntos para mantenerlos.</p>{{/if}}<p><a href="{{portalUrl}}">Ver mis puntos</a></p><p>Recibes este correo porque eres miembro de {{programName}}.</p>',
       },
       enUS: {
-        subject: "{{amount}} points expiring soon",
+        subject: "{{programName}}: {{amount}} points expiring soon",
         bodyHtml:
-          '<h1>Your points are expiring soon</h1><p>Hi {{member.firstName}},</p>{{#if (eq mode "PER_LOT")}}<p>You have <strong>{{amount}} points</strong> expiring on {{formatDate date "long" _locale}}. Use them before then at {{portalUrl}}.</p>{{else}}<p>Your <strong>{{amount}} points</strong> expire on {{formatDate date "long" _locale}} if you stay inactive. Earn or redeem points to keep them.</p>{{/if}}',
+          '<h1>Your {{programName}} points are expiring soon</h1><p>Hi {{member.firstName}},</p>{{#if (eq mode "PER_LOT")}}<p>You have <strong>{{amount}} points</strong> expiring on {{formatDate date "long" _locale}}. Use them before then.</p>{{else}}<p>Your <strong>{{amount}} points</strong> expire on {{formatDate date "long" _locale}} if you stay inactive. Earn or redeem points to keep them.</p>{{/if}}<p><a href="{{portalUrl}}">View my points</a></p><p>You\'re receiving this email because you\'re a member of {{programName}}.</p>',
       },
     },
   ];
