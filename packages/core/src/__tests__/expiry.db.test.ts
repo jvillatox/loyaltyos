@@ -184,4 +184,113 @@ describe.skipIf(!databaseUrl)("PointsService expiry modes (PostgreSQL)", () => {
     expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(100);
     expect((await svc.balance(ids.memberId, ids.programId)).nextExpiry).toBeNull();
   });
+
+  it("INACTIVITY: a failing account does not block the others from expiring", async () => {
+    const ids = await newMember({ expiryMode: "INACTIVITY", expiryMonths: 12 });
+    const other = await prisma.member.create({ data: { programId: ids.programId } });
+    const otherIds = { memberId: other.id, programId: ids.programId };
+    const svc = new PointsService(prisma);
+    await earn(svc, ids, 100, `seed-a-${ids.memberId}`);
+    await earn(svc, otherIds, 100, `seed-b-${other.id}`);
+
+    const accountA = await accountOf(ids);
+    const accountB = await accountOf(otherIds);
+    const past = new Date(Date.now() - 400 * DAY_MS);
+    await prisma.pointAccount.update({
+      where: { id: accountA.id },
+      data: { lastActivityAt: null },
+    });
+    await prisma.pointAccount.update({
+      where: { id: accountB.id },
+      data: { lastActivityAt: null },
+    });
+    await prisma.program.update({
+      where: { id: ids.programId },
+      data: { expiryChangedAt: past },
+    });
+
+    // Force account A's expiry to collide on its idempotency key so its
+    // transaction aborts; account B must still expire.
+    const now = new Date();
+    const collidingKey = `expire-inactive-${accountA.id}-${now.toISOString().slice(0, 10)}`;
+    await prisma.pointTransaction.create({
+      data: {
+        accountId: accountA.id,
+        programId: ids.programId,
+        type: "EARN",
+        amount: 1,
+        balanceAfter: 0,
+        source: "test:collision",
+        idempotencyKey: collidingKey,
+        settledAt: now,
+      },
+    });
+
+    expect(await svc.expire(ids.programId, now)).toBe(1);
+    expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(100);
+    expect((await svc.balance(other.id, ids.programId)).confirmed).toBe(0);
+  });
+
+  it("INACTIVITY: a positive adjustment after expiry expires on a later run without error", async () => {
+    const ids = await newMember({ expiryMode: "INACTIVITY", expiryMonths: 12 });
+    const svc = new PointsService(prisma);
+    await earn(svc, ids, 100, `seed-${ids.memberId}`);
+
+    const account = await accountOf(ids);
+    await prisma.pointAccount.update({
+      where: { id: account.id },
+      data: { lastActivityAt: null },
+    });
+    await prisma.program.update({
+      where: { id: ids.programId },
+      data: { expiryChangedAt: new Date(Date.now() - 400 * DAY_MS) },
+    });
+
+    const now1 = new Date();
+    expect(await svc.expire(ids.programId, now1)).toBe(1);
+    expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(0);
+
+    // A positive adjustment is not activity: it adds spendable points without
+    // touching lastActivityAt, so the account still qualifies as inactive.
+    await svc.adjust({
+      memberId: ids.memberId,
+      programId: ids.programId,
+      amount: 50,
+      reason: "goodwill credit",
+      adminUserId: "admin-1",
+      idempotencyKey: `adj-${ids.memberId}`,
+    });
+    expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(50);
+
+    const now2 = new Date(now1.getTime() + 2 * DAY_MS);
+    expect(await svc.expire(ids.programId, now2)).toBe(1);
+    expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(0);
+    expect(
+      await prisma.pointTransaction.count({ where: { programId: ids.programId, type: "EXPIRE" } }),
+    ).toBe(2);
+  });
+
+  it("PER_LOT: backfills an expiry on lots missing one before expiring them", async () => {
+    const ids = await newMember({ expiryMode: "PER_LOT", expiryMonths: 3 });
+    const svc = new PointsService(prisma);
+    await earn(svc, ids, 100, `seed-${ids.memberId}`);
+
+    const account = await accountOf(ids);
+    const lot = await prisma.pointLot.findFirstOrThrow({ where: { accountId: account.id } });
+    const past = new Date(Date.now() - 400 * DAY_MS);
+
+    // Simulate a lot created while the mode was switching: no expiry, backdated
+    // createdAt so max(createdAt, expiryChangedAt) + months lands in the past.
+    await prisma.pointLot.update({
+      where: { id: lot.id },
+      data: { expiresAt: null, createdAt: past },
+    });
+    await prisma.program.update({
+      where: { id: ids.programId },
+      data: { expiryChangedAt: past },
+    });
+
+    expect(await svc.expire(ids.programId)).toBe(1);
+    expect((await svc.balance(ids.memberId, ids.programId)).confirmed).toBe(0);
+  });
 });
