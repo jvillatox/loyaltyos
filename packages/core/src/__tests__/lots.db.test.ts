@@ -241,4 +241,26 @@ describe.skipIf(!databaseUrl)("PointLot behaviour (PostgreSQL)", () => {
       expect(s.totalRemaining).toBe(0);
     }
   });
+
+  it("rejects rows that violate PointLot and debt CHECK constraints", async () => {
+    const ids = await newMember();
+    const svc = new PointsService(prisma);
+    await earn(svc, ids, 100, `c-${ids.memberId}`);
+    const account = await prisma.pointAccount.findFirstOrThrow({ where: ids });
+
+    const badLot = (originalAmount: number, remaining: number) =>
+      prisma.pointLot.create({
+        data: { accountId: account.id, programId: ids.programId, originalAmount, remaining },
+      });
+
+    await expect(badLot(10, -1)).rejects.toThrow(); // remaining >= 0
+    await expect(badLot(10, 11)).rejects.toThrow(); // remaining <= originalAmount
+    await expect(badLot(0, 0)).rejects.toThrow(); // originalAmount > 0
+
+    await expect(
+      prisma.$executeRawUnsafe(
+        `UPDATE "PointAccount" SET "debt" = -1 WHERE "id" = '${account.id}'`,
+      ),
+    ).rejects.toThrow(); // debt >= 0
+  });
 });

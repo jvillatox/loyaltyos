@@ -5,6 +5,9 @@ CREATE TYPE "ExpiryMode" AS ENUM ('NONE', 'INACTIVITY', 'PER_LOT');
 ALTER TABLE "PointAccount" ADD COLUMN     "debt" INTEGER NOT NULL DEFAULT 0,
 ADD COLUMN     "lastActivityAt" TIMESTAMP(3);
 
+-- Constraint: debt can never be negative.
+ALTER TABLE "PointAccount" ADD CONSTRAINT "PointAccount_debt_nonnegative" CHECK ("debt" >= 0);
+
 -- AlterTable
 ALTER TABLE "Program" ADD COLUMN     "expiryChangedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN     "expiryMode" "ExpiryMode" NOT NULL DEFAULT 'INACTIVITY',
@@ -21,7 +24,10 @@ CREATE TABLE "PointLot" (
     "expiresAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "PointLot_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "PointLot_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "PointLot_original_positive" CHECK ("originalAmount" > 0),
+    CONSTRAINT "PointLot_remaining_nonnegative" CHECK ("remaining" >= 0),
+    CONSTRAINT "PointLot_remaining_not_exceed_original" CHECK ("remaining" <= "originalAmount")
 );
 
 -- CreateIndex
