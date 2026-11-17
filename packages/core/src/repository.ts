@@ -150,6 +150,13 @@ export function createRepository(prisma: PrismaClient) {
       });
     },
 
+    findLotsWithoutExpiry(programId: string) {
+      return prisma.pointLot.findMany({
+        where: { programId, remaining: { gt: 0 }, expiresAt: null },
+        select: { id: true, createdAt: true },
+      });
+    },
+
     async findReversalForTx(txId: string) {
       return prisma.pointTransaction.findFirst({
         where: { reversedFromId: txId },

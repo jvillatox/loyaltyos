@@ -77,14 +77,24 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
       });
     }
 
-    const expiryChanging = body.expiryMode !== undefined || body.expiryMonths !== undefined;
+    const { program, expiryChanging } = await prisma.$transaction(async (tx) => {
+      const current = await tx.program.findUniqueOrThrow({ where: { id } });
 
-    const program = await prisma.$transaction(async (tx) => {
-      if (!expiryChanging) {
-        return tx.program.update({ where: { id }, data: body, select: programSelect });
+      const expiryModeChanged =
+        body.expiryMode !== undefined && body.expiryMode !== current.expiryMode;
+      const expiryMonthsChanged =
+        body.expiryMonths !== undefined && body.expiryMonths !== current.expiryMonths;
+      const changing = expiryModeChanged || expiryMonthsChanged;
+
+      if (!changing) {
+        const updated = await tx.program.update({
+          where: { id },
+          data: body,
+          select: programSelect,
+        });
+        return { program: updated, expiryChanging: false };
       }
 
-      const current = await tx.program.findUniqueOrThrow({ where: { id } });
       const newMode = body.expiryMode ?? current.expiryMode;
       const now = new Date();
 
@@ -108,7 +118,7 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
         });
       }
 
-      return updated;
+      return { program: updated, expiryChanging: true };
     });
 
     if (expiryChanging) {

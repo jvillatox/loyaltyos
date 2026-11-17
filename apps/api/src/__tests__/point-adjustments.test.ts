@@ -167,6 +167,22 @@ describe("point adjustments — program limits", () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  it("changing holdDays without touching expiry keeps expiryChangedAt", async () => {
+    const before = await prisma.program.findUniqueOrThrow({ where: { id: programId } });
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/programs/${programId}`,
+      headers: { cookie: cookies.SUPER_ADMIN },
+      payload: { holdDays: 7 },
+    });
+    expect(res.statusCode).toBe(200);
+    const after = await prisma.program.findUniqueOrThrow({ where: { id: programId } });
+    expect(after.holdDays).toBe(7);
+    expect(after.expiryChangedAt.getTime()).toBe(before.expiryChangedAt.getTime());
+
+    await prisma.program.update({ where: { id: programId }, data: { holdDays: 10 } });
+  });
 });
 
 describe("point adjustments — reason validation", () => {

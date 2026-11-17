@@ -510,50 +510,77 @@ export class PointsService {
   async expire(programId: string, now: Date = new Date()): Promise<number> {
     const program = await this.programExpiry(programId);
     if (program.mode === "NONE") return 0;
-    if (program.mode === "PER_LOT") return this.expireLots(programId, now);
+    if (program.mode === "PER_LOT") {
+      await this.backfillLotExpiry(programId, program);
+      return this.expireLots(programId, now);
+    }
     return this.expireInactiveAccounts(programId, program, now);
+  }
+
+  /**
+   * Self-heals PER_LOT lots that have no expiry (e.g. created while the mode was
+   * switching): assigns `max(createdAt, expiryChangedAt) + expiryMonths` so they
+   * are picked up by the next `expireLots` pass instead of never expiring.
+   */
+  private async backfillLotExpiry(
+    programId: string,
+    program: { mode: ExpiryMode; months: number; changedAt: Date | null },
+  ): Promise<void> {
+    if (!program.changedAt) return;
+    const lots = await this.repo.findLotsWithoutExpiry(programId);
+    for (const lot of lots) {
+      const base = lot.createdAt > program.changedAt ? lot.createdAt : program.changedAt;
+      await this.prisma.pointLot.update({
+        where: { id: lot.id },
+        data: { expiresAt: addMonths(base, program.months) },
+      });
+    }
   }
 
   private async expireLots(programId: string, now: Date): Promise<number> {
     const lots = await this.repo.findExpiredLots(programId, now);
     let expired = 0;
     for (const lot of lots) {
-      const key = `expire-${lot.id}`;
-      const done = await this.prisma.$transaction(async (db) => {
-        // Serialize on the account row, then re-read the lot so a concurrent
-        // expiry or redemption cannot double-consume it.
-        const account = await this.lockAccount(db, lot.accountId);
-        const current = await db.pointLot.findUnique({ where: { id: lot.id } });
-        if (!current || current.remaining <= 0) return false;
-        const amount = Math.min(current.remaining, account.balance);
-        if (amount <= 0) return false;
+      try {
+        const key = `expire-${lot.id}`;
+        const done = await this.prisma.$transaction(async (db) => {
+          // Serialize on the account row, then re-read the lot so a concurrent
+          // expiry or redemption cannot double-consume it.
+          const account = await this.lockAccount(db, lot.accountId);
+          const current = await db.pointLot.findUnique({ where: { id: lot.id } });
+          if (!current || current.remaining <= 0) return false;
+          const amount = Math.min(current.remaining, account.balance);
+          if (amount <= 0) return false;
 
-        await db.pointLot.update({
-          where: { id: lot.id },
-          data: { remaining: { decrement: amount } },
+          await db.pointLot.update({
+            where: { id: lot.id },
+            data: { remaining: { decrement: amount } },
+          });
+          const updated = await db.pointAccount.update({
+            where: { id: lot.accountId },
+            data: { balance: { decrement: amount } },
+          });
+          await db.pointTransaction.create({
+            data: {
+              accountId: lot.accountId,
+              programId,
+              type: "EXPIRE",
+              amount,
+              balanceAfter: updated.balance,
+              source: "system:expire",
+              idempotencyKey: key,
+              description: `Expired lot ${lot.id}`,
+              settledAt: now,
+            },
+          });
+          return true;
         });
-        const updated = await db.pointAccount.update({
-          where: { id: lot.accountId },
-          data: { balance: { decrement: amount } },
-        });
-        await db.pointTransaction.create({
-          data: {
-            accountId: lot.accountId,
-            programId,
-            type: "EXPIRE",
-            amount,
-            balanceAfter: updated.balance,
-            source: "system:expire",
-            idempotencyKey: key,
-            description: `Expired lot ${lot.id}`,
-            settledAt: now,
-          },
-        });
-        return true;
-      });
-      if (done) {
-        this.metrics?.recordExpire(programId);
-        expired++;
+        if (done) {
+          this.metrics?.recordExpire(programId);
+          expired++;
+        }
+      } catch (err) {
+        console.error(`[Expiry] failed to expire lot ${lot.id}:`, err);
       }
     }
     return expired;
@@ -568,40 +595,47 @@ export class PointsService {
     const accounts = await this.repo.findActiveAccounts(programId);
     let expired = 0;
     for (const account of accounts) {
-      const anchor = account.lastActivityAt
-        ? new Date(Math.max(account.lastActivityAt.getTime(), program.changedAt.getTime()))
-        : program.changedAt;
-      const expiresAt = addMonths(anchor, program.months);
-      if (expiresAt > now) continue;
+      try {
+        const anchor = account.lastActivityAt
+          ? new Date(Math.max(account.lastActivityAt.getTime(), program.changedAt.getTime()))
+          : program.changedAt;
+        const expiresAt = addMonths(anchor, program.months);
+        if (expiresAt > now) continue;
 
-      const key = `expire-inactive-${account.id}-${expiresAt.toISOString().slice(0, 10)}`;
-      const done = await this.prisma.$transaction(async (db) => {
-        const locked = await this.lockAccount(db, account.id);
-        const amount = Math.max(locked.balance, 0);
-        if (amount <= 0) return false;
-        await this.consumeLots(db, account.id, amount);
-        const updated = await db.pointAccount.update({
-          where: { id: account.id },
-          data: { balance: { decrement: amount } },
+        // One EXPIRE per account per day, so points that arrive after an expiry
+        // (e.g. a non-activity adjustment) can expire on a later run without
+        // colliding with the previous day's idempotency key.
+        const key = `expire-inactive-${account.id}-${now.toISOString().slice(0, 10)}`;
+        const done = await this.prisma.$transaction(async (db) => {
+          const locked = await this.lockAccount(db, account.id);
+          const amount = Math.max(locked.balance, 0);
+          if (amount <= 0) return false;
+          await this.consumeLots(db, account.id, amount);
+          const updated = await db.pointAccount.update({
+            where: { id: account.id },
+            data: { balance: { decrement: amount } },
+          });
+          await db.pointTransaction.create({
+            data: {
+              accountId: account.id,
+              programId,
+              type: "EXPIRE",
+              amount,
+              balanceAfter: updated.balance,
+              source: "system:expire",
+              idempotencyKey: key,
+              description: `Expired inactive account points on ${expiresAt.toISOString()}`,
+              settledAt: now,
+            },
+          });
+          return true;
         });
-        await db.pointTransaction.create({
-          data: {
-            accountId: account.id,
-            programId,
-            type: "EXPIRE",
-            amount,
-            balanceAfter: updated.balance,
-            source: "system:expire",
-            idempotencyKey: key,
-            description: `Expired inactive account points on ${expiresAt.toISOString()}`,
-            settledAt: now,
-          },
-        });
-        return true;
-      });
-      if (done) {
-        this.metrics?.recordExpire(programId);
-        expired++;
+        if (done) {
+          this.metrics?.recordExpire(programId);
+          expired++;
+        }
+      } catch (err) {
+        console.error(`[Expiry] failed to expire account ${account.id}:`, err);
       }
     }
     return expired;
