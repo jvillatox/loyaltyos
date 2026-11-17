@@ -464,7 +464,7 @@
   },
   "programSettings": {
     "title": "Configuración del programa",
-    "subtitle": "Configura la retención y los límites de ajuste de puntos.",
+    "subtitle": "Configura la retención, el vencimiento y los límites de ajuste de puntos.",
     "holdPeriod": "Retención de puntos",
     "holdPeriodDescription": "Controla cuánto tiempo los puntos ganados quedan retenidos antes de poder canjearse.",
     "holdDays": "Días de retención de puntos",
@@ -485,6 +485,8 @@
     "expiryModePerLot": "Por antigüedad",
     "expiryMonths": "Meses para vencer",
     "expiryMonthsDescription": "Los puntos vencen después de esta cantidad de meses (1 a 60).",
+    "expiryMonthsInactivityDescription": "Meses sin ganar ni canjear puntos antes de que venzan (1 a 60).",
+    "expiryMonthsPerLotDescription": "Meses desde que los puntos se liberan hasta que vencen (1 a 60).",
     "expiryExplanation": "El plazo empieza a contar desde hoy para los puntos que ya existen; nadie pierde puntos al activar o cambiar esta opción.",
     "save": "Guardar",
     "saved": "Ajustes guardados",

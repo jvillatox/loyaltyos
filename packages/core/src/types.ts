@@ -47,6 +47,15 @@ export interface NextExpiry {
   mode: "PER_LOT" | "INACTIVITY";
 }
 
+/** An upcoming expiry deadline that should trigger a 30-day reminder. */
+export interface UpcomingExpiry {
+  memberId: string;
+  /** Spendable points that will expire on `expiresOn`. */
+  amount: number;
+  expiresOn: Date;
+  mode: "PER_LOT" | "INACTIVITY";
+}
+
 export interface PaginationParams {
   page?: number;
   pageSize?: number;

@@ -18,6 +18,7 @@ export type {
   RedeemInput,
   RedeemResult,
   ReverseResult,
+  UpcomingExpiry,
 } from "./types.js";
 export {
   AlreadyReversedError,

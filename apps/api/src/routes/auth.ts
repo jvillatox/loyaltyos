@@ -7,6 +7,7 @@ import { prisma } from "../db.js";
 import { lucia } from "../lib/auth/lucia.js";
 import { LoyaltyError } from "../lib/errors.js";
 import { notificationsService } from "../lib/notifications-setup.js";
+import { resolvePortalUrl } from "../lib/portal-url.js";
 
 const TOKEN_MINUTES = 15;
 
@@ -59,10 +60,6 @@ async function triggerMagicLinkEmail(
   } catch (err) {
     console.error("[Auth] Magic link notification failed:", err);
   }
-}
-
-function resolvePortalUrl(_programId: string): string {
-  return process.env.PORTAL_URL ?? `http://localhost:5176`;
 }
 
 export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {

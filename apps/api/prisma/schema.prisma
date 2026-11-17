@@ -177,6 +177,17 @@ model PointLot {
   @@index([expiresAt])
 }
 
+model PointExpiryReminder {
+  id         String   @id @default(cuid())
+  memberId   String
+  programId  String
+  expiresOn  DateTime
+  sentAt     DateTime @default(now())
+
+  @@unique([memberId, programId, expiresOn])
+  @@index([programId, expiresOn])
+}
+
 enum AdjustmentStatus {
   PENDING
   APPROVED

@@ -464,7 +464,7 @@
   },
   "programSettings": {
     "title": "Program settings",
-    "subtitle": "Configure point hold and adjustment limits.",
+    "subtitle": "Configure point hold, expiry, and adjustment limits.",
     "holdPeriod": "Point hold period",
     "holdPeriodDescription": "Controls how long earned points are held before they can be redeemed.",
     "holdDays": "Point hold days",
@@ -485,6 +485,8 @@
     "expiryModePerLot": "By age",
     "expiryMonths": "Months until expiry",
     "expiryMonthsDescription": "Points expire after this many months (1 to 60).",
+    "expiryMonthsInactivityDescription": "Months without earning or redeeming points before they expire (1 to 60).",
+    "expiryMonthsPerLotDescription": "Months from when points are released until they expire (1 to 60).",
     "expiryExplanation": "The clock starts today for points that already exist; nobody loses points by enabling or changing this option.",
     "save": "Save",
     "saved": "Settings saved",
