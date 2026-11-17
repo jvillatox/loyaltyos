@@ -85,10 +85,11 @@ export class LoyaltyRewardsTop3 extends LitElement {
     this.loading = true;
     this.error = "";
     try {
-      this.rewards = await fetchApi<RewardSummary[]>(
+      const result = await fetchApi<{ items: RewardSummary[] }>(
         this.controller.config,
         `/rewards?isActive=true&pageSize=3&page=1`,
       );
+      this.rewards = result.items;
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
