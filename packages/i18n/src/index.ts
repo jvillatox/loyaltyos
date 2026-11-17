@@ -4,6 +4,7 @@ export { DEFAULT_LOCALE, getSupportedLocales, isSupportedLocale, resolveLocale }
 export {
   formatCurrency,
   formatDate,
+  formatDateNumeric,
   formatNumber,
   formatPoints,
   formatRelativeDate,

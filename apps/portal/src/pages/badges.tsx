@@ -1,3 +1,4 @@
+import { formatDateNumeric } from "@loyaltyos/i18n/src/format.js";
 import { useQuery } from "@tanstack/react-query";
 import { Award, Lock } from "lucide-react";
 import { useState } from "react";
@@ -7,7 +8,7 @@ import { fetchApi } from "../lib/api-client";
 import type { BadgeProgress } from "../types";
 
 export default function Badges() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [filter, setFilter] = useState<"all" | "unlocked" | "locked">("all");
 
   const { data, isLoading } = useQuery({
@@ -96,7 +97,7 @@ export default function Badges() {
               <p className="text-xs font-semibold leading-tight">{bp.badge.name}</p>
               {bp.unlocked && bp.unlockedAt && (
                 <p className="text-xs text-[var(--color-text-secondary)]">
-                  {new Date(bp.unlockedAt).toLocaleDateString()}
+                  {formatDateNumeric(bp.unlockedAt, i18n.language)}
                 </p>
               )}
               {!bp.unlocked && bp.targetValue > 0 && (
