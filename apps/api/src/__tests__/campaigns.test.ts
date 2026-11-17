@@ -45,6 +45,11 @@ const mockPrisma = vi.hoisted(() => ({
   pointRule: {
     findMany: vi.fn(),
   },
+  pointLot: {
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -101,6 +106,10 @@ beforeEach(async () => {
   mockPrisma.pointRule.findMany.mockResolvedValue([]);
   mockPrisma.program.findUnique.mockResolvedValue({ holdDays: 0 });
   mockPrisma.$transaction.mockImplementation((fn: never) => fn(mockPrisma));
+  // PointsService.earn() locks the account via $queryRaw and creates a lot.
+  mockPrisma.$queryRaw.mockResolvedValue([{ balance: 500, debt: 0 }]);
+  mockPrisma.pointLot.create.mockResolvedValue({});
+  mockPrisma.pointLot.update.mockResolvedValue({});
   app = await buildApp({ logger: false });
 
   // Add onRequest hook at root level to set programId for tests
