@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCurrency, formatDate, formatNumber, formatPoints } from "../format.js";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateNumeric,
+  formatNumber,
+  formatPoints,
+} from "../format.js";
 
 describe("formatDate", () => {
   it("formats a date in en-US format", () => {
@@ -25,6 +31,20 @@ describe("formatDate", () => {
     const result = formatDate("2026-01-15T00:00:00Z", "en-US");
     expect(result).toContain("January");
     expect(result).toContain("2026");
+  });
+});
+
+describe("formatDateNumeric", () => {
+  it("formats es-MX as dd/mm/yyyy with leading zeros", () => {
+    expect(formatDateNumeric("2027-01-05T00:00:00Z", "es-MX")).toBe("05/01/2027");
+  });
+
+  it("formats en-US as mm/dd/yyyy with leading zeros", () => {
+    expect(formatDateNumeric("2027-01-05T00:00:00Z", "en-US")).toBe("01/05/2027");
+  });
+
+  it("pads single-digit day and month", () => {
+    expect(formatDateNumeric(new Date("2027-01-01T12:00:00Z"), "es-MX")).toBe("01/01/2027");
   });
 });
 

@@ -115,6 +115,33 @@ describe("LoyaltyPointsCard", () => {
     expect(note!.textContent.trim()).toBe("+1,000 points to be released on 11/26/2026");
   });
 
+  it("formats the release date with leading zeros in the member's locale", async () => {
+    const balance: Balance = {
+      confirmed: 5000,
+      pendingBalance: 1000,
+      total: 6000,
+      nextAvailableAt: "2026-12-05T13:22:31.877Z",
+      nextExpiry: null,
+    };
+    mockFetchWithData(balance);
+
+    const el = await fixture<LoyaltyPointsCard>(html`
+      <loyalty-points-card
+        program-id="pgm"
+        api-base="http://localhost"
+        auth-token="tok"
+        data-lang="en-US"
+      ></loyalty-points-card>
+    `);
+
+    await new Promise((r) => setTimeout(r, 50));
+    await el.updateComplete;
+
+    const note = el.shadowRoot!.querySelector(".release-note");
+    expect(note).not.toBeNull();
+    expect(note!.textContent.trim()).toBe("+1,000 points to be released on 12/05/2026");
+  });
+
   it("shows error message on fetch failure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
 

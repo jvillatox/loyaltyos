@@ -14,6 +14,19 @@ export function formatDate(
 }
 
 /**
+ * Format a date as a numeric date with leading zeros, e.g. "05/01/2027"
+ * in es-MX (dd/mm/yyyy) and "01/05/2027" in en-US (mm/dd/yyyy).
+ */
+export function formatDateNumeric(date: Date | string, locale: string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+}
+
+/**
  * Format a date as relative time (e.g., "3 days ago", "hace 3 días").
  * Uses Intl.RelativeTimeFormat under the hood.
  */

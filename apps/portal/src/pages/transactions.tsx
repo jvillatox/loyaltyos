@@ -1,3 +1,4 @@
+import { formatDateNumeric } from "@loyaltyos/i18n/src/format.js";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Filter, RotateCcw, XCircle } from "lucide-react";
 import { useState } from "react";
@@ -23,7 +24,7 @@ const typeColors: Record<string, string> = {
 };
 
 export default function Transactions() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [filter, setFilter] = useState<string>("");
 
   const { data, isLoading } = useQuery({
@@ -94,7 +95,7 @@ export default function Transactions() {
                     </p>
                   )}
                   <p className="text-xs text-[var(--color-text-secondary)]">
-                    {new Date(tx.createdAt).toLocaleDateString()}
+                    {formatDateNumeric(tx.createdAt, i18n.language)}
                   </p>
                 </div>
                 <div className="text-right">

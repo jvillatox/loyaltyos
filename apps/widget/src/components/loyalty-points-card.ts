@@ -1,6 +1,7 @@
 import "./ui/error-message.js";
 import "./ui/spinner.js";
 
+import { formatDateNumeric } from "@loyaltyos/i18n/src/format.js";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
@@ -105,7 +106,7 @@ export class LoyaltyPointsCard extends LitElement {
                 "widget.pointsToRelease",
                 {
                   points: formatPoints(this.data.pendingBalance, locale),
-                  date: new Date(this.data.nextAvailableAt).toLocaleDateString(locale),
+                  date: formatDateNumeric(this.data.nextAvailableAt, locale),
                 },
                 locale,
               )}
@@ -116,14 +117,14 @@ export class LoyaltyPointsCard extends LitElement {
               ${expiry.mode === "INACTIVITY"
                 ? widgetT(
                     "widget.pointsExpireInactivity",
-                    { date: expiry.date.toLocaleDateString(locale) },
+                    { date: formatDateNumeric(expiry.date, locale) },
                     locale,
                   )
                 : widgetT(
                     "widget.pointsExpireOn",
                     {
                       points: formatPoints(expiry.amount, locale),
-                      date: expiry.date.toLocaleDateString(locale),
+                      date: formatDateNumeric(expiry.date, locale),
                     },
                     locale,
                   )}

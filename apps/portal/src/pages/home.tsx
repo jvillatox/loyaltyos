@@ -1,3 +1,4 @@
+import { formatDateNumeric } from "@loyaltyos/i18n/src/format.js";
 import { useQuery } from "@tanstack/react-query";
 import { Award, ChevronRight, Gift, Star, TrendingUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -23,7 +24,7 @@ function BalanceCard({ balance }: { balance: Balance }) {
         <p className="mt-2 text-xs opacity-90">
           {t("pointsToRelease", {
             points: balance.pendingBalance.toLocaleString(i18n.language),
-            date: new Date(balance.nextAvailableAt).toLocaleDateString(i18n.language),
+            date: formatDateNumeric(balance.nextAvailableAt, i18n.language),
           })}
         </p>
       )}
@@ -31,11 +32,11 @@ function BalanceCard({ balance }: { balance: Balance }) {
         <p className="mt-2 text-xs opacity-90">
           {balance.nextExpiry.mode === "INACTIVITY"
             ? t("pointsExpireInactivity", {
-                date: new Date(balance.nextExpiry.date).toLocaleDateString(i18n.language),
+                date: formatDateNumeric(balance.nextExpiry.date, i18n.language),
               })
             : t("pointsExpireOn", {
                 points: balance.nextExpiry.amount.toLocaleString(i18n.language),
-                date: new Date(balance.nextExpiry.date).toLocaleDateString(i18n.language),
+                date: formatDateNumeric(balance.nextExpiry.date, i18n.language),
               })}
         </p>
       )}
