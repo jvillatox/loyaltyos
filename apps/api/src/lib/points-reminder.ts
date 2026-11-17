@@ -19,6 +19,11 @@ export async function sendExpiryReminders(
   now: Date = new Date(),
   notifications: NotificationsService = notificationsService,
 ): Promise<number> {
+  const program = await prisma.program.findUnique({
+    where: { id: programId },
+    select: { name: true },
+  });
+
   return points.remindUpcomingExpiries(programId, now, async (deadline) => {
     const member = await prisma.member.findUnique({
       where: { id: deadline.memberId },
@@ -30,6 +35,7 @@ export async function sendExpiryReminders(
       mode: deadline.mode,
       date: deadline.expiresOn.toISOString(),
       portalUrl: resolvePortalUrl(programId),
+      programName: program?.name ?? "",
       member: {
         id: deadline.memberId,
         email: member?.email,
