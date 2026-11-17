@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PointExpiryReminder` unique constraint, so two jobs running at once cannot
   double-send. (#33)
 
+### Fixed
+
+- **The widget's top rewards load again.** The component expected an array but
+  `GET /rewards` returns `{ data: { items, total } }`, so the section stayed on a
+  spinner.
+- **Dates use the member's locale format** in the portal and widget.
+
 ### Upgrade notes
 
 1. **Run the migration before deploying.** This adds the `PointLot` and
