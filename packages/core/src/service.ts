@@ -1,5 +1,6 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { type ExpiryMode, Prisma, type PrismaClient } from "@prisma/client";
 
+import { addMonths, lotExpiresAt } from "./expiry.js";
 import { applyTxToBalance } from "./ledger.js";
 import { createRepository } from "./repository.js";
 import { calculateEffectiveAmount, evaluateRules } from "./rules.js";
@@ -9,6 +10,7 @@ import type {
   Balance,
   EarnInput,
   EarnResult,
+  NextExpiry,
   PaginatedResult,
   PaginationParams,
   RedeemInput,
@@ -88,6 +90,7 @@ export class PointsService {
     const held = holdDays > 0;
     const now = new Date();
     const availableAt = held ? new Date(now.getTime() + holdDays * DAY_MS) : null;
+    const program = await this.programExpiry(input.programId);
 
     const account = await this.ensureAccount(input.memberId, input.programId);
     try {
@@ -129,7 +132,6 @@ export class PointsService {
             source: input.source,
             idempotencyKey: input.idempotencyKey,
             metadata: input.metadata as Prisma.InputJsonValue | undefined,
-            expiresAt: input.expiresAt,
             settledAt: held ? null : now,
             availableAt,
           },
@@ -143,7 +145,7 @@ export class PointsService {
               sourceTxId: created.id,
               originalAmount: lotAmount,
               remaining: lotAmount,
-              expiresAt: null,
+              expiresAt: lotExpiresAt(program.mode, program.months, availableAt ?? now),
             },
           });
         }
@@ -237,9 +239,11 @@ export class PointsService {
     }
 
     const account = await this.ensureAccount(input.memberId, input.programId);
+    const program = await this.programExpiry(input.programId);
     try {
       const { tx, balanceAfter } = await this.prisma.$transaction(async (db) => {
         const locked = await this.lockAccount(db, account.id);
+        const now = new Date();
 
         let updated: { balance: number };
         let lotAmount = 0;
@@ -269,7 +273,7 @@ export class PointsService {
             source: `admin:${input.adminUserId}`,
             idempotencyKey: input.idempotencyKey,
             description: input.reason,
-            settledAt: new Date(),
+            settledAt: now,
           },
         });
 
@@ -281,7 +285,7 @@ export class PointsService {
               sourceTxId: created.id,
               originalAmount: lotAmount,
               remaining: lotAmount,
-              expiresAt: null,
+              expiresAt: lotExpiresAt(program.mode, program.months, now),
             },
           });
         }
@@ -336,6 +340,7 @@ export class PointsService {
     if (original.type === "REVERSE") throw new CannotReverseError(txId);
 
     const effect = applyTxToBalance(original.type, original.amount);
+    const program = await this.programExpiry(programId);
 
     const { reversal } = await this.prisma.$transaction(async (db) => {
       // Claim the original first; a concurrent reversal blocks on this row and
@@ -423,7 +428,7 @@ export class PointsService {
             sourceTxId: created.id,
             originalAmount: surplusLot,
             remaining: surplusLot,
-            expiresAt: null,
+            expiresAt: lotExpiresAt(program.mode, program.months, new Date()),
           },
         });
       }
@@ -449,9 +454,10 @@ export class PointsService {
         reversedById: null,
         availableAt: { lte: now },
       },
-      select: { id: true, accountId: true, amount: true, programId: true },
+      select: { id: true, accountId: true, amount: true, programId: true, availableAt: true },
     });
 
+    const program = await this.programExpiry(programId);
     let settled = 0;
     for (const tx of due) {
       const moved = await this.prisma.$transaction(async (db) => {
@@ -480,7 +486,7 @@ export class PointsService {
               sourceTxId: tx.id,
               originalAmount: lotAmount,
               remaining: lotAmount,
-              expiresAt: null,
+              expiresAt: lotExpiresAt(program.mode, program.months, tx.availableAt ?? now),
             },
           });
         }
@@ -492,78 +498,132 @@ export class PointsService {
   }
 
   /**
-   * Expires EARN transactions past the legacy per-EARN `expiresAt`. Removes at most
-   * the current spendable balance (never below zero) and consumes the matching
-   * lots so the lot/debt invariant holds. In PR A every lot has `expiresAt = null`,
-   * so the lot-driven expiry is deferred; this keeps the legacy behaviour while
-   * still moving spendable value through lots.
+   * Expires spendable points according to the program's `expiryMode`:
+   * - PER_LOT: each expired lot (remaining > 0, expiresAt <= now) is expired by
+   *   its remaining amount, idempotently per lot.
+   * - INACTIVITY: an account with a positive balance whose anchor
+   *   (`max(lastActivityAt, expiryChangedAt)`, or `expiryChangedAt` when there is
+   *   no activity) plus `expiryMonths` has passed expires all its lots, idempotently
+   *   per account and expiry date.
+   * - NONE: nothing ever expires.
    */
-  async expire(programId: string): Promise<number> {
-    const due = await this.repo.findExpiredTransactions(programId, new Date());
+  async expire(programId: string, now: Date = new Date()): Promise<number> {
+    const program = await this.programExpiry(programId);
+    if (program.mode === "NONE") return 0;
+    if (program.mode === "PER_LOT") return this.expireLots(programId, now);
+    return this.expireInactiveAccounts(programId, program, now);
+  }
 
-    let expiredCount = 0;
-    for (const tx of due) {
-      if (tx.settledAt === null) continue;
-      const key = `expire-${tx.id}`;
-      const expired = await this.prisma.$transaction(async (db) => {
-        const claimed = await db.pointTransaction.updateMany({
-          where: { id: tx.id, reversedById: null },
-          data: { reversedById: key },
+  private async expireLots(programId: string, now: Date): Promise<number> {
+    const lots = await this.repo.findExpiredLots(programId, now);
+    let expired = 0;
+    for (const lot of lots) {
+      const key = `expire-${lot.id}`;
+      const done = await this.prisma.$transaction(async (db) => {
+        // Serialize on the account row, then re-read the lot so a concurrent
+        // expiry or redemption cannot double-consume it.
+        const account = await this.lockAccount(db, lot.accountId);
+        const current = await db.pointLot.findUnique({ where: { id: lot.id } });
+        if (!current || current.remaining <= 0) return false;
+        const amount = Math.min(current.remaining, account.balance);
+        if (amount <= 0) return false;
+
+        await db.pointLot.update({
+          where: { id: lot.id },
+          data: { remaining: { decrement: amount } },
         });
-        if (claimed.count === 0) return false;
-
-        // Lock the account row before reading its balance so a concurrent
-        // redemption cannot spend between the read and the decrement.
-        const account = await this.lockAccount(db, tx.accountId);
-        const amount = Math.min(tx.amount, Math.max(account.balance, 0));
-        await this.consumeLots(db, tx.accountId, amount, tx.id);
         const updated = await db.pointAccount.update({
-          where: { id: tx.accountId },
+          where: { id: lot.accountId },
           data: { balance: { decrement: amount } },
         });
-        const created = await db.pointTransaction.create({
+        await db.pointTransaction.create({
           data: {
-            accountId: tx.accountId,
+            accountId: lot.accountId,
             programId,
             type: "EXPIRE",
             amount,
             balanceAfter: updated.balance,
             source: "system:expire",
             idempotencyKey: key,
-            description: `Expired from tx ${tx.id}`,
-            reversedFromId: tx.id,
-            settledAt: new Date(),
+            description: `Expired lot ${lot.id}`,
+            settledAt: now,
           },
-        });
-        await db.pointTransaction.update({
-          where: { id: tx.id },
-          data: { reversedById: created.id },
         });
         return true;
       });
-      if (expired) {
+      if (done) {
         this.metrics?.recordExpire(programId);
-        expiredCount++;
+        expired++;
       }
     }
-    return expiredCount;
+    return expired;
+  }
+
+  private async expireInactiveAccounts(
+    programId: string,
+    program: { mode: ExpiryMode; months: number; changedAt: Date | null },
+    now: Date,
+  ): Promise<number> {
+    if (!program.changedAt) return 0;
+    const accounts = await this.repo.findActiveAccounts(programId);
+    let expired = 0;
+    for (const account of accounts) {
+      const anchor = account.lastActivityAt
+        ? new Date(Math.max(account.lastActivityAt.getTime(), program.changedAt.getTime()))
+        : program.changedAt;
+      const expiresAt = addMonths(anchor, program.months);
+      if (expiresAt > now) continue;
+
+      const key = `expire-inactive-${account.id}-${expiresAt.toISOString().slice(0, 10)}`;
+      const done = await this.prisma.$transaction(async (db) => {
+        const locked = await this.lockAccount(db, account.id);
+        const amount = Math.max(locked.balance, 0);
+        if (amount <= 0) return false;
+        await this.consumeLots(db, account.id, amount);
+        const updated = await db.pointAccount.update({
+          where: { id: account.id },
+          data: { balance: { decrement: amount } },
+        });
+        await db.pointTransaction.create({
+          data: {
+            accountId: account.id,
+            programId,
+            type: "EXPIRE",
+            amount,
+            balanceAfter: updated.balance,
+            source: "system:expire",
+            idempotencyKey: key,
+            description: `Expired inactive account points on ${expiresAt.toISOString()}`,
+            settledAt: now,
+          },
+        });
+        return true;
+      });
+      if (done) {
+        this.metrics?.recordExpire(programId);
+        expired++;
+      }
+    }
+    return expired;
   }
 
   async balance(memberId: string, programId: string): Promise<Balance> {
     const account = await this.repo.findAccount(memberId, programId);
     if (!account) {
-      return { confirmed: 0, pendingBalance: 0, total: 0, nextAvailableAt: null };
+      return { confirmed: 0, pendingBalance: 0, total: 0, nextAvailableAt: null, nextExpiry: null };
     }
     let nextAvailableAt: Date | null = null;
     if (account.pendingBalance > 0) {
       const earliest = await this.repo.findNextAvailableAt(account.id);
       nextAvailableAt = earliest?.availableAt ?? null;
     }
+    const nextExpiry = await this.computeNextExpiry(programId, account);
     return {
       confirmed: account.balance,
       pendingBalance: account.pendingBalance,
       total: account.balance + account.pendingBalance,
       nextAvailableAt,
+      nextExpiry,
     };
   }
 
@@ -651,6 +711,47 @@ export class PointsService {
   private async programHoldDays(programId: string): Promise<number> {
     const days = await this.repo.findProgramHoldDays(programId);
     return days ?? this.holdDays;
+  }
+
+  /** Expiry rule for a program, falling back to "never expire" when missing. */
+  private async programExpiry(
+    programId: string,
+  ): Promise<{ mode: ExpiryMode; months: number; changedAt: Date | null }> {
+    const program = await this.repo.findProgramExpiry(programId);
+    return {
+      mode: program?.expiryMode ?? "NONE",
+      months: program?.expiryMonths ?? 12,
+      changedAt: program?.expiryChangedAt ?? null,
+    };
+  }
+
+  private async computeNextExpiry(
+    programId: string,
+    account: { id: string; balance: number; lastActivityAt: Date | null },
+  ): Promise<NextExpiry | null> {
+    const program = await this.programExpiry(programId);
+
+    if (program.mode === "PER_LOT") {
+      const next = await this.repo.findNextExpiringLot(account.id);
+      if (!next?.expiresAt) return null;
+      const lots = await this.repo.findLotsExpiringAt(account.id, next.expiresAt);
+      const amount = lots.reduce((sum, lot) => sum + lot.remaining, 0);
+      return { amount, date: next.expiresAt, mode: "PER_LOT" };
+    }
+
+    if (program.mode === "INACTIVITY") {
+      if (account.balance <= 0 || !program.changedAt) return null;
+      const anchor = account.lastActivityAt
+        ? new Date(Math.max(account.lastActivityAt.getTime(), program.changedAt.getTime()))
+        : program.changedAt;
+      return {
+        amount: account.balance,
+        date: addMonths(anchor, program.months),
+        mode: "INACTIVITY",
+      };
+    }
+
+    return null;
   }
 
   /**

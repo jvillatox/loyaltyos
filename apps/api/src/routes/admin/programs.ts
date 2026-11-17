@@ -1,8 +1,10 @@
+import { addMonths } from "@loyaltyos/core";
 import { isSupportedLocale } from "@loyaltyos/i18n";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../db.js";
+import { audit } from "../../lib/audit.js";
 
 const updateProgramSchema = z.object({
   defaultLocale: z.string().refine(isSupportedLocale, "Unsupported locale").optional(),
@@ -15,7 +17,29 @@ const updateProgramSchema = z.object({
   adjustOperatorDailyLimit: z.number().int().min(1).optional(),
   adjustServerPerTxLimit: z.number().int().min(1).optional(),
   holdDays: z.number().int().min(0).max(90).optional(),
+  expiryMode: z.enum(["NONE", "INACTIVITY", "PER_LOT"]).optional(),
+  expiryMonths: z.number().int().min(1).max(60).optional(),
 });
+
+const programSelect = {
+  id: true,
+  name: true,
+  description: true,
+  pointsUnit: true,
+  logoUrl: true,
+  isActive: true,
+  defaultLocale: true,
+  supportedLocales: true,
+  adjustOperatorPerTxLimit: true,
+  adjustOperatorDailyLimit: true,
+  adjustServerPerTxLimit: true,
+  holdDays: true,
+  expiryMode: true,
+  expiryMonths: true,
+  expiryChangedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   /** GET /admin/programs/:id — get program details including locale settings */
@@ -30,22 +54,7 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
 
     const program = await prisma.program.findUnique({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        pointsUnit: true,
-        logoUrl: true,
-        isActive: true,
-        defaultLocale: true,
-        supportedLocales: true,
-        adjustOperatorPerTxLimit: true,
-        adjustOperatorDailyLimit: true,
-        adjustServerPerTxLimit: true,
-        holdDays: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: programSelect,
     });
 
     if (!program) {
@@ -68,26 +77,46 @@ export function adminProgramsRoutes(app: FastifyInstance, _opts: unknown, done: 
       });
     }
 
-    const program = await prisma.program.update({
-      where: { id },
-      data: body,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        pointsUnit: true,
-        logoUrl: true,
-        isActive: true,
-        defaultLocale: true,
-        supportedLocales: true,
-        adjustOperatorPerTxLimit: true,
-        adjustOperatorDailyLimit: true,
-        adjustServerPerTxLimit: true,
-        holdDays: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const expiryChanging = body.expiryMode !== undefined || body.expiryMonths !== undefined;
+
+    const program = await prisma.$transaction(async (tx) => {
+      if (!expiryChanging) {
+        return tx.program.update({ where: { id }, data: body, select: programSelect });
+      }
+
+      const current = await tx.program.findUniqueOrThrow({ where: { id } });
+      const newMode = body.expiryMode ?? current.expiryMode;
+      const now = new Date();
+
+      const updated = await tx.program.update({
+        where: { id },
+        data: { ...body, expiryChangedAt: now },
+        select: programSelect,
+      });
+
+      // Existing spendable lots follow the new rule: entering PER_LOT backfills
+      // an expiry from now; leaving PER_LOT clears it so nothing is lost.
+      if (current.expiryMode !== "PER_LOT" && newMode === "PER_LOT") {
+        await tx.pointLot.updateMany({
+          where: { programId: id, remaining: { gt: 0 }, expiresAt: null },
+          data: { expiresAt: addMonths(now, updated.expiryMonths) },
+        });
+      } else if (current.expiryMode === "PER_LOT" && newMode !== "PER_LOT") {
+        await tx.pointLot.updateMany({
+          where: { programId: id, remaining: { gt: 0 } },
+          data: { expiresAt: null },
+        });
+      }
+
+      return updated;
     });
+
+    if (expiryChanging) {
+      await audit(request.programId, request.actor, "CONFIG_CHANGE", "program", id, {
+        expiryMode: body.expiryMode,
+        expiryMonths: body.expiryMonths,
+      });
+    }
 
     return reply.send({ data: program });
   });

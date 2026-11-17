@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Configurable point expiry modes.** `Program.expiryMode` now controls how
+  points expire: `NONE` (never), `INACTIVITY` (an account's points expire
+  `expiryMonths` after its last activity) and `PER_LOT` (each lot of points
+  expires `expiryMonths` after it becomes spendable). Points are tracked as
+  per-lot records (`PointLot`) and expire FIFO (soonest first); the daily expiry
+  job removes expired lots and idle accounts idempotently, and a redeem consumes
+  the soonest-expiring lots first. The admin _Program settings_ page gains a
+  "Vencimiento de puntos" section, and the portal and widget show an "X points
+  expire on \<date\>" line when the next expiry falls within 90 days. (#33)
+
+### Upgrade notes
+
+1. **Run the migration before deploying.** This adds the `PointLot` table and the
+   `expiryMode` / `expiryMonths` / `expiryChangedAt` program fields, backfills one
+   never-expiring lot per account from its current balance, and drops the legacy
+   `PointTransaction.expiresAt` column. Existing programs are backfilled to
+   `NONE` so no one loses points on upgrade; new programs default to `INACTIVITY`
+   with 12 months. To start expiring points, pick a mode on the _Program
+   settings_ page — the clock starts from that moment, so points that already
+   exist begin their expiry window when the mode is enabled or changed.
+
 ## [1.7.0] - 2026-11-16
 
 ### Added

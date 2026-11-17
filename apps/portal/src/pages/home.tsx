@@ -9,6 +9,12 @@ import type { BadgeProgress, Balance, Reward, TierStatus } from "../types";
 
 function BalanceCard({ balance }: { balance: Balance }) {
   const { t, i18n } = useTranslation();
+  const expiryDate = balance.nextExpiry ? new Date(balance.nextExpiry.date) : null;
+  const daysUntil =
+    expiryDate !== null ? Math.ceil((expiryDate.getTime() - Date.now()) / 86_400_000) : null;
+  const showExpiry =
+    balance.nextExpiry !== null && daysUntil !== null && daysUntil >= 0 && daysUntil <= 90;
+
   return (
     <div className="rounded-2xl bg-[var(--color-primary)] p-6 text-white shadow-lg">
       <p className="text-sm font-medium opacity-80">{t("balance")}</p>
@@ -19,6 +25,18 @@ function BalanceCard({ balance }: { balance: Balance }) {
             points: balance.pendingBalance.toLocaleString(i18n.language),
             date: new Date(balance.nextAvailableAt).toLocaleDateString(i18n.language),
           })}
+        </p>
+      )}
+      {showExpiry && balance.nextExpiry && (
+        <p className="mt-2 text-xs opacity-90">
+          {balance.nextExpiry.mode === "INACTIVITY"
+            ? t("pointsExpireInactivity", {
+                date: new Date(balance.nextExpiry.date).toLocaleDateString(i18n.language),
+              })
+            : t("pointsExpireOn", {
+                points: balance.nextExpiry.amount.toLocaleString(i18n.language),
+                date: new Date(balance.nextExpiry.date).toLocaleDateString(i18n.language),
+              })}
         </p>
       )}
     </div>

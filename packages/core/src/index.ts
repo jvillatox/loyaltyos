@@ -1,4 +1,5 @@
 export { hashPassword, verifyPassword } from "./auth/password.js";
+export { addMonths, lotExpiresAt } from "./expiry.js";
 export { applyTxToBalance, verifyConsistency } from "./ledger.js";
 export type { Repository } from "./repository.js";
 export { createRepository } from "./repository.js";
@@ -11,6 +12,7 @@ export type {
   Balance,
   EarnInput,
   EarnResult,
+  NextExpiry,
   PaginatedResult,
   PaginationParams,
   RedeemInput,

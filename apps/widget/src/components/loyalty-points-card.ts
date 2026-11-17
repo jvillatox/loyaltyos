@@ -93,6 +93,8 @@ export class LoyaltyPointsCard extends LitElement {
       ></loy-error>`;
     if (!this.data) return null;
 
+    const expiry = this.computeExpiry(this.data.nextExpiry);
+
     return html`
       <div class="balance-card">
         <div class="balance-label">${widgetT("widget.availableBalance", undefined, locale)}</div>
@@ -109,7 +111,37 @@ export class LoyaltyPointsCard extends LitElement {
               )}
             </p>`
           : ""}
+        ${expiry
+          ? html`<p class="release-note">
+              ${expiry.mode === "INACTIVITY"
+                ? widgetT(
+                    "widget.pointsExpireInactivity",
+                    { date: expiry.date.toLocaleDateString(locale) },
+                    locale,
+                  )
+                : widgetT(
+                    "widget.pointsExpireOn",
+                    {
+                      points: formatPoints(expiry.amount, locale),
+                      date: expiry.date.toLocaleDateString(locale),
+                    },
+                    locale,
+                  )}
+            </p>`
+          : ""}
       </div>
     `;
+  }
+
+  private computeExpiry(nextExpiry: Balance["nextExpiry"]): {
+    amount: number;
+    date: Date;
+    mode: "PER_LOT" | "INACTIVITY";
+  } | null {
+    if (!nextExpiry) return null;
+    const date = new Date(nextExpiry.date);
+    const daysUntil = Math.ceil((date.getTime() - Date.now()) / 86_400_000);
+    if (daysUntil < 0 || daysUntil > 90) return null;
+    return { amount: nextExpiry.amount, date, mode: nextExpiry.mode };
   }
 }

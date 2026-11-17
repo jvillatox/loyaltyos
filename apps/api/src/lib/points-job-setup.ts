@@ -3,7 +3,7 @@ import { createQueue } from "./queue.js";
 // Hourly settlement of held points that have passed their program hold period.
 const settlementQueue = createQueue("points.settle-pending");
 
-// Daily expiry of earned points past their expiresAt.
+// Daily expiry of spendable points per the program's expiry rule (PER_LOT or INACTIVITY).
 const expiryQueue = createQueue("points.expire");
 
 export async function schedulePointsSettlement(): Promise<void> {
