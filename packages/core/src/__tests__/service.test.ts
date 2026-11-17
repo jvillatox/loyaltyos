@@ -31,6 +31,11 @@ const mockPrisma = {
   program: {
     findUnique: vi.fn(),
   },
+  pointLot: {
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 };
 
@@ -52,7 +57,7 @@ beforeEach(async () => {
 });
 
 describe("PointsService.earn", () => {
-  it("creates earn transaction and updates balance", async () => {
+  it("creates earn transaction, a lot, and updates balance", async () => {
     mockPrisma.pointTransaction.findUnique.mockResolvedValue(null);
     mockPrisma.pointRule.findMany.mockResolvedValue([]);
     mockPrisma.pointAccount.findFirst.mockResolvedValue({
@@ -66,6 +71,7 @@ describe("PointsService.earn", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    mockPrisma.$queryRaw.mockResolvedValue([{ balance: 500, debt: 0 }]);
     mockPrisma.pointTransaction.create.mockResolvedValue({
       id: "tx-1",
       accountId: "acc-1",
@@ -81,6 +87,7 @@ describe("PointsService.earn", () => {
       balance: 600,
       programId: "prog-1",
     });
+    mockPrisma.pointLot.create.mockResolvedValue({});
 
     const svc = new PointsService(prisma);
     const result = await svc.earn({
@@ -95,6 +102,15 @@ describe("PointsService.earn", () => {
     expect(result.amount).toBe(100);
     expect(result.balanceAfter).toBe(600);
     expect(result.idempotent).toBe(false);
+    expect(mockPrisma.pointLot.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountId: "acc-1",
+          sourceTxId: "tx-1",
+          remaining: 100,
+        }),
+      }),
+    );
   });
 
   it("returns existing result on duplicate idempotency key", async () => {
@@ -136,6 +152,7 @@ describe("PointsService.earn", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    mockPrisma.$queryRaw.mockResolvedValue([{ balance: 0, debt: 0 }]);
     mockPrisma.pointRule.findMany.mockResolvedValue([
       {
         id: "rule-1",
@@ -160,6 +177,7 @@ describe("PointsService.earn", () => {
       balance: 200,
       programId: "prog-1",
     });
+    mockPrisma.pointLot.create.mockResolvedValue({});
 
     const svc = new PointsService(prisma);
     const result = await svc.earn({
@@ -191,6 +209,7 @@ describe("PointsService.earn", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    mockPrisma.$queryRaw.mockResolvedValue([{ balance: 0, debt: 0 }]);
     mockPrisma.pointTransaction.create.mockResolvedValue({
       id: "tx-1",
       amount: 50,
@@ -201,6 +220,7 @@ describe("PointsService.earn", () => {
       balance: 50,
       programId: "prog-1",
     });
+    mockPrisma.pointLot.create.mockResolvedValue({});
 
     const svc = new PointsService(prisma);
     const result = await svc.earn({
@@ -217,7 +237,7 @@ describe("PointsService.earn", () => {
 });
 
 describe("PointsService.redeem", () => {
-  it("redeems points and decrements balance", async () => {
+  it("redeems points, consumes a lot, and decrements balance", async () => {
     mockPrisma.pointTransaction.findUnique.mockResolvedValue(null);
     mockPrisma.pointAccount.findFirst.mockResolvedValue({
       id: "acc-1",
@@ -230,13 +250,16 @@ describe("PointsService.redeem", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([{ balance: 500, debt: 0 }])
+      .mockResolvedValueOnce([{ id: "lot-1", sourceTxId: null, remaining: 500 }]);
+    mockPrisma.pointLot.update.mockResolvedValue({});
     mockPrisma.pointTransaction.create.mockResolvedValue({
       id: "tx-redeem",
       amount: 200,
       balanceAfter: 300,
     });
-    mockPrisma.pointAccount.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma.pointAccount.findUniqueOrThrow.mockResolvedValue({ id: "acc-1", balance: 300 });
+    mockPrisma.pointAccount.update.mockResolvedValue({ id: "acc-1", balance: 300 });
 
     const svc = new PointsService(prisma);
     const result = await svc.redeem({
@@ -249,6 +272,7 @@ describe("PointsService.redeem", () => {
 
     expect(result.balanceAfter).toBe(300);
     expect(result.idempotent).toBe(false);
+    expect(mockPrisma.pointLot.update).toHaveBeenCalled();
   });
 
   it("throws InsufficientBalanceError when balance too low", async () => {
@@ -264,9 +288,7 @@ describe("PointsService.redeem", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    // The balance-checked decrement matches no row.
-    mockPrisma.pointAccount.updateMany.mockResolvedValue({ count: 0 });
-    mockPrisma.pointAccount.findUniqueOrThrow.mockResolvedValue({ id: "acc-1", balance: 50 });
+    mockPrisma.$queryRaw.mockResolvedValue([{ balance: 50, debt: 0 }]);
 
     const svc = new PointsService(prisma);
     await expect(
