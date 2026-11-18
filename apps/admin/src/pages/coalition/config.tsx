@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
@@ -36,18 +37,15 @@ import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-const PROVIDERS = [
-  { value: "APPRECIO", label: "Apprecio" },
-  { value: "GENERIC", label: "Generic" },
-] as const;
+const PROVIDERS = ["APPRECIO", "GENERIC"] as const;
 
-const APPRECIO_COUNTRIES: { value: string; label: string; baseUrl: string }[] = [
-  { value: "MX", label: "Mexico", baseUrl: "https://apiv2.dcanje.mx/api" },
-  { value: "CL", label: "Chile", baseUrl: "https://api.apprecio.cl/api" },
-  { value: "CO", label: "Colombia", baseUrl: "https://apiv2.apprecio.com.co/api" },
-  { value: "PE", label: "Peru", baseUrl: "https://apiv2.apprecio.pe/api" },
-  { value: "EC", label: "Ecuador", baseUrl: "https://apiv2.ec.dcanje.com/api" },
-  { value: "OTHER", label: "Other / Custom URL", baseUrl: "" },
+const APPRECIO_COUNTRIES: { value: string; baseUrl: string }[] = [
+  { value: "MX", baseUrl: "https://apiv2.dcanje.mx/api" },
+  { value: "CL", baseUrl: "https://api.apprecio.cl/api" },
+  { value: "CO", baseUrl: "https://apiv2.apprecio.com.co/api" },
+  { value: "PE", baseUrl: "https://apiv2.apprecio.pe/api" },
+  { value: "EC", baseUrl: "https://apiv2.ec.dcanje.com/api" },
+  { value: "OTHER", baseUrl: "" },
 ];
 
 const configFormSchema = z.object({
@@ -99,6 +97,7 @@ interface HealthcheckResult {
 }
 
 export function CoalitionConfigPage(): JSX.Element {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [showPrivateToken, setShowPrivateToken] = useState(false);
   const [healthcheckResult, setHealthcheckResult] = useState<HealthcheckResult | null>(null);
@@ -146,6 +145,8 @@ export function CoalitionConfigPage(): JSX.Element {
   });
 
   const provider = form.watch("provider");
+  const country = form.watch("country");
+  const isCustomUrl = country === "OTHER";
 
   const saveMutation = useMutation({
     mutationFn: (values: ConfigFormValues) => {
@@ -188,9 +189,9 @@ export function CoalitionConfigPage(): JSX.Element {
 
   const handleCountryChange = (value: string) => {
     form.setValue("country", value);
-    const country = APPRECIO_COUNTRIES.find((c) => c.value === value);
-    if (country?.baseUrl) {
-      form.setValue("endpoint", country.baseUrl);
+    const selected = APPRECIO_COUNTRIES.find((c) => c.value === value);
+    if (selected?.baseUrl) {
+      form.setValue("endpoint", selected.baseUrl);
     }
   };
 
@@ -209,14 +210,14 @@ export function CoalitionConfigPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Coalition Configuration</h1>
-          <p className="mt-1 text-muted-foreground">
-            Configure external coalition provider settings and credentials.
-          </p>
+          <h1 className="text-3xl font-bold">{t("coalition.config.title")}</h1>
+          <p className="mt-1 text-muted-foreground">{t("coalition.config.subtitle")}</p>
         </div>
         {config && (
           <Badge variant={config.hasCredentials ? "default" : "secondary"}>
-            {config.hasCredentials ? "Credentials configured" : "No credentials set"}
+            {config.hasCredentials
+              ? t("coalition.config.credentialsConfigured")
+              : t("coalition.config.noCredentials")}
           </Badge>
         )}
       </div>
@@ -238,24 +239,39 @@ export function CoalitionConfigPage(): JSX.Element {
       ) : capabilities ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Adapter Capabilities</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("coalition.config.adapterCapabilities")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              <CapabilityBadge label="Accumulate" supported={capabilities.accumulate} />
-              <CapabilityBadge label="Redeem" supported={capabilities.redeem} />
-              <CapabilityBadge label="Convert" supported={capabilities.convert} />
-              <CapabilityBadge label="Reverse" supported={capabilities.reverseTransaction} />
-              <CapabilityBadge label="History" supported={capabilities.historyQuery} />
+              <CapabilityBadge
+                label={t("coalition.capabilities.accumulate")}
+                supported={capabilities.accumulate}
+              />
+              <CapabilityBadge
+                label={t("coalition.capabilities.redeem")}
+                supported={capabilities.redeem}
+              />
+              <CapabilityBadge
+                label={t("coalition.capabilities.convert")}
+                supported={capabilities.convert}
+              />
+              <CapabilityBadge
+                label={t("coalition.capabilities.reverse")}
+                supported={capabilities.reverseTransaction}
+              />
+              <CapabilityBadge
+                label={t("coalition.capabilities.history")}
+                supported={capabilities.historyQuery}
+              />
             </div>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">
-              Save a configuration first to see adapter capabilities.
-            </p>
+            <p className="text-muted-foreground">{t("coalition.config.noCapabilities")}</p>
           </CardContent>
         </Card>
       )}
@@ -265,14 +281,12 @@ export function CoalitionConfigPage(): JSX.Element {
         {/* Provider Selection */}
         <Card>
           <CardHeader>
-            <CardTitle>Provider</CardTitle>
-            <CardDescription>
-              Select the external coalition provider to integrate with.
-            </CardDescription>
+            <CardTitle>{t("coalition.config.provider")}</CardTitle>
+            <CardDescription>{t("coalition.config.providerDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="provider">Provider</Label>
+              <Label htmlFor="provider">{t("coalition.config.provider")}</Label>
               <Select
                 value={provider}
                 onValueChange={(v) => {
@@ -280,12 +294,12 @@ export function CoalitionConfigPage(): JSX.Element {
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a provider" />
+                  <SelectValue placeholder={t("coalition.config.selectProvider")} />
                 </SelectTrigger>
                 <SelectContent>
                   {PROVIDERS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
+                    <SelectItem key={p} value={p}>
+                      {t(`coalition.config.providers.${p}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -298,20 +312,22 @@ export function CoalitionConfigPage(): JSX.Element {
         {provider === "APPRECIO" && (
           <Card>
             <CardHeader>
-              <CardTitle>Apprecio Connection</CardTitle>
-              <CardDescription>Configure the Apprecio API connection details.</CardDescription>
+              <CardTitle>{t("coalition.config.apprecioConnection")}</CardTitle>
+              <CardDescription>
+                {t("coalition.config.apprecioConnectionDescription")}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="country">Country</Label>
-                <Select value={form.watch("country")} onValueChange={handleCountryChange}>
+                <Label htmlFor="country">{t("coalition.config.country")}</Label>
+                <Select value={country} onValueChange={handleCountryChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select country" />
+                    <SelectValue placeholder={t("coalition.config.selectCountry")} />
                   </SelectTrigger>
                   <SelectContent>
                     {APPRECIO_COUNTRIES.map((c) => (
                       <SelectItem key={c.value} value={c.value}>
-                        {c.label}
+                        {t(`coalition.config.countries.${c.value}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -319,31 +335,33 @@ export function CoalitionConfigPage(): JSX.Element {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="endpoint">API Base URL</Label>
+                <Label htmlFor="endpoint">{t("coalition.config.apiBaseUrl")}</Label>
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-muted-foreground" />
                   <Input
                     id="endpoint"
                     {...form.register("endpoint")}
                     placeholder="https://apiv2.dcanje.mx/api"
+                    readOnly={!isCustomUrl}
+                    className={cn(!isCustomUrl && "bg-muted")}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="publicToken">Public Token</Label>
+                <Label htmlFor="publicToken">{t("coalition.config.publicToken")}</Label>
                 <div className="flex items-center gap-2">
                   <Key className="h-4 w-4 text-muted-foreground" />
                   <Input
                     id="publicToken"
                     {...form.register("publicToken")}
-                    placeholder="Enter public token"
+                    placeholder={t("coalition.config.publicTokenPlaceholder")}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="privateToken">Private Token</Label>
+                <Label htmlFor="privateToken">{t("coalition.config.privateToken")}</Label>
                 <div className="flex items-center gap-2">
                   <Key className="h-4 w-4 text-muted-foreground" />
                   <div className="relative flex-1">
@@ -351,7 +369,7 @@ export function CoalitionConfigPage(): JSX.Element {
                       id="privateToken"
                       type={showPrivateToken ? "text" : "password"}
                       {...form.register("privateToken")}
-                      placeholder="Enter private token"
+                      placeholder={t("coalition.config.privateTokenPlaceholder")}
                       className="pr-10"
                     />
                     <Button
@@ -374,7 +392,7 @@ export function CoalitionConfigPage(): JSX.Element {
               </div>
 
               <div className="space-y-2">
-                <Label>Identifier Type</Label>
+                <Label>{t("coalition.config.identifierType")}</Label>
                 <RadioGroup
                   value={form.watch("identifierType") ?? "email"}
                   onValueChange={(v) => {
@@ -385,20 +403,20 @@ export function CoalitionConfigPage(): JSX.Element {
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="email" id="id-email" />
                     <Label htmlFor="id-email" className="cursor-pointer">
-                      Email
+                      {t("coalition.config.identifierEmail")}
                     </Label>
                   </div>
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="rut" id="id-rut" />
                     <Label htmlFor="id-rut" className="cursor-pointer">
-                      RUT
+                      {t("coalition.config.identifierRut")}
                     </Label>
                   </div>
                 </RadioGroup>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="timeoutMs">Timeout (ms)</Label>
+                <Label htmlFor="timeoutMs">{t("coalition.config.timeoutMs")}</Label>
                 <Input
                   id="timeoutMs"
                   type="number"
@@ -414,12 +432,14 @@ export function CoalitionConfigPage(): JSX.Element {
         {provider === "GENERIC" && (
           <Card>
             <CardHeader>
-              <CardTitle>Generic Connection</CardTitle>
-              <CardDescription>Configure the generic coalition API endpoint.</CardDescription>
+              <CardTitle>{t("coalition.config.genericConnection")}</CardTitle>
+              <CardDescription>
+                {t("coalition.config.genericConnectionDescription")}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="endpoint">API Endpoint URL</Label>
+                <Label htmlFor="endpoint">{t("coalition.config.apiEndpointUrl")}</Label>
                 <div className="flex items-center gap-2">
                   <Link2 className="h-4 w-4 text-muted-foreground" />
                   <Input
@@ -436,13 +456,13 @@ export function CoalitionConfigPage(): JSX.Element {
         {/* Conversion Settings */}
         <Card>
           <CardHeader>
-            <CardTitle>Conversion</CardTitle>
-            <CardDescription>Configure how own points convert to coalition points.</CardDescription>
+            <CardTitle>{t("coalition.config.conversion")}</CardTitle>
+            <CardDescription>{t("coalition.config.conversionDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="conversionRate">Conversion Rate</Label>
+                <Label htmlFor="conversionRate">{t("coalition.config.conversionRate")}</Label>
                 <Input
                   id="conversionRate"
                   type="number"
@@ -450,19 +470,19 @@ export function CoalitionConfigPage(): JSX.Element {
                   {...form.register("conversionRate")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Own points × rate = coalition points
+                  {t("coalition.config.conversionRateHelp")}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="minConversionPoints">Minimum Points</Label>
+                <Label htmlFor="minConversionPoints">{t("coalition.config.minimumPoints")}</Label>
                 <Input
                   id="minConversionPoints"
                   type="number"
                   {...form.register("minConversionPoints")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Minimum own points required to convert
+                  {t("coalition.config.minimumPointsHelp")}
                 </p>
               </div>
             </div>
@@ -472,16 +492,16 @@ export function CoalitionConfigPage(): JSX.Element {
         {/* Feature Toggles */}
         <Card>
           <CardHeader>
-            <CardTitle>Features</CardTitle>
-            <CardDescription>Enable or disable coalition operations.</CardDescription>
+            <CardTitle>{t("coalition.config.features")}</CardTitle>
+            <CardDescription>{t("coalition.config.featuresDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <TooltipProvider>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="accumulationEnabled">Accumulation</Label>
+                  <Label htmlFor="accumulationEnabled">{t("coalition.config.accumulation")}</Label>
                   <p className="text-xs text-muted-foreground">
-                    Allow members to earn coalition points
+                    {t("coalition.config.accumulationDescription")}
                   </p>
                 </div>
                 <Switch
@@ -495,9 +515,9 @@ export function CoalitionConfigPage(): JSX.Element {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="redemptionEnabled">Redemption</Label>
+                  <Label htmlFor="redemptionEnabled">{t("coalition.config.redemption")}</Label>
                   <p className="text-xs text-muted-foreground">
-                    Allow members to redeem coalition points
+                    {t("coalition.config.redemptionDescription")}
                   </p>
                 </div>
                 {capabilities && !capabilities.redeem ? (
@@ -508,7 +528,7 @@ export function CoalitionConfigPage(): JSX.Element {
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>This adapter does not support redemption</p>
+                      <p>{t("coalition.config.redemptionUnsupported")}</p>
                     </TooltipContent>
                   </Tooltip>
                 ) : (
@@ -524,9 +544,11 @@ export function CoalitionConfigPage(): JSX.Element {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="conversionEnabled">Conversion</Label>
+                  <Label htmlFor="conversionEnabled">
+                    {t("coalition.config.conversionFeature")}
+                  </Label>
                   <p className="text-xs text-muted-foreground">
-                    Allow members to convert own points to coalition points
+                    {t("coalition.config.conversionFeatureDescription")}
                   </p>
                 </div>
                 <Switch
@@ -550,7 +572,7 @@ export function CoalitionConfigPage(): JSX.Element {
               ) : (
                 <Save className="mr-2 h-4 w-4" />
               )}
-              Save Configuration
+              {t("coalition.config.saveConfiguration")}
             </Button>
           )}
 
@@ -568,20 +590,20 @@ export function CoalitionConfigPage(): JSX.Element {
               ) : (
                 <FlaskConical className="mr-2 h-4 w-4" />
               )}
-              Test Connection
+              {t("coalition.config.testConnection")}
             </Button>
           )}
         </div>
 
         {/* Save Status */}
         {saveMutation.isSuccess && (
-          <p className="text-sm text-green-600">Configuration saved successfully.</p>
+          <p className="text-sm text-green-600">{t("coalition.config.saved")}</p>
         )}
         {saveMutation.isError && (
           <p className="text-sm text-destructive">
             {saveMutation.error instanceof Error
               ? saveMutation.error.message
-              : "Failed to save configuration"}
+              : t("coalition.config.saveFailed")}
           </p>
         )}
 
@@ -590,14 +612,18 @@ export function CoalitionConfigPage(): JSX.Element {
           <Card className={cn(healthcheckResult.ok ? "border-green-600" : "border-destructive")}>
             <CardHeader>
               <CardTitle className="text-sm font-medium">
-                Connection Test: {healthcheckResult.ok ? "Success" : "Failed"}
+                {t("coalition.config.connectionTest")}:{" "}
+                {healthcheckResult.ok
+                  ? t("coalition.config.testSuccess")
+                  : t("coalition.config.testFailed")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-1 text-sm">
                 {healthcheckResult.latencyMs != null && (
                   <p>
-                    Latency: <span className="font-mono">{healthcheckResult.latencyMs}ms</span>
+                    {t("coalition.config.latency")}{" "}
+                    <span className="font-mono">{healthcheckResult.latencyMs}ms</span>
                   </p>
                 )}
                 {healthcheckResult.details != null && (
@@ -613,7 +639,7 @@ export function CoalitionConfigPage(): JSX.Element {
           <p className="text-sm text-destructive">
             {healthcheckMutation.error instanceof Error
               ? healthcheckMutation.error.message
-              : "Healthcheck failed"}
+              : t("coalition.config.healthcheckFailed")}
           </p>
         )}
       </form>

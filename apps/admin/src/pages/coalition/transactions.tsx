@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AlertTriangle, ArrowLeftRight, RefreshCw, Search, Undo2 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
 };
 
 export function CoalitionTransactionsPage(): JSX.Element {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [memberIdFilter, setMemberIdFilter] = useState("");
@@ -93,7 +95,9 @@ export function CoalitionTransactionsPage(): JSX.Element {
   });
 
   const statusBadge = (status: string) => (
-    <Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>{status}</Badge>
+    <Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>
+      {t(`coalition.status.${status}`)}
+    </Badge>
   );
 
   const handleReverse = (): void => {
@@ -104,17 +108,15 @@ export function CoalitionTransactionsPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Coalition Transactions</h1>
-        <p className="mt-1 text-muted-foreground">
-          View and manage external coalition transactions.
-        </p>
+        <h1 className="text-3xl font-bold">{t("coalition.transactions.title")}</h1>
+        <p className="mt-1 text-muted-foreground">{t("coalition.transactions.subtitle")}</p>
       </div>
 
       {/* Filters */}
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-2">
-            <Label htmlFor="status-filter">Status</Label>
+            <Label htmlFor="status-filter">{t("coalition.transactions.status")}</Label>
             <Select
               value={statusFilter}
               onValueChange={(v) => {
@@ -123,25 +125,25 @@ export function CoalitionTransactionsPage(): JSX.Element {
               }}
             >
               <SelectTrigger id="status-filter" className="w-36">
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={t("coalition.transactions.all")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                <SelectItem value="FAILED">Failed</SelectItem>
-                <SelectItem value="REVERSED">Reversed</SelectItem>
+                <SelectItem value="ALL">{t("coalition.transactions.all")}</SelectItem>
+                <SelectItem value="PENDING">{t("coalition.status.PENDING")}</SelectItem>
+                <SelectItem value="CONFIRMED">{t("coalition.status.CONFIRMED")}</SelectItem>
+                <SelectItem value="FAILED">{t("coalition.status.FAILED")}</SelectItem>
+                <SelectItem value="REVERSED">{t("coalition.status.REVERSED")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="member-filter">Member ID</Label>
+            <Label htmlFor="member-filter">{t("coalition.transactions.memberId")}</Label>
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
                 id="member-filter"
-                placeholder="Filter by member..."
+                placeholder={t("coalition.transactions.memberFilterPlaceholder")}
                 value={memberIdFilter}
                 onChange={(e) => {
                   setMemberIdFilter(e.target.value);
@@ -161,7 +163,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
               setPage(1);
             }}
           >
-            Clear Filters
+            {t("coalition.transactions.clearFilters")}
           </Button>
         </CardContent>
       </Card>
@@ -182,13 +184,13 @@ export function CoalitionTransactionsPage(): JSX.Element {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Status</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Local Ref</TableHead>
-                <TableHead>External Ref</TableHead>
-                <TableHead>Attempts</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>{t("coalition.transactions.status")}</TableHead>
+                <TableHead>{t("coalition.transactions.type")}</TableHead>
+                <TableHead>{t("coalition.transactions.amount")}</TableHead>
+                <TableHead>{t("coalition.transactions.localRef")}</TableHead>
+                <TableHead>{t("coalition.transactions.externalRef")}</TableHead>
+                <TableHead>{t("coalition.transactions.attempts")}</TableHead>
+                <TableHead>{t("coalition.transactions.date")}</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -203,7 +205,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                 >
                   <TableCell>{statusBadge(tx.status)}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{tx.type}</Badge>
+                    <Badge variant="outline">{t(`coalition.transactionTypes.${tx.type}`)}</Badge>
                   </TableCell>
                   <TableCell className="font-mono">{tx.amount.toLocaleString()}</TableCell>
                   <TableCell className="font-mono text-xs">{tx.localTxRef}</TableCell>
@@ -224,7 +226,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                         }}
                       >
                         <Undo2 className="mr-1 h-3 w-3" />
-                        Reverse
+                        {t("coalition.transactions.reverse")}
                       </Button>
                     )}
                   </TableCell>
@@ -236,7 +238,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
       ) : (
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No transactions found.</p>
+            <p className="text-muted-foreground">{t("coalition.transactions.noTransactions")}</p>
           </CardContent>
         </Card>
       )}
@@ -251,9 +253,9 @@ export function CoalitionTransactionsPage(): JSX.Element {
             setPage(page - 1);
           }}
         >
-          Previous
+          {t("common.previous")}
         </Button>
-        <span className="text-sm text-muted-foreground">Page {page}</span>
+        <span className="text-sm text-muted-foreground">{t("coalition.page", { page })}</span>
         <Button
           variant="outline"
           size="sm"
@@ -262,7 +264,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
             setPage(page + 1);
           }}
         >
-          Next
+          {t("common.next")}
         </Button>
       </div>
 
@@ -271,7 +273,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              Transaction Detail
+              {t("coalition.transactions.transactionDetail")}
               {statusBadge(selectedTx.status)}
             </CardTitle>
             <CardDescription>{selectedTx.localTxRef}</CardDescription>
@@ -279,46 +281,66 @@ export function CoalitionTransactionsPage(): JSX.Element {
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <Label className="text-xs text-muted-foreground">ID</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.id")}
+                </Label>
                 <p className="font-mono text-sm">{selectedTx.id}</p>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Type</Label>
-                <p>{selectedTx.type}</p>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.type")}
+                </Label>
+                <p>{t(`coalition.transactionTypes.${selectedTx.type}`)}</p>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Amount</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.amount")}
+                </Label>
                 <p className="font-mono">{selectedTx.amount.toLocaleString()}</p>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Attempts</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.attempts")}
+                </Label>
                 <p>{selectedTx.attempts}</p>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">External Tx Ref</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.externalTxRef")}
+                </Label>
                 <p className="font-mono text-sm">{selectedTx.externalTxRef ?? "—"}</p>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Idempotency Key</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.idempotencyKey")}
+                </Label>
                 <p className="font-mono text-sm">{selectedTx.idempotencyKey}</p>
               </div>
               <div className="sm:col-span-2">
-                <Label className="text-xs text-muted-foreground">Created At</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.createdAt")}
+                </Label>
                 <p className="text-sm">{format(new Date(selectedTx.createdAt), "PPpp")}</p>
               </div>
               <div className="sm:col-span-2">
-                <Label className="text-xs text-muted-foreground">Updated At</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {t("coalition.transactions.updatedAt")}
+                </Label>
                 <p className="text-sm">{format(new Date(selectedTx.updatedAt), "PPpp")}</p>
               </div>
               {selectedTx.lastError && (
                 <div className="sm:col-span-2">
-                  <Label className="text-xs text-destructive">Last Error</Label>
+                  <Label className="text-xs text-destructive">
+                    {t("coalition.transactions.lastError")}
+                  </Label>
                   <p className="text-sm text-destructive">{selectedTx.lastError}</p>
                 </div>
               )}
               {selectedTx.metadata != null && (
                 <div className="sm:col-span-2">
-                  <Label className="text-xs text-muted-foreground">Metadata</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    {t("coalition.transactions.metadata")}
+                  </Label>
                   <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted p-2 text-xs">
                     {JSON.stringify(selectedTx.metadata as Record<string, unknown>, null, 2)}
                   </pre>
@@ -328,14 +350,16 @@ export function CoalitionTransactionsPage(): JSX.Element {
 
             {/* Timeline */}
             <div className="mt-6">
-              <Label className="text-xs text-muted-foreground">Timeline</Label>
+              <Label className="text-xs text-muted-foreground">
+                {t("coalition.transactions.timeline")}
+              </Label>
               <div className="mt-2 space-y-2">
                 <div className="flex items-center gap-3">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs">
                     1
                   </div>
                   <div>
-                    <p className="text-sm font-medium">PENDING</p>
+                    <p className="text-sm font-medium">{t("coalition.status.PENDING")}</p>
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(selectedTx.createdAt), "PPpp")}
                     </p>
@@ -348,7 +372,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                       2
                     </div>
                     <div>
-                      <p className="text-sm font-medium">CONFIRMED</p>
+                      <p className="text-sm font-medium">{t("coalition.status.CONFIRMED")}</p>
                       <p className="text-xs text-muted-foreground">
                         {format(new Date(selectedTx.updatedAt), "PPpp")}
                       </p>
@@ -362,7 +386,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                       <AlertTriangle className="h-3 w-3" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">FAILED</p>
+                      <p className="text-sm font-medium">{t("coalition.status.FAILED")}</p>
                       <p className="text-xs text-muted-foreground">{selectedTx.lastError}</p>
                     </div>
                   </div>
@@ -374,7 +398,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                       <ArrowLeftRight className="h-3 w-3" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">REVERSED</p>
+                      <p className="text-sm font-medium">{t("coalition.status.REVERSED")}</p>
                       <p className="text-xs text-muted-foreground">
                         {format(new Date(selectedTx.updatedAt), "PPpp")}
                       </p>
@@ -395,7 +419,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                   }}
                 >
                   <Undo2 className="mr-2 h-4 w-4" />
-                  Force Reverse
+                  {t("coalition.transactions.forceReverse")}
                 </Button>
               </div>
             )}
@@ -407,22 +431,21 @@ export function CoalitionTransactionsPage(): JSX.Element {
       <Dialog open={reverseDialogOpen} onOpenChange={setReverseDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reverse Transaction</DialogTitle>
+            <DialogTitle>{t("coalition.transactions.reverseDialogTitle")}</DialogTitle>
             <DialogDescription>
-              This will attempt to reverse the external coalition transaction. This action cannot be
-              undone.
+              {t("coalition.transactions.reverseDialogDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="reverse-reason">Reason</Label>
+              <Label htmlFor="reverse-reason">{t("coalition.transactions.reason")}</Label>
               <Input
                 id="reverse-reason"
                 value={reverseReason}
                 onChange={(e) => {
                   setReverseReason(e.target.value);
                 }}
-                placeholder="e.g., Customer refund, system error"
+                placeholder={t("coalition.transactions.reasonPlaceholder")}
               />
             </div>
           </div>
@@ -433,7 +456,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                 setReverseDialogOpen(false);
               }}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -443,14 +466,14 @@ export function CoalitionTransactionsPage(): JSX.Element {
               {reverseMutation.isPending ? (
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              Confirm Reverse
+              {t("coalition.transactions.confirmReverse")}
             </Button>
           </DialogFooter>
           {reverseMutation.isError && (
             <p className="text-sm text-destructive">
               {reverseMutation.error instanceof Error
                 ? reverseMutation.error.message
-                : "Reverse failed"}
+                : t("coalition.transactions.reverseFailed")}
             </p>
           )}
         </DialogContent>
