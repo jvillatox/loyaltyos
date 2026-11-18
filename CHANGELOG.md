@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.9.0] - 2026-11-18
 
 ### Added
 
@@ -17,20 +17,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selector and identifier-type toggle, and its "Probar conexión" healthcheck now
   requires `coalition.write` (SUPER_ADMIN). (#59)
 
+### Changed
+
 - **Unique `ts` and transaction reference on every Apprecio call.** Loads use the
   internal `CoalitionTransaction` id as `ts`; balance/history/healthcheck use a
   random alphanumeric code. The `descripcion` now carries the reference
   `"<description> [LOS:<transaction id>]"`, truncated to a conservative length.
   TLS is always enforced — a non-https API base URL is rejected. (#59)
 
+### Fixed
+
+- **The coalition admin pages are translated.** The _Coalición_ config,
+  transactions, and linked-members pages now render in es-MX and en-US instead of
+  hard-coded English strings. (#59)
+
 ### Upgrade notes
 
-- **Migrate from `APPRECIO_*` env vars to per-program config.** The
-  `APPRECIO_API_BASE`, `APPRECIO_PUBLIC_TOKEN`, `APPRECIO_PRIVATE_TOKEN`,
-  `APPRECIO_IDENTIFIER_TYPE`, and `APPRECIO_TIMEOUT_MS` env vars are deprecated
-  and only apply as a fallback when a program has no `CoalitionConfig`. Configure
-  credentials per program in the admin _Coalición_ screen. A deprecation warning
-  is logged at startup when these vars are still set.
+1. **Run the migration before deploying.** This adds the
+   `CoalitionConfig.country` and `CoalitionConfig.identifierType` columns.
+2. **Migrate from `APPRECIO_*` env vars to per-program config.** The
+   `APPRECIO_API_BASE`, `APPRECIO_PUBLIC_TOKEN`, `APPRECIO_PRIVATE_TOKEN`,
+   `APPRECIO_IDENTIFIER_TYPE`, and `APPRECIO_TIMEOUT_MS` env vars are deprecated
+   and only apply as a fallback in single-program installs with no
+   `CoalitionConfig`. With more than one program, each program must be configured
+   in the admin _Coalición_ screen; a program without a `CoalitionConfig` is an
+   error. A deprecation warning is logged at startup when these vars are still
+   set.
+
+### Known limitations
+
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
 
 ## [1.8.0] - 2026-11-17
 
