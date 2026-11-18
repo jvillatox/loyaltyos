@@ -12,10 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-program Apprecio credentials.** `CoalitionConfig` now stores a `country`
   (MX, CL, CO, PE, EC, or `OTHER` for a custom API base URL) and an
   `identifierType` (`email` | `rut`). The Apprecio adapter is built per program
-  from its decrypted config (cached in memory and invalidated on save) instead of
-  a single process-wide adapter. The admin _Coalición_ screen gains a country
-  selector and identifier-type toggle, and its "Probar conexión" healthcheck now
-  requires `coalition.write` (SUPER_ADMIN). (#59)
+  from its decrypted config (cached per program and rebuilt automatically on
+  every instance when the config changes) instead of a single process-wide
+  adapter. The admin _Coalición_ screen gains a country selector and
+  identifier-type toggle, and its "Probar conexión" healthcheck now requires
+  `coalition.write` (SUPER_ADMIN). Each program has its own circuit breaker, so
+  one program with failing credentials no longer blocks coalition calls for the
+  others. (#59)
 
 ### Changed
 
