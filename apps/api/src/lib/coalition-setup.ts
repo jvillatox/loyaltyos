@@ -11,23 +11,44 @@ export const coalitionService = new CoalitionService(
 
 // ── Apprecio Adapter ──────────────────────────────────────────────
 
-const apprecioApiBase = process.env.APPRECIO_API_BASE;
-const apprecioPublicToken = process.env.APPRECIO_PUBLIC_TOKEN;
-const apprecioPrivateToken = process.env.APPRECIO_PRIVATE_TOKEN;
-const apprecioIdentifierType: "email" | "rut" =
-  process.env.APPRECIO_IDENTIFIER_TYPE === "rut" ? "rut" : "email";
-const apprecioTimeoutMs = process.env.APPRECIO_TIMEOUT_MS
-  ? parseInt(process.env.APPRECIO_TIMEOUT_MS, 10)
-  : 10000;
+/**
+ * Registers the deprecated APPRECIO_* env adapter as a fallback. It is only
+ * usable when the installation has exactly one program: with more than one, a
+ * program without a CoalitionConfig is an error and each program must be
+ * configured explicitly (admin → Coalition).
+ */
+export async function setupApprecioFallback(): Promise<void> {
+  const apprecioApiBase = process.env.APPRECIO_API_BASE;
+  const apprecioPublicToken = process.env.APPRECIO_PUBLIC_TOKEN;
+  const apprecioPrivateToken = process.env.APPRECIO_PRIVATE_TOKEN;
 
-if (apprecioApiBase && apprecioPublicToken && apprecioPrivateToken) {
-  // Deprecated: these env vars only back single-program installs with no
-  // CoalitionConfig. Configure credentials per program in the admin UI instead.
+  if (!apprecioApiBase || !apprecioPublicToken || !apprecioPrivateToken) {
+    return;
+  }
+
+  const programCount = await prisma.program.count();
+
+  if (programCount > 1) {
+    console.warn(
+      `[Coalition] APPRECIO_* env vars are ignored: this installation has ${String(programCount)} ` +
+        "programs. Configure Apprecio credentials per program (admin → Coalition); each " +
+        "program requires its own CoalitionConfig.",
+    );
+    return;
+  }
+
   console.warn(
     "[Coalition] APPRECIO_* env vars are deprecated — configure Apprecio credentials " +
-      "per program (admin → Coalition). They only apply as a fallback when a program " +
-      "has no CoalitionConfig.",
+      "per program (admin → Coalition). They only apply as a fallback for a " +
+      "single-program install with no CoalitionConfig.",
   );
+
+  const apprecioIdentifierType: "email" | "rut" =
+    process.env.APPRECIO_IDENTIFIER_TYPE === "rut" ? "rut" : "email";
+  const apprecioTimeoutMs = process.env.APPRECIO_TIMEOUT_MS
+    ? parseInt(process.env.APPRECIO_TIMEOUT_MS, 10)
+    : 10000;
+
   const apprecioAdapter = createApprecioAdapter({
     apiBase: apprecioApiBase,
     publicToken: apprecioPublicToken,
@@ -35,7 +56,7 @@ if (apprecioApiBase && apprecioPublicToken && apprecioPrivateToken) {
     identifierType: apprecioIdentifierType,
     timeoutMs: apprecioTimeoutMs,
   });
-  coalitionService.registerAdapter(apprecioAdapter);
+  coalitionService.registerAdapter(apprecioAdapter, "apprecio:env");
 }
 
 // ── Balance Cache ─────────────────────────────────────────────────

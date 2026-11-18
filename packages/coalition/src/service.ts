@@ -55,12 +55,20 @@ interface ApprecioCredentials {
   identifierType?: IdentifierType;
 }
 
+/** A per-program adapter plus the breaker key and the config version it was built from. */
+interface CachedProgramAdapter {
+  adapter: CoalitionAdapter;
+  breakerKey: string;
+  updatedAt: Date;
+}
+
 export class CoalitionService {
   private repo: Repository;
   private pointsService: PointsService;
   private adapters: Map<string, CoalitionAdapter>;
-  private programAdapters: Map<string, CoalitionAdapter>;
+  private programAdapters: Map<string, CachedProgramAdapter>;
   private breakers: Map<string, CircuitBreaker>;
+  private adapterBreakerKeys: Map<CoalitionAdapter, string>;
   private metrics?: CoalitionServiceMetrics;
 
   constructor(prisma: PrismaClient, metrics?: CoalitionServiceMetrics) {
@@ -69,38 +77,57 @@ export class CoalitionService {
     this.adapters = new Map();
     this.programAdapters = new Map();
     this.breakers = new Map();
+    this.adapterBreakerKeys = new Map();
     this.metrics = metrics;
   }
 
   // ── Adapter Management ────────────────────────────────────────
 
-  /** Register a coalition adapter implementation. */
-  registerAdapter(adapter: CoalitionAdapter): void {
+  /**
+   * Register a coalition adapter implementation. `breakerKey` names the circuit
+   * breaker entry; the env fallback passes "apprecio:env" so it never shares a
+   * breaker with per-program "apprecio:<programId>" entries.
+   */
+  registerAdapter(adapter: CoalitionAdapter, breakerKey?: string): void {
     this.adapters.set(adapter.name, adapter);
-    this.ensureBreaker(adapter);
+    const key = breakerKey ?? adapter.name;
+    this.adapterBreakerKeys.set(adapter, key);
+    this.ensureBreaker(key, adapter.timeoutMs);
   }
 
-  private ensureBreaker(adapter: CoalitionAdapter): CircuitBreaker {
-    const existing = this.breakers.get(adapter.name);
-    if (existing) return existing;
-
+  private createBreaker(key: string, timeoutMs: number): CircuitBreaker {
     const breaker = new CircuitBreaker(async (fn: () => Promise<unknown>) => fn(), {
       ...BREAKER_OPTIONS,
-      timeout: adapter.timeoutMs + BREAKER_TIMEOUT_PADDING_MS,
+      timeout: timeoutMs + BREAKER_TIMEOUT_PADDING_MS,
     });
     breaker.on("open", () => {
-      console.warn(`[Coalition] Circuit breaker OPEN for adapter "${adapter.name}"`);
-      this.metrics?.setCircuitBreakerState(adapter.name, 2);
+      console.warn(`[Coalition] Circuit breaker OPEN for adapter "${key}"`);
+      this.metrics?.setCircuitBreakerState(key, 2);
     });
     breaker.on("halfOpen", () => {
-      console.info(`[Coalition] Circuit breaker HALF-OPEN for adapter "${adapter.name}"`);
-      this.metrics?.setCircuitBreakerState(adapter.name, 1);
+      console.info(`[Coalition] Circuit breaker HALF-OPEN for adapter "${key}"`);
+      this.metrics?.setCircuitBreakerState(key, 1);
     });
     breaker.on("close", () => {
-      console.info(`[Coalition] Circuit breaker CLOSED for adapter "${adapter.name}"`);
-      this.metrics?.setCircuitBreakerState(adapter.name, 0);
+      console.info(`[Coalition] Circuit breaker CLOSED for adapter "${key}"`);
+      this.metrics?.setCircuitBreakerState(key, 0);
     });
-    this.breakers.set(adapter.name, breaker);
+    return breaker;
+  }
+
+  private ensureBreaker(key: string, timeoutMs: number): CircuitBreaker {
+    const existing = this.breakers.get(key);
+    if (existing) return existing;
+    const breaker = this.createBreaker(key, timeoutMs);
+    this.breakers.set(key, breaker);
+    return breaker;
+  }
+
+  /** Replaces a breaker (shutting down the old one) so stale state does not leak into a new config. */
+  private replaceBreaker(key: string, timeoutMs: number): CircuitBreaker {
+    this.breakers.get(key)?.shutdown();
+    const breaker = this.createBreaker(key, timeoutMs);
+    this.breakers.set(key, breaker);
     return breaker;
   }
 
@@ -112,10 +139,15 @@ export class CoalitionService {
     }
 
     // Legacy single-program installs: no per-program config, so fall back to the
-    // adapter registered from the deprecated APPRECIO_* env vars.
+    // adapter registered from the deprecated APPRECIO_* env vars. This is only
+    // safe when the installation has exactly one program — with more, a missing
+    // config is an error and the caller must configure each program explicitly.
     const envAdapter = this.adapters.get("apprecio") ?? this.adapters.get("APPRECIO");
     if (envAdapter) {
-      return envAdapter;
+      const programCount = await this.repo.countPrograms();
+      if (programCount <= 1) {
+        return envAdapter;
+      }
     }
 
     throw new CoalitionConfigNotFoundError(programId);
@@ -124,11 +156,27 @@ export class CoalitionService {
   /** Resolves (and caches) the adapter for a program's CoalitionConfig. */
   private adapterForConfig(config: CoalitionConfigRow): CoalitionAdapter {
     if (config.provider.toUpperCase() === "APPRECIO") {
-      let adapter = this.programAdapters.get(config.programId);
-      if (!adapter) {
-        adapter = this.buildApprecioAdapter(config);
-        this.programAdapters.set(config.programId, adapter);
-        this.ensureBreaker(adapter);
+      const breakerKey = `apprecio:${config.programId}`;
+      const cached = this.programAdapters.get(config.programId);
+
+      // Cache is valid only for the exact config version it was built from. A
+      // different `updatedAt` (e.g. tokens changed in another instance) rebuilds
+      // the adapter and replaces its breaker so the new credentials take effect.
+      if (cached && cached.updatedAt.getTime() === config.updatedAt.getTime()) {
+        return cached.adapter;
+      }
+
+      const adapter = this.buildApprecioAdapter(config);
+      this.programAdapters.set(config.programId, {
+        adapter,
+        breakerKey,
+        updatedAt: config.updatedAt,
+      });
+      this.adapterBreakerKeys.set(adapter, breakerKey);
+      if (cached) {
+        this.replaceBreaker(breakerKey, adapter.timeoutMs);
+      } else {
+        this.ensureBreaker(breakerKey, adapter.timeoutMs);
       }
       return adapter;
     }
@@ -394,7 +442,11 @@ export class CoalitionService {
   }): Promise<CoalitionConfigRow> {
     const result = await this.repo.upsertConfig(input);
     // The credentials/endpoint may have changed — drop the cached adapter so the
-    // next operation rebuilds it from the fresh config.
+    // next operation rebuilds it from the fresh config (and a fresh breaker).
+    const cached = this.programAdapters.get(input.programId);
+    if (cached) {
+      this.adapterBreakerKeys.delete(cached.adapter);
+    }
     this.programAdapters.delete(input.programId);
     return result;
   }
@@ -569,7 +621,7 @@ export class CoalitionService {
 
   /** Calls `fn` through the adapter's circuit breaker without auto-retry. */
   private async callAdapter<T>(adapter: CoalitionAdapter, fn: () => Promise<T>): Promise<T> {
-    const breaker = this.breakers.get(adapter.name);
+    const breaker = this.breakers.get(this.adapterBreakerKeys.get(adapter) ?? adapter.name);
 
     if (!breaker) {
       return await fn();
