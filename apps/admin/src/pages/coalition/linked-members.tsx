@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Link2, RefreshCw, Search, Unlink } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ interface CoalitionAccount {
 }
 
 export function CoalitionLinkedMembersPage(): JSX.Element {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -70,22 +72,20 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Linked Coalition Members</h1>
-        <p className="mt-1 text-muted-foreground">
-          Manage members linked to external coalition accounts.
-        </p>
+        <h1 className="text-3xl font-bold">{t("coalition.linkedMembers.title")}</h1>
+        <p className="mt-1 text-muted-foreground">{t("coalition.linkedMembers.subtitle")}</p>
       </div>
 
       {/* Search */}
       <Card>
         <CardContent className="flex items-end gap-4 pt-6">
           <div className="space-y-2">
-            <Label htmlFor="member-search">Search Members</Label>
+            <Label htmlFor="member-search">{t("coalition.linkedMembers.searchMembers")}</Label>
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
                 id="member-search"
-                placeholder="Search by member ID or external ref..."
+                placeholder={t("coalition.linkedMembers.searchPlaceholder")}
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -114,11 +114,11 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Member ID</TableHead>
-                <TableHead>External Ref</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead>External Balance</TableHead>
-                <TableHead>Linked At</TableHead>
+                <TableHead>{t("coalition.linkedMembers.memberId")}</TableHead>
+                <TableHead>{t("coalition.linkedMembers.externalRef")}</TableHead>
+                <TableHead>{t("coalition.linkedMembers.provider")}</TableHead>
+                <TableHead>{t("coalition.linkedMembers.externalBalance")}</TableHead>
+                <TableHead>{t("coalition.linkedMembers.linkedAt")}</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -146,7 +146,7 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
                         }}
                       >
                         <Unlink className="mr-1 h-3 w-3" />
-                        Unlink
+                        {t("coalition.linkedMembers.unlink")}
                       </Button>
                     )}
                   </TableCell>
@@ -159,9 +159,9 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
         <Card>
           <CardContent className="py-8 text-center">
             <Link2 className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-2 text-muted-foreground">No linked accounts found.</p>
+            <p className="mt-2 text-muted-foreground">{t("coalition.linkedMembers.noAccounts")}</p>
             <p className="text-sm text-muted-foreground">
-              Use the API to link members to external coalition accounts.
+              {t("coalition.linkedMembers.noAccountsHint")}
             </p>
           </CardContent>
         </Card>
@@ -177,9 +177,9 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
             setPage(page - 1);
           }}
         >
-          Previous
+          {t("common.previous")}
         </Button>
-        <span className="text-sm text-muted-foreground">Page {page}</span>
+        <span className="text-sm text-muted-foreground">{t("coalition.page", { page })}</span>
         <Button
           variant="outline"
           size="sm"
@@ -188,7 +188,7 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
             setPage(page + 1);
           }}
         >
-          Next
+          {t("common.next")}
         </Button>
       </div>
 
@@ -201,24 +201,24 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Unlink Coalition Account</DialogTitle>
+            <DialogTitle>{t("coalition.linkedMembers.unlinkDialogTitle")}</DialogTitle>
             <DialogDescription>
-              This will remove the link between the member and their external coalition account. The
-              external account itself will not be affected.
+              {t("coalition.linkedMembers.unlinkDialogDescription")}
             </DialogDescription>
           </DialogHeader>
           {unlinkTarget && (
             <div className="space-y-2 text-sm">
               <p>
-                <span className="font-medium">Member:</span>{" "}
+                <span className="font-medium">{t("coalition.linkedMembers.member")}</span>{" "}
                 <code className="rounded bg-muted px-1">{unlinkTarget.memberId}</code>
               </p>
               <p>
-                <span className="font-medium">External Ref:</span>{" "}
+                <span className="font-medium">{t("coalition.linkedMembers.externalRef")}:</span>{" "}
                 <code className="rounded bg-muted px-1">{unlinkTarget.externalId}</code>
               </p>
               <p>
-                <span className="font-medium">Provider:</span> {unlinkTarget.provider}
+                <span className="font-medium">{t("coalition.linkedMembers.provider")}:</span>{" "}
+                {unlinkTarget.provider}
               </p>
             </div>
           )}
@@ -229,7 +229,7 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
                 setUnlinkTarget(null);
               }}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -241,14 +241,14 @@ export function CoalitionLinkedMembersPage(): JSX.Element {
               {unlinkMutation.isPending ? (
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              Confirm Unlink
+              {t("coalition.linkedMembers.confirmUnlink")}
             </Button>
           </DialogFooter>
           {unlinkMutation.isError && (
             <p className="text-sm text-destructive">
               {unlinkMutation.error instanceof Error
                 ? unlinkMutation.error.message
-                : "Unlink failed"}
+                : t("coalition.linkedMembers.unlinkFailed")}
             </p>
           )}
         </DialogContent>
