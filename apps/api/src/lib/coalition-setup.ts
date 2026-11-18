@@ -21,6 +21,13 @@ const apprecioTimeoutMs = process.env.APPRECIO_TIMEOUT_MS
   : 10000;
 
 if (apprecioApiBase && apprecioPublicToken && apprecioPrivateToken) {
+  // Deprecated: these env vars only back single-program installs with no
+  // CoalitionConfig. Configure credentials per program in the admin UI instead.
+  console.warn(
+    "[Coalition] APPRECIO_* env vars are deprecated — configure Apprecio credentials " +
+      "per program (admin → Coalition). They only apply as a fallback when a program " +
+      "has no CoalitionConfig.",
+  );
   const apprecioAdapter = createApprecioAdapter({
     apiBase: apprecioApiBase,
     publicToken: apprecioPublicToken,

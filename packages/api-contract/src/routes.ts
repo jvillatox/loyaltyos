@@ -98,7 +98,7 @@ export const ADMIN_ROUTE_ENTRIES: readonly (readonly [HttpMethod, string, Permis
   ["POST", "/api/v1/admin/coalition/reconciliation", "coalition.write"],
   ["GET", "/api/v1/admin/coalition/config", "read"],
   ["PUT", "/api/v1/admin/coalition/config", "coalition.write"],
-  ["POST", "/api/v1/admin/coalition/healthcheck", "read"],
+  ["POST", "/api/v1/admin/coalition/healthcheck", "coalition.write"],
   // giftcards
   ["POST", "/api/v1/admin/giftcards/batches", "giftcards.financial"],
   ["GET", "/api/v1/admin/giftcards/batches", "read"],

@@ -24,6 +24,7 @@ export interface CoalitionAdapter {
     points: number,
     txRef: string,
     metadata?: object,
+    internalTxId?: string,
   ): Promise<TxResult>;
   redeem?(
     externalMemberRef: string,
@@ -31,7 +32,12 @@ export interface CoalitionAdapter {
     txRef: string,
     metadata?: object,
   ): Promise<TxResult>;
-  convert?(externalMemberRef: string, ownPoints: number, txRef: string): Promise<TxResult>;
+  convert?(
+    externalMemberRef: string,
+    ownPoints: number,
+    txRef: string,
+    internalTxId?: string,
+  ): Promise<TxResult>;
   reverseTransaction?(txRef: string, reason: string): Promise<void>;
   queryHistory?(externalMemberRef: string, from: Date, to: Date): Promise<unknown[]>;
 }
@@ -133,6 +139,8 @@ export interface CoalitionConfigRow {
   programId: string;
   provider: string;
   endpoint: string;
+  country: string | null;
+  identifierType: string | null;
   encryptedCredentials: string;
   conversionRate: number;
   accumulationEnabled: boolean;

@@ -46,6 +46,29 @@ function validateIdentifier(identifierType: "email" | "rut", externalMemberRef: 
   }
 }
 
+// Apprecio does not document a precise descripcion length limit; truncate to a
+// conservative bound while always preserving the "[LOS:<id>]" reference suffix.
+const MAX_DESCRIPTION_LENGTH = 100;
+
+/** Cryptographically-random alphanumeric code used as a unique `ts` per call. */
+function randomAlphanumeric(length = 24): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = crypto.randomBytes(length);
+  let out = "";
+  for (const byte of bytes) {
+    out += chars.charAt(byte % chars.length);
+  }
+  return out;
+}
+
+/** Appends the LoyaltyOS transaction reference to a description, truncating the base if needed. */
+function buildDescription(base: string, txId: string): string {
+  const suffix = ` [LOS:${txId}]`;
+  const maxBase = MAX_DESCRIPTION_LENGTH - suffix.length;
+  const trimmed = base.length > maxBase ? `${base.slice(0, maxBase - 1)}…` : base;
+  return trimmed + suffix;
+}
+
 // ── Adapter ─────────────────────────────────────────────────────
 
 export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter {
@@ -58,8 +81,15 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
     description = "LoyaltyOS coalition transaction",
   } = config;
 
+  // Apprecio is TLS-only; refuse a non-https base so TLS is always verified.
+  if (!apiBase.startsWith("https://")) {
+    throw new ApprecioConfigError("apiBase must use https:// so TLS is always verified");
+  }
+
   async function callApi<T>(accion: string, extraParams: Record<string, string>): Promise<T> {
-    const ts = extraParams.ts ?? String(Math.floor(Date.now() / 1000));
+    // Never fall back to a wall-clock timestamp; every call must carry a unique
+    // code (internal transaction id for loads, random alphanumeric otherwise).
+    const ts = extraParams.ts ?? randomAlphanumeric();
     const body = buildFormData(accion, publicToken, ts, privateToken, extraParams);
 
     const controller = new AbortController();
@@ -138,19 +168,24 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
     points: number,
     txRef: string,
     metadata?: object,
+    internalTxId?: string,
   ): Promise<TxResult> {
     validateIdentifier(identifierType, externalMemberRef);
     const accion = identifierType === "email" ? "carga_directa_email" : "acumular_puntos";
     const refKey = identifierType === "email" ? "email" : "rut";
+    // `ts` must be the internal CoalitionTransaction id (not the caller's txRef).
+    const txId = internalTxId ?? txRef;
+
+    const baseDescription =
+      (metadata as Record<string, unknown> | null)?.description != null
+        ? String((metadata as Record<string, unknown>).description)
+        : description;
 
     const extraParams: Record<string, string> = {
       [refKey]: externalMemberRef,
       asignado: String(points),
-      descripcion:
-        (metadata as Record<string, unknown> | null)?.description != null
-          ? String((metadata as Record<string, unknown>).description)
-          : description,
-      ts: txRef,
+      descripcion: buildDescription(baseDescription, txId),
+      ts: txId,
     };
 
     const apiResponse = await callApi<ApprecioAccumulateResponse>(accion, extraParams);
@@ -171,7 +206,7 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
 
     const extraParams: Record<string, string> = {
       [refKey]: externalMemberRef,
-      ts: String(Math.floor(Date.now() / 1000)),
+      ts: randomAlphanumeric(),
     };
 
     const apiResponse = await callApi<ApprecioBalanceResponse>(accion, extraParams);
@@ -194,7 +229,7 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
       const refKey = identifierType === "email" ? "email" : "rut";
       const extraParams: Record<string, string> = {
         [refKey]: identifierType === "email" ? "healthcheck@loyaltyos.dev" : "00000000-0",
-        ts: String(Math.floor(Date.now() / 1000)),
+        ts: randomAlphanumeric(),
       };
       await callApi(accion, extraParams);
       return { ok: true, latencyMs: Date.now() - startedAt };
@@ -219,7 +254,7 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
     const extraParams: Record<string, string> = {
       date_start: fmtDate(from),
       date_end: fmtDate(to),
-      ts: String(Math.floor(Date.now() / 1000)),
+      ts: randomAlphanumeric(),
     };
 
     const apiResponse = await callApi<ApprecioHistoryResponse>("historialCarga", extraParams);
@@ -247,10 +282,11 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
       externalMemberRef: string,
       ownPoints: number,
       txRef: string,
+      internalTxId?: string,
     ): Promise<TxResult> => {
       // convert maps to accumulate since Apprecio only receives points.
       // The CoalitionService handles local points debit internally.
-      return accumulate(externalMemberRef, ownPoints, txRef);
+      return accumulate(externalMemberRef, ownPoints, txRef, undefined, internalTxId);
     },
     reverseTransaction: undefined, // not supported
     queryHistory,

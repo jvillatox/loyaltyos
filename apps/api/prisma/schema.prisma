@@ -687,6 +687,8 @@ model CoalitionConfig {
   program              Program  @relation(fields: [programId], references: [id], onDelete: Restrict)
   provider             String   @default("GENERIC")
   endpoint             String
+  country              String?
+  identifierType       String?
   encryptedCredentials String
   conversionRate       Float    @default(1.0)
   accumulationEnabled  Boolean  @default(false)

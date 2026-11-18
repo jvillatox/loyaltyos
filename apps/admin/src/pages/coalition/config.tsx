@@ -44,15 +44,16 @@ const PROVIDERS = [
 const APPRECIO_COUNTRIES: { value: string; label: string; baseUrl: string }[] = [
   { value: "MX", label: "Mexico", baseUrl: "https://apiv2.dcanje.mx/api" },
   { value: "CL", label: "Chile", baseUrl: "https://api.apprecio.cl/api" },
-  { value: "PE", label: "Peru", baseUrl: "https://api.apprecio.pe/api" },
-  { value: "CO", label: "Colombia", baseUrl: "https://api.apprecio.co/api" },
-  { value: "AR", label: "Argentina", baseUrl: "https://api.apprecio.com.ar/api" },
-  { value: "CUSTOM", label: "Custom URL", baseUrl: "" },
+  { value: "CO", label: "Colombia", baseUrl: "https://apiv2.apprecio.com.co/api" },
+  { value: "PE", label: "Peru", baseUrl: "https://apiv2.apprecio.pe/api" },
+  { value: "EC", label: "Ecuador", baseUrl: "https://apiv2.ec.dcanje.com/api" },
+  { value: "OTHER", label: "Other / Custom URL", baseUrl: "" },
 ];
 
 const configFormSchema = z.object({
   provider: z.string().min(1),
   endpoint: z.string().min(1),
+  country: z.string().min(1),
   publicToken: z.string().optional(),
   privateToken: z.string().optional(),
   identifierType: z.enum(["email", "rut"]).optional(),
@@ -71,6 +72,8 @@ interface CoalitionConfig {
   programId: string;
   provider: string;
   endpoint: string;
+  country: string | null;
+  identifierType: string | null;
   hasCredentials: boolean;
   conversionRate: number;
   accumulationEnabled: boolean;
@@ -98,7 +101,6 @@ interface HealthcheckResult {
 export function CoalitionConfigPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [showPrivateToken, setShowPrivateToken] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<string>("MX");
   const [healthcheckResult, setHealthcheckResult] = useState<HealthcheckResult | null>(null);
   const canWrite = usePermission("coalition.write");
 
@@ -117,6 +119,7 @@ export function CoalitionConfigPage(): JSX.Element {
     defaultValues: {
       provider: "APPRECIO",
       endpoint: APPRECIO_COUNTRIES[0]?.baseUrl ?? "https://apiv2.dcanje.mx/api",
+      country: "MX",
       publicToken: "",
       privateToken: "",
       identifierType: "email",
@@ -131,6 +134,8 @@ export function CoalitionConfigPage(): JSX.Element {
       ? {
           provider: config.provider,
           endpoint: config.endpoint,
+          country: config.country ?? "OTHER",
+          identifierType: (config.identifierType as "email" | "rut" | null) ?? "email",
           conversionRate: config.conversionRate,
           accumulationEnabled: config.accumulationEnabled,
           redemptionEnabled: config.redemptionEnabled,
@@ -148,7 +153,6 @@ export function CoalitionConfigPage(): JSX.Element {
       if (values.provider === "APPRECIO") {
         credentials.publicToken = values.publicToken ?? "";
         credentials.privateToken = values.privateToken ?? "";
-        credentials.identifierType = values.identifierType ?? "email";
         credentials.timeoutMs = values.timeoutMs ?? 10000;
       }
       return fetchApi<CoalitionConfig>("/admin/coalition/config", {
@@ -156,6 +160,9 @@ export function CoalitionConfigPage(): JSX.Element {
         body: JSON.stringify({
           provider: values.provider,
           endpoint: values.endpoint,
+          country: values.provider === "APPRECIO" ? values.country : null,
+          identifierType:
+            values.provider === "APPRECIO" ? (values.identifierType ?? "email") : null,
           credentials,
           conversionRate: values.conversionRate,
           accumulationEnabled: values.accumulationEnabled,
@@ -180,7 +187,7 @@ export function CoalitionConfigPage(): JSX.Element {
   });
 
   const handleCountryChange = (value: string) => {
-    setSelectedCountry(value);
+    form.setValue("country", value);
     const country = APPRECIO_COUNTRIES.find((c) => c.value === value);
     if (country?.baseUrl) {
       form.setValue("endpoint", country.baseUrl);
@@ -297,7 +304,7 @@ export function CoalitionConfigPage(): JSX.Element {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="country">Country</Label>
-                <Select value={selectedCountry} onValueChange={handleCountryChange}>
+                <Select value={form.watch("country")} onValueChange={handleCountryChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select country" />
                   </SelectTrigger>
@@ -547,21 +554,23 @@ export function CoalitionConfigPage(): JSX.Element {
             </Button>
           )}
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              healthcheckMutation.mutate();
-            }}
-            disabled={healthcheckMutation.isPending}
-          >
-            {healthcheckMutation.isPending ? (
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FlaskConical className="mr-2 h-4 w-4" />
-            )}
-            Test Connection
-          </Button>
+          {canWrite && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                healthcheckMutation.mutate();
+              }}
+              disabled={healthcheckMutation.isPending}
+            >
+              {healthcheckMutation.isPending ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FlaskConical className="mr-2 h-4 w-4" />
+              )}
+              Test Connection
+            </Button>
+          )}
         </div>
 
         {/* Save Status */}

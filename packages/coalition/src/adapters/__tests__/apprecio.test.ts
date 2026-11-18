@@ -73,7 +73,7 @@ describe("createApprecioAdapter", () => {
         expect(parsed.accion).toBe("carga_directa_email");
         expect(parsed.email).toBe("user@test.com");
         expect(parsed.asignado).toBe("100");
-        expect(parsed.descripcion).toBe("LoyaltyOS coalition transaction");
+        expect(parsed.descripcion).toBe("LoyaltyOS coalition transaction [LOS:tx-acc-1]");
         expect(parsed.public_token).toBe(CONFIG.publicToken);
         expect(parsed.ts).toBe("tx-acc-1");
         expect(parsed.tipo).toBe("JSON");
@@ -93,6 +93,50 @@ describe("createApprecioAdapter", () => {
       expect(result.externalTxId).toBe("tx-acc-1");
       expect(result.balanceAfter).toBe(500);
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses the internal transaction id (not client txRef) for ts and the reference", async () => {
+      fetchMock.mockImplementation((_url: string, init: { body?: string }) => {
+        const parsed = parseFormBody(init.body ?? "");
+        expect(parsed.ts).toBe("tx-internal-42");
+        expect(parsed.descripcion).toBe("My campaign [LOS:tx-internal-42]");
+        return {
+          status: 200,
+          json: () => Promise.resolve({ success: true, data: { saldo_actual: 5 } }),
+        };
+      });
+
+      const adapter = createApprecioAdapter(CONFIG);
+      await adapter.accumulate(
+        "user@test.com",
+        100,
+        "client-ref-1",
+        { description: "My campaign" },
+        "tx-internal-42",
+      );
+    });
+
+    it("truncates a long description but preserves the [LOS:<id>] reference", async () => {
+      const longDescription = "x".repeat(200);
+      fetchMock.mockImplementation((_url: string, init: { body?: string }) => {
+        const parsed = parseFormBody(init.body ?? "");
+        const desc = parsed.descripcion ?? "";
+        expect(desc.endsWith("[LOS:tx-internal-42]")).toBe(true);
+        expect(desc.length).toBeLessThanOrEqual(100);
+        return {
+          status: 200,
+          json: () => Promise.resolve({ success: true, data: { saldo_actual: 5 } }),
+        };
+      });
+
+      const adapter = createApprecioAdapter(CONFIG);
+      await adapter.accumulate(
+        "user@test.com",
+        100,
+        "client-ref-1",
+        { description: longDescription },
+        "tx-internal-42",
+      );
     });
 
     it("sends acumular_puntos with rut when identifierType is rut", async () => {
@@ -167,6 +211,30 @@ describe("createApprecioAdapter", () => {
       const balance = await adapter.getBalance("user@test.com");
 
       expect(balance).toBe(0);
+    });
+
+    it("sends a random alphanumeric ts (not wall-clock seconds)", async () => {
+      const seen: string[] = [];
+      fetchMock.mockImplementation((_url: string, init: { body?: string }) => {
+        const parsed = parseFormBody(init.body ?? "");
+        seen.push(parsed.ts ?? "");
+        return {
+          status: 200,
+          json: () => Promise.resolve({ success: true, data: { saldo: 100 } }),
+        };
+      });
+
+      const adapter = createApprecioAdapter(CONFIG);
+      await adapter.getBalance("user@test.com");
+      await adapter.getBalance("user@test.com");
+
+      expect(seen).toHaveLength(2);
+      // Both are unique and alphanumeric, and not a Unix-seconds-style integer.
+      expect(seen[0]).not.toBe(seen[1]);
+      for (const ts of seen) {
+        expect(ts).toMatch(/^[A-Za-z0-9]+$/);
+        expect(ts).not.toMatch(/^\d+$/);
+      }
     });
   });
 
@@ -446,6 +514,16 @@ describe("createApprecioAdapter", () => {
 
       errorSpy.mockRestore();
       warnSpy.mockRestore();
+    });
+  });
+
+  // ═══ TLS Enforcement ═══
+
+  describe("TLS enforcement", () => {
+    it("rejects a non-https apiBase so TLS is always verified", () => {
+      expect(() =>
+        createApprecioAdapter({ ...CONFIG, apiBase: "http://insecure.local/api" }),
+      ).toThrow(ApprecioConfigError);
     });
   });
 

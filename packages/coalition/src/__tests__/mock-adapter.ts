@@ -45,6 +45,7 @@ export class MockAdapter implements CoalitionAdapter {
     points: number;
     txRef: string;
     metadata?: object;
+    internalTxId?: string;
   }[] = [];
   redeemCalls: {
     externalMemberRef: string;
@@ -117,8 +118,9 @@ export class MockAdapter implements CoalitionAdapter {
     points: number,
     txRef: string,
     metadata?: object,
+    internalTxId?: string,
   ): Promise<TxResult> {
-    this.accumulateCalls.push({ externalMemberRef, points, txRef, metadata });
+    this.accumulateCalls.push({ externalMemberRef, points, txRef, metadata, internalTxId });
     this.maybeThrow();
     await this.delay();
     this.balanceAfter += points;

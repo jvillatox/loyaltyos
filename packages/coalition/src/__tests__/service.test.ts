@@ -82,6 +82,8 @@ function configRow(overrides: Record<string, unknown> = {}) {
     programId: "prog-1",
     provider: "mock",
     endpoint: "https://mock.coalition.local",
+    country: null,
+    identifierType: null,
     encryptedCredentials: "encrypted-stuff",
     conversionRate: 1.0,
     accumulationEnabled: true,
@@ -719,6 +721,104 @@ describe("CoalitionService", () => {
         where: { id: "tx-1" },
         data: expect.objectContaining({ status: "FAILED" }),
       });
+    });
+  });
+
+  // ═══ Per-program Apprecio adapters ═══
+
+  describe("per-program Apprecio adapters", () => {
+    function apprecioConfig(programId: string, country: string, token: string) {
+      return configRow({
+        provider: "APPRECIO",
+        programId,
+        country,
+        identifierType: "email",
+        endpoint: "https://fallback.invalid/api",
+        encryptedCredentials: encrypt(
+          JSON.stringify({ publicToken: `pub-${token}`, privateToken: `priv-${token}` }),
+          getMasterKey(),
+        ),
+      });
+    }
+
+    it("builds a distinct adapter per program, resolving country URL and tokens", async () => {
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn().mockResolvedValue({
+        status: 200,
+        json: () => Promise.resolve({ success: true, data: { saldo_actual: 100 } }),
+      });
+      globalThis.fetch = fetchMock as never;
+
+      try {
+        const svc = new CoalitionService(mockPrisma as never);
+
+        mockPrisma.coalitionConfig.findUnique.mockResolvedValue(
+          apprecioConfig("prog-MX", "MX", "mx"),
+        );
+        const mxAdapter = await svc.getActiveAdapter("prog-MX");
+        await mxAdapter.accumulate("a@b.com", 10, "client-ref", undefined, "tx-mx-1");
+
+        mockPrisma.coalitionConfig.findUnique.mockResolvedValue(
+          apprecioConfig("prog-CL", "CL", "cl"),
+        );
+        const clAdapter = await svc.getActiveAdapter("prog-CL");
+        await clAdapter.accumulate("a@b.com", 20, "client-ref", undefined, "tx-cl-1");
+
+        expect(mxAdapter).not.toBe(clAdapter);
+
+        const calls = fetchMock.mock.calls as [string, { body?: string }][];
+        expect(calls).toHaveLength(2);
+        expect(calls[0]?.[0]).toBe("https://apiv2.dcanje.mx/api");
+        expect(calls[1]?.[0]).toBe("https://api.apprecio.cl/api");
+
+        const bodyMx = new URLSearchParams(calls[0]?.[1]?.body ?? "");
+        const bodyCl = new URLSearchParams(calls[1]?.[1]?.body ?? "");
+        expect(bodyMx.get("public_token")).toBe("pub-mx");
+        expect(bodyCl.get("public_token")).toBe("pub-cl");
+        expect(bodyMx.get("ts")).toBe("tx-mx-1");
+        expect(bodyCl.get("ts")).toBe("tx-cl-1");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("falls back to the env-registered adapter when no config exists", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(null);
+      const svc = new CoalitionService(mockPrisma as never);
+      const envAdapter = new MockAdapter();
+      envAdapter.name = "apprecio";
+      svc.registerAdapter(envAdapter);
+
+      const adapter = await svc.getActiveAdapter("prog-no-config");
+      expect(adapter.name).toBe("apprecio");
+    });
+
+    it("rejects an Apprecio config with a non-https apiBase", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(
+        configRow({
+          provider: "APPRECIO",
+          country: "OTHER",
+          endpoint: "http://insecure.local/api",
+          encryptedCredentials: encrypt(
+            JSON.stringify({ publicToken: "pub", privateToken: "priv" }),
+            getMasterKey(),
+          ),
+        }),
+      );
+      const svc = new CoalitionService(mockPrisma as never);
+      await expect(svc.getActiveAdapter("prog-insecure")).rejects.toThrow(/https/);
+    });
+
+    it("throws when Apprecio credentials are missing", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(
+        configRow({
+          provider: "APPRECIO",
+          country: "MX",
+          encryptedCredentials: encrypt(JSON.stringify({}), getMasterKey()),
+        }),
+      );
+      const svc = new CoalitionService(mockPrisma as never);
+      await expect(svc.getActiveAdapter("prog-no-creds")).rejects.toThrow(/credentials/);
     });
   });
 });
