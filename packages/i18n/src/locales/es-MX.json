@@ -198,7 +198,7 @@
       "privateTokenPlaceholder": "Ingresa el token privado",
       "identifierType": "Tipo de identificador",
       "identifierEmail": "Correo electrónico",
-      "identifierRut": "RUT",
+      "identifierRut": "RUT / DNI / Cédula",
       "timeoutMs": "Tiempo de espera (ms)",
       "genericConnection": "Conexión genérica",
       "genericConnectionDescription": "Configura el endpoint de la API de coalición genérica.",
