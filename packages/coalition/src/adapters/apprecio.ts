@@ -53,10 +53,11 @@ const MAX_DESCRIPTION_LENGTH = 100;
 /** Cryptographically-random alphanumeric code used as a unique `ts` per call. */
 function randomAlphanumeric(length = 24): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  const bytes = crypto.randomBytes(length);
   let out = "";
-  for (const byte of bytes) {
-    out += chars.charAt(byte % chars.length);
+  for (let i = 0; i < length; i++) {
+    // crypto.randomInt is unbiased, unlike byte % chars.length which favors the
+    // first few characters.
+    out += chars.charAt(crypto.randomInt(chars.length));
   }
   return out;
 }
