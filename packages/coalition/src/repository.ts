@@ -13,6 +13,8 @@ export function createRepository(prisma: PrismaClient) {
     programId: string;
     provider?: string;
     endpoint: string;
+    country?: string | null;
+    identifierType?: string | null;
     encryptedCredentials: string;
     conversionRate?: number;
     accumulationEnabled?: boolean;
@@ -26,6 +28,8 @@ export function createRepository(prisma: PrismaClient) {
         programId: input.programId,
         provider: input.provider ?? "GENERIC",
         endpoint: input.endpoint,
+        country: input.country ?? null,
+        identifierType: input.identifierType ?? null,
         encryptedCredentials: input.encryptedCredentials,
         conversionRate: input.conversionRate ?? 1.0,
         accumulationEnabled: input.accumulationEnabled ?? false,
@@ -36,6 +40,8 @@ export function createRepository(prisma: PrismaClient) {
       update: {
         provider: input.provider,
         endpoint: input.endpoint,
+        country: input.country,
+        identifierType: input.identifierType,
         encryptedCredentials: input.encryptedCredentials,
         conversionRate: input.conversionRate,
         accumulationEnabled: input.accumulationEnabled,

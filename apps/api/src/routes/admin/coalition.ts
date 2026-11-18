@@ -21,6 +21,8 @@ const linkSchema = z.object({
 const configSchema = z.object({
   provider: z.string().min(1).optional(),
   endpoint: z.string().min(1),
+  country: z.string().min(1).nullish(),
+  identifierType: z.enum(["email", "rut"]).nullish(),
   credentials: z.record(z.string(), z.unknown()),
   conversionRate: z.number().positive().optional(),
   accumulationEnabled: z.boolean().optional(),
@@ -164,6 +166,8 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
       programId,
       provider: body.provider,
       endpoint: body.endpoint,
+      country: body.country,
+      identifierType: body.identifierType,
       encryptedCredentials,
       conversionRate: body.conversionRate,
       accumulationEnabled: body.accumulationEnabled,

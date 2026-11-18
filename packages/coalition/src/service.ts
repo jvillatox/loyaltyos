@@ -2,6 +2,13 @@ import { PointsService } from "@loyaltyos/core";
 import type { PrismaClient } from "@prisma/client";
 import CircuitBreaker from "opossum";
 
+import { createApprecioAdapter } from "./adapters/apprecio.js";
+import {
+  APPRECIO_BASE_URLS,
+  type ApprecioCountry,
+  type IdentifierType,
+} from "./adapters/apprecio.types.js";
+import { decrypt, getMasterKey } from "./crypto.js";
 import type { Repository } from "./repository.js";
 import { createRepository } from "./repository.js";
 import type {
@@ -41,10 +48,18 @@ export interface CoalitionServiceMetrics {
   setCircuitBreakerState(adapter: string, state: number): void;
 }
 
+interface ApprecioCredentials {
+  publicToken?: string;
+  privateToken?: string;
+  timeoutMs?: number;
+  identifierType?: IdentifierType;
+}
+
 export class CoalitionService {
   private repo: Repository;
   private pointsService: PointsService;
   private adapters: Map<string, CoalitionAdapter>;
+  private programAdapters: Map<string, CoalitionAdapter>;
   private breakers: Map<string, CircuitBreaker>;
   private metrics?: CoalitionServiceMetrics;
 
@@ -52,6 +67,7 @@ export class CoalitionService {
     this.repo = createRepository(prisma);
     this.pointsService = new PointsService(prisma);
     this.adapters = new Map();
+    this.programAdapters = new Map();
     this.breakers = new Map();
     this.metrics = metrics;
   }
@@ -61,34 +77,60 @@ export class CoalitionService {
   /** Register a coalition adapter implementation. */
   registerAdapter(adapter: CoalitionAdapter): void {
     this.adapters.set(adapter.name, adapter);
+    this.ensureBreaker(adapter);
+  }
 
-    // Create a circuit breaker for this adapter
-    if (!this.breakers.has(adapter.name)) {
-      const breaker = new CircuitBreaker(async (fn: () => Promise<unknown>) => fn(), {
-        ...BREAKER_OPTIONS,
-        timeout: adapter.timeoutMs + BREAKER_TIMEOUT_PADDING_MS,
-      });
-      breaker.on("open", () => {
-        console.warn(`[Coalition] Circuit breaker OPEN for adapter "${adapter.name}"`);
-        this.metrics?.setCircuitBreakerState(adapter.name, 2);
-      });
-      breaker.on("halfOpen", () => {
-        console.info(`[Coalition] Circuit breaker HALF-OPEN for adapter "${adapter.name}"`);
-        this.metrics?.setCircuitBreakerState(adapter.name, 1);
-      });
-      breaker.on("close", () => {
-        console.info(`[Coalition] Circuit breaker CLOSED for adapter "${adapter.name}"`);
-        this.metrics?.setCircuitBreakerState(adapter.name, 0);
-      });
-      this.breakers.set(adapter.name, breaker);
-    }
+  private ensureBreaker(adapter: CoalitionAdapter): CircuitBreaker {
+    const existing = this.breakers.get(adapter.name);
+    if (existing) return existing;
+
+    const breaker = new CircuitBreaker(async (fn: () => Promise<unknown>) => fn(), {
+      ...BREAKER_OPTIONS,
+      timeout: adapter.timeoutMs + BREAKER_TIMEOUT_PADDING_MS,
+    });
+    breaker.on("open", () => {
+      console.warn(`[Coalition] Circuit breaker OPEN for adapter "${adapter.name}"`);
+      this.metrics?.setCircuitBreakerState(adapter.name, 2);
+    });
+    breaker.on("halfOpen", () => {
+      console.info(`[Coalition] Circuit breaker HALF-OPEN for adapter "${adapter.name}"`);
+      this.metrics?.setCircuitBreakerState(adapter.name, 1);
+    });
+    breaker.on("close", () => {
+      console.info(`[Coalition] Circuit breaker CLOSED for adapter "${adapter.name}"`);
+      this.metrics?.setCircuitBreakerState(adapter.name, 0);
+    });
+    this.breakers.set(adapter.name, breaker);
+    return breaker;
   }
 
   /** Returns the active adapter for a program based on its CoalitionConfig. */
   async getActiveAdapter(programId: string): Promise<CoalitionAdapter> {
     const config = await this.repo.getConfig(programId);
-    if (!config) {
-      throw new CoalitionConfigNotFoundError(programId);
+    if (config) {
+      return this.adapterForConfig(config);
+    }
+
+    // Legacy single-program installs: no per-program config, so fall back to the
+    // adapter registered from the deprecated APPRECIO_* env vars.
+    const envAdapter = this.adapters.get("apprecio") ?? this.adapters.get("APPRECIO");
+    if (envAdapter) {
+      return envAdapter;
+    }
+
+    throw new CoalitionConfigNotFoundError(programId);
+  }
+
+  /** Resolves (and caches) the adapter for a program's CoalitionConfig. */
+  private adapterForConfig(config: CoalitionConfigRow): CoalitionAdapter {
+    if (config.provider.toUpperCase() === "APPRECIO") {
+      let adapter = this.programAdapters.get(config.programId);
+      if (!adapter) {
+        adapter = this.buildApprecioAdapter(config);
+        this.programAdapters.set(config.programId, adapter);
+        this.ensureBreaker(adapter);
+      }
+      return adapter;
     }
 
     const adapter = this.adapters.get(config.provider);
@@ -100,6 +142,41 @@ export class CoalitionService {
     }
 
     return adapter;
+  }
+
+  /** Builds an Apprecio adapter from a program's decrypted CoalitionConfig. */
+  private buildApprecioAdapter(config: CoalitionConfigRow): CoalitionAdapter {
+    let credentials: ApprecioCredentials = {};
+    try {
+      credentials = JSON.parse(
+        decrypt(config.encryptedCredentials, getMasterKey()),
+      ) as ApprecioCredentials;
+    } catch {
+      // Fall through: missing/invalid credentials surface as a clear error below.
+    }
+
+    if (!credentials.publicToken || !credentials.privateToken) {
+      throw new CoalitionBusinessError(
+        `Apprecio credentials are not configured for program "${config.programId}"`,
+      );
+    }
+
+    const country = config.country;
+    let apiBase = config.endpoint;
+    if (country && country !== "OTHER" && country in APPRECIO_BASE_URLS) {
+      apiBase = APPRECIO_BASE_URLS[country as ApprecioCountry];
+    }
+
+    const identifierType: IdentifierType =
+      (config.identifierType as IdentifierType | null) ?? credentials.identifierType ?? "email";
+
+    return createApprecioAdapter({
+      apiBase,
+      publicToken: credentials.publicToken,
+      privateToken: credentials.privateToken,
+      identifierType,
+      timeoutMs: credentials.timeoutMs,
+    });
   }
 
   // ── Public Operations ─────────────────────────────────────────
@@ -158,9 +235,9 @@ export class CoalitionService {
       const adapter = await this.getActiveAdapter(programId);
       this.requireCapability(adapter, "convert", "convert");
 
-      const adapterResult = await this.callAdapter(() => {
+      const adapterResult = await this.callAdapter(adapter, () => {
         if (!adapter.convert) throw new CoalitionUnsupportedError("convert", adapter.name);
-        return adapter.convert(externalMemberRef, ownPoints, txRef);
+        return adapter.convert(externalMemberRef, ownPoints, txRef, tx.id);
       });
 
       await this.repo.updateTxSuccess(
@@ -306,6 +383,8 @@ export class CoalitionService {
     programId: string;
     provider?: string;
     endpoint: string;
+    country?: string | null;
+    identifierType?: string | null;
     encryptedCredentials: string;
     conversionRate?: number;
     accumulationEnabled?: boolean;
@@ -313,7 +392,11 @@ export class CoalitionService {
     conversionEnabled?: boolean;
     minConversionPoints?: number;
   }): Promise<CoalitionConfigRow> {
-    return this.repo.upsertConfig(input);
+    const result = await this.repo.upsertConfig(input);
+    // The credentials/endpoint may have changed — drop the cached adapter so the
+    // next operation rebuilds it from the fresh config.
+    this.programAdapters.delete(input.programId);
+    return result;
   }
 
   async healthcheck(
@@ -440,7 +523,7 @@ export class CoalitionService {
 
       const adapterFn = () => {
         if (txType === "EARN") {
-          return adapter.accumulate(externalMemberRef, points, txRef, metadata);
+          return adapter.accumulate(externalMemberRef, points, txRef, metadata, tx.id);
         }
         if (!adapter.redeem) {
           throw new CoalitionUnsupportedError("redeem", adapter.name);
@@ -448,7 +531,7 @@ export class CoalitionService {
         return adapter.redeem(externalMemberRef, points, txRef, metadata);
       };
 
-      const adapterResult = await this.callAdapter(adapterFn);
+      const adapterResult = await this.callAdapter(adapter, adapterFn);
       await this.repo.updateTxSuccess(
         tx.id,
         adapterResult.externalTxId,
@@ -484,12 +567,11 @@ export class CoalitionService {
     }
   }
 
-  /** Calls `fn` through the circuit breaker without auto-retry. */
-  private async callAdapter<T>(fn: () => Promise<T>): Promise<T> {
-    const adapter = this.getAnyAdapter(); // used only for breaker identification
-    const breaker = adapter ? this.breakers.get(adapter.name) : undefined;
+  /** Calls `fn` through the adapter's circuit breaker without auto-retry. */
+  private async callAdapter<T>(adapter: CoalitionAdapter, fn: () => Promise<T>): Promise<T> {
+    const breaker = this.breakers.get(adapter.name);
 
-    if (!adapter || !breaker) {
+    if (!breaker) {
       return await fn();
     }
 
@@ -511,10 +593,6 @@ export class CoalitionService {
       }
       throw err;
     }
-  }
-
-  private getAnyAdapter(): CoalitionAdapter | undefined {
-    return this.adapters.values().next().value;
   }
 
   /** Throws CoalitionUnsupportedError if the adapter does not support the given capability. */

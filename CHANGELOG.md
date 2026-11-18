@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Per-program Apprecio credentials.** `CoalitionConfig` now stores a `country`
+  (MX, CL, CO, PE, EC, or `OTHER` for a custom API base URL) and an
+  `identifierType` (`email` | `rut`). The Apprecio adapter is built per program
+  from its decrypted config (cached in memory and invalidated on save) instead of
+  a single process-wide adapter. The admin _Coalición_ screen gains a country
+  selector and identifier-type toggle, and its "Probar conexión" healthcheck now
+  requires `coalition.write` (SUPER_ADMIN). (#59)
+
+- **Unique `ts` and transaction reference on every Apprecio call.** Loads use the
+  internal `CoalitionTransaction` id as `ts`; balance/history/healthcheck use a
+  random alphanumeric code. The `descripcion` now carries the reference
+  `"<description> [LOS:<transaction id>]"`, truncated to a conservative length.
+  TLS is always enforced — a non-https API base URL is rejected. (#59)
+
+### Upgrade notes
+
+- **Migrate from `APPRECIO_*` env vars to per-program config.** The
+  `APPRECIO_API_BASE`, `APPRECIO_PUBLIC_TOKEN`, `APPRECIO_PRIVATE_TOKEN`,
+  `APPRECIO_IDENTIFIER_TYPE`, and `APPRECIO_TIMEOUT_MS` env vars are deprecated
+  and only apply as a fallback when a program has no `CoalitionConfig`. Configure
+  credentials per program in the admin _Coalición_ screen. A deprecation warning
+  is logged at startup when these vars are still set.
+
 ## [1.8.0] - 2026-11-17
 
 ### Added
