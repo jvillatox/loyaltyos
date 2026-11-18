@@ -10,6 +10,9 @@ import {
 // ── Mock Prisma ─────────────────────────────────────────────────
 
 const mockPrisma = vi.hoisted(() => ({
+  program: {
+    count: vi.fn(),
+  },
   coalitionConfig: {
     findUnique: vi.fn(),
     upsert: vi.fn(),
@@ -782,8 +785,9 @@ describe("CoalitionService", () => {
       }
     });
 
-    it("falls back to the env-registered adapter when no config exists", async () => {
+    it("falls back to the env-registered adapter when no config exists and only one program", async () => {
       mockPrisma.coalitionConfig.findUnique.mockResolvedValue(null);
+      mockPrisma.program.count.mockResolvedValue(1);
       const svc = new CoalitionService(mockPrisma as never);
       const envAdapter = new MockAdapter();
       envAdapter.name = "apprecio";
@@ -791,6 +795,19 @@ describe("CoalitionService", () => {
 
       const adapter = await svc.getActiveAdapter("prog-no-config");
       expect(adapter.name).toBe("apprecio");
+    });
+
+    it("throws when no config exists and the installation has more than one program", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(null);
+      mockPrisma.program.count.mockResolvedValue(2);
+      const svc = new CoalitionService(mockPrisma as never);
+      const envAdapter = new MockAdapter();
+      envAdapter.name = "apprecio";
+      svc.registerAdapter(envAdapter);
+
+      await expect(svc.getActiveAdapter("prog-no-config")).rejects.toThrow(
+        'No coalition config found for program "prog-no-config"',
+      );
     });
 
     it("rejects an Apprecio config with a non-https apiBase", async () => {
@@ -819,6 +836,120 @@ describe("CoalitionService", () => {
       );
       const svc = new CoalitionService(mockPrisma as never);
       await expect(svc.getActiveAdapter("prog-no-creds")).rejects.toThrow(/credentials/);
+    });
+
+    it("isolates circuit breakers per program: opening one does not affect the other", async () => {
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn().mockImplementation((_url: string, init?: { body?: string }) => {
+        const body = init?.body ?? "";
+        if (body.includes("pub-a")) {
+          return Promise.resolve({
+            status: 500,
+            json: () => Promise.resolve({ message: "upstream failure" }),
+          });
+        }
+        return Promise.resolve({
+          status: 200,
+          json: () => Promise.resolve({ success: true, data: { saldo_actual: 100 } }),
+        });
+      });
+      globalThis.fetch = fetchMock as never;
+
+      try {
+        const svc = new CoalitionService(mockPrisma as never);
+        const configA = apprecioConfig("prog-A", "MX", "a");
+        const configB = apprecioConfig("prog-B", "MX", "b");
+
+        mockPrisma.coalitionAccount.findFirst.mockResolvedValue(
+          accountRow({ programId: "prog-A" }),
+        );
+        mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
+        mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow({ programId: "prog-A" }));
+        mockPrisma.coalitionTransaction.update.mockResolvedValue(
+          txRow({ programId: "prog-A", status: "PENDING" }),
+        );
+
+        // Program A: five transient failures trip its breaker (volumeThreshold = 5).
+        mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configA);
+        for (let i = 0; i < 5; i++) {
+          await expect(
+            svc.accumulate({
+              programId: "prog-A",
+              memberId: "mem-a",
+              externalMemberRef: "a@b.com",
+              points: 10,
+              txRef: `ref-a-${String(i)}`,
+            }),
+          ).rejects.toThrow();
+        }
+
+        // Program A's breaker is open: the 6th call fails fast without invoking upstream.
+        await expect(
+          svc.accumulate({
+            programId: "prog-A",
+            memberId: "mem-a",
+            externalMemberRef: "a@b.com",
+            points: 10,
+            txRef: "ref-a-6",
+          }),
+        ).rejects.toThrow(CoalitionCircuitOpenError);
+
+        // Program B is unaffected: its own breaker is still closed.
+        mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configB);
+        mockPrisma.coalitionAccount.findFirst.mockResolvedValue(
+          accountRow({ programId: "prog-B" }),
+        );
+        mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow({ programId: "prog-B" }));
+        mockPrisma.coalitionTransaction.update.mockResolvedValue(
+          txRow({ programId: "prog-B", status: "CONFIRMED", externalTxRef: "ext-b" }),
+        );
+
+        const result = await svc.accumulate({
+          programId: "prog-B",
+          memberId: "mem-b",
+          externalMemberRef: "b@b.com",
+          points: 10,
+          txRef: "ref-b-1",
+        });
+
+        expect(result.status).toBe("CONFIRMED");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("rebuilds the adapter when config.updatedAt changes so fresh tokens take effect", async () => {
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn().mockResolvedValue({
+        status: 200,
+        json: () => Promise.resolve({ success: true, data: { saldo_actual: 100 } }),
+      });
+      globalThis.fetch = fetchMock as never;
+
+      try {
+        const svc = new CoalitionService(mockPrisma as never);
+
+        const configV1 = apprecioConfig("prog-1", "MX", "v1");
+        mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configV1);
+        const adapterV1 = await svc.getActiveAdapter("prog-1");
+        await adapterV1.accumulate("a@b.com", 10, "client-ref", undefined, "tx-1");
+
+        // Another instance changed the tokens in the DB: same programId, newer updatedAt.
+        const configV2 = apprecioConfig("prog-1", "MX", "v2");
+        configV2.updatedAt = new Date(configV1.updatedAt.getTime() + 1000);
+        mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configV2);
+
+        const adapterV2 = await svc.getActiveAdapter("prog-1");
+        expect(adapterV2).not.toBe(adapterV1);
+        await adapterV2.accumulate("a@b.com", 20, "client-ref", undefined, "tx-2");
+
+        const calls = fetchMock.mock.calls as [string, { body?: string }][];
+        expect(calls).toHaveLength(2);
+        expect(new URLSearchParams(calls[0]?.[1]?.body ?? "").get("public_token")).toBe("pub-v1");
+        expect(new URLSearchParams(calls[1]?.[1]?.body ?? "").get("public_token")).toBe("pub-v2");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 });

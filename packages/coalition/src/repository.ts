@@ -9,6 +9,10 @@ export function createRepository(prisma: PrismaClient) {
     return prisma.coalitionConfig.findUnique({ where: { programId } });
   }
 
+  async function countPrograms(): Promise<number> {
+    return prisma.program.count();
+  }
+
   async function upsertConfig(input: {
     programId: string;
     provider?: string;
@@ -272,6 +276,7 @@ export function createRepository(prisma: PrismaClient) {
 
   return {
     getConfig,
+    countPrograms,
     upsertConfig,
     updateCircuitState,
     getAccount,
