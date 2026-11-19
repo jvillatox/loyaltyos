@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { assertNoDefaultApiKey } from "../lib/boot-guards.js";
+import { assertMasterKeyConfigured, assertNoDefaultApiKey } from "../lib/boot-guards.js";
 
 function mockDb(result: unknown): Pick<PrismaClient, "apiKey"> {
   return {
@@ -36,5 +36,35 @@ describe("assertNoDefaultApiKey", () => {
 
     await expect(assertNoDefaultApiKey(db)).resolves.toBeUndefined();
     expect(db.apiKey.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe("assertMasterKeyConfigured", () => {
+  it("throws in production when KMS_MASTER_KEY is missing", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KMS_MASTER_KEY", undefined);
+
+    expect(() => assertMasterKeyConfigured()).toThrow(/KMS_MASTER_KEY/);
+  });
+
+  it("throws in production when KMS_MASTER_KEY is shorter than 32 characters", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KMS_MASTER_KEY", "too-short");
+
+    expect(() => assertMasterKeyConfigured()).toThrow(/KMS_MASTER_KEY/);
+  });
+
+  it("does not throw in production with a 32+ character key", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KMS_MASTER_KEY", "x".repeat(32));
+
+    expect(() => assertMasterKeyConfigured()).not.toThrow();
+  });
+
+  it("does not throw outside production when KMS_MASTER_KEY is missing", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("KMS_MASTER_KEY", undefined);
+
+    expect(() => assertMasterKeyConfigured()).not.toThrow();
   });
 });

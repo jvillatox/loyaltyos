@@ -4,7 +4,7 @@ import { initTracing } from "@loyaltyos/telemetry";
 await initTracing("loyaltyos-api");
 
 import { buildApp, getBullMQMetrics, prisma } from "./app.js";
-import { assertNoDefaultApiKey } from "./lib/boot-guards.js";
+import { assertMasterKeyConfigured, assertNoDefaultApiKey } from "./lib/boot-guards.js";
 import { getBusinessMetrics } from "./lib/business-metrics.js";
 import { setupApprecioFallback } from "./lib/coalition-setup.js";
 import {
@@ -30,8 +30,10 @@ const app = await buildApp();
 // Register the deprecated APPRECIO_* env fallback (single-program installs only).
 await setupApprecioFallback();
 
-// Production boot guard — refuse to start while the seeded dev-key is active.
+// Production boot guards — refuse to start without a strong master key, or
+// while the seeded dev-key is active.
 try {
+  assertMasterKeyConfigured();
   await assertNoDefaultApiKey();
 } catch (err) {
   console.error(`FATAL: ${(err as Error).message}`);

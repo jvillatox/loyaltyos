@@ -20,17 +20,29 @@ function deriveKey(secret: string): Buffer {
   return crypto.createHash("sha256").update(secret).digest();
 }
 
+/** Minimum acceptable length for KMS_MASTER_KEY in production. */
+export const MIN_MASTER_KEY_LENGTH = 32;
+
+const DEV_FALLBACK_KEY = "loyaltyos-coalition-dev-key-2026";
+
 /** Returns the master encryption key from the environment or a dev fallback. */
 export function getMasterKey(): string {
   const envKey = process.env.KMS_MASTER_KEY;
-  if (envKey && envKey.length >= 16) return envKey;
+  if (envKey && envKey.length >= MIN_MASTER_KEY_LENGTH) return envKey;
 
-  const fallback = "loyaltyos-coalition-dev-key-2026";
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "KMS_MASTER_KEY is not configured for production: it must be at least " +
+        `${String(MIN_MASTER_KEY_LENGTH)} characters. Set KMS_MASTER_KEY before starting. ` +
+        "If credentials were encrypted with a previous key, run the coalition:reencrypt script to migrate them.",
+    );
+  }
+
   console.warn(
     "[Coalition] KMS_MASTER_KEY not set — using development fallback. " +
       "Set KMS_MASTER_KEY to a strong secret in production.",
   );
-  return fallback;
+  return DEV_FALLBACK_KEY;
 }
 
 /** Encrypts a plaintext string with AES-256-GCM. Returns a base64-encoded ciphertext. */

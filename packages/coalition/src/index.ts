@@ -5,7 +5,7 @@ export {
   ApprecioAuthError,
   ApprecioConfigError,
 } from "./adapters/apprecio.types.js";
-export { decrypt, encrypt, getMasterKey } from "./crypto.js";
+export { decrypt, encrypt, getMasterKey, MIN_MASTER_KEY_LENGTH } from "./crypto.js";
 export type { Repository } from "./repository.js";
 export { createRepository } from "./repository.js";
 export type { CoalitionServiceMetrics } from "./service.js";
