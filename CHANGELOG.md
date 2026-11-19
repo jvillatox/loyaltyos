@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-11-19
+
+### Changed
+
+- **Release verifies images are public and multi-arch.** The release workflow now
+  checks that each published image is anonymously pullable from GHCR and that its
+  manifest includes both `linux/amd64` and `linux/arm64`, failing the release with
+  a clear message if either check does not pass.
+
+### Fixed
+
+- **Docker images are now multi-arch (linux/amd64 and linux/arm64).** The API,
+  admin, and portal images are built for both `linux/amd64` and `linux/arm64`, so
+  they run natively on Apple Silicon and ARM servers.
+
 ## [1.9.0] - 2026-11-18
 
 ### Added
@@ -746,3 +761,5 @@ Upgrading from v1.0.x? Apply the v1.1.0 upgrade notes first (security release, G
 [1.6.0]: https://github.com/jvillatox/loyaltyos/compare/v1.5.0...v1.6.0
 [1.7.0]: https://github.com/jvillatox/loyaltyos/compare/v1.6.0...v1.7.0
 [1.8.0]: https://github.com/jvillatox/loyaltyos/compare/v1.7.0...v1.8.0
+[1.9.0]: https://github.com/jvillatox/loyaltyos/compare/v1.8.0...v1.9.0
+[1.9.1]: https://github.com/jvillatox/loyaltyos/compare/v1.9.0...v1.9.1
