@@ -152,7 +152,8 @@
       "PENDING": "Pending",
       "CONFIRMED": "Confirmed",
       "FAILED": "Failed",
-      "REVERSED": "Reversed"
+      "REVERSED": "Reversed",
+      "NEEDS_REVIEW": "Needs Review"
     },
     "transactionTypes": {
       "EARN": "Earn",
@@ -259,7 +260,16 @@
       "reason": "Reason",
       "reasonPlaceholder": "e.g., Customer refund, system error",
       "confirmReverse": "Confirm Reverse",
-      "reverseFailed": "Reverse failed"
+      "reverseFailed": "Reverse failed",
+      "retryNow": "Retry Now",
+      "markConfirmed": "Mark as Confirmed",
+      "markFailed": "Mark as Failed",
+      "markFailedDialogTitle": "Mark Transaction as Failed",
+      "markFailedDialogDescription": "Provide a reason for failing this transaction. This action cannot be undone.",
+      "comment": "Comment",
+      "commentPlaceholder": "Reason for failing this transaction",
+      "confirmMarkFailed": "Confirm",
+      "actionFailed": "Action failed"
     },
     "linkedMembers": {
       "title": "Linked Coalition Members",

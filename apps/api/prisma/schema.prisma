@@ -728,12 +728,14 @@ model CoalitionTransaction {
   amount           Int
   localTxRef       String
   externalTxRef    String?
-  status           String   @default("PENDING") // PENDING, CONFIRMED, FAILED, REVERSED
+  status           String   @default("PENDING") // PENDING, CONFIRMED, FAILED, REVERSED, NEEDS_REVIEW
   attempts         Int      @default(1)
   lastError        String?
   metadata         Json?    @default("{}")
   idempotencyKey   String
   createdAt        DateTime @default(now())
+  lastAttemptAt    DateTime?
+  updatedAt        DateTime @updatedAt
 
   account CoalitionAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
@@ -891,6 +893,7 @@ enum AuditAction {
   SEND_TEST_NOTIFICATION
   PREVIEW_NOTIFICATION_TEMPLATE
   ACCESS_DENIED
+  COALITION_TRANSACTION_REVIEW
 }
 
 enum AuditActorType {

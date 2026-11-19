@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowLeftRight, RefreshCw, Search, Undo2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  CheckCircle2,
+  RefreshCw,
+  Search,
+  Undo2,
+  XCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -33,6 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermission } from "@/lib/access";
 import { fetchApi } from "@/lib/api-client";
 
 interface CoalitionTransaction {
@@ -42,7 +51,7 @@ interface CoalitionTransaction {
   amount: number;
   localTxRef: string;
   externalTxRef: string | null;
-  status: "PENDING" | "CONFIRMED" | "FAILED" | "REVERSED";
+  status: "PENDING" | "CONFIRMED" | "FAILED" | "REVERSED" | "NEEDS_REVIEW";
   idempotencyKey: string;
   attempts: number;
   lastError: string | null;
@@ -56,17 +65,21 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   CONFIRMED: "default",
   FAILED: "destructive",
   REVERSED: "outline",
+  NEEDS_REVIEW: "secondary",
 };
 
 export function CoalitionTransactionsPage(): JSX.Element {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const canReview = usePermission("coalition.write");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [memberIdFilter, setMemberIdFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<CoalitionTransaction | null>(null);
   const [reverseDialogOpen, setReverseDialogOpen] = useState(false);
   const [reverseReason, setReverseReason] = useState("");
+  const [failDialogOpen, setFailDialogOpen] = useState(false);
+  const [failComment, setFailComment] = useState("");
 
   const { data: transactions, isLoading } = useQuery({
     queryKey: ["coalition-transactions", statusFilter, memberIdFilter, page],
@@ -91,6 +104,35 @@ export function CoalitionTransactionsPage(): JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ["coalition-transactions"] });
       setReverseDialogOpen(false);
       setReverseReason("");
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (txId: string) =>
+      fetchApi(`/admin/coalition/transactions/${txId}/retry`, { method: "POST" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["coalition-transactions"] });
+    },
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: (txId: string) =>
+      fetchApi(`/admin/coalition/transactions/${txId}/confirm`, { method: "POST" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["coalition-transactions"] });
+    },
+  });
+
+  const failMutation = useMutation({
+    mutationFn: (input: { txId: string; comment: string }) =>
+      fetchApi(`/admin/coalition/transactions/${input.txId}/fail`, {
+        method: "POST",
+        body: JSON.stringify({ comment: input.comment }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["coalition-transactions"] });
+      setFailDialogOpen(false);
+      setFailComment("");
     },
   });
 
@@ -133,6 +175,7 @@ export function CoalitionTransactionsPage(): JSX.Element {
                 <SelectItem value="CONFIRMED">{t("coalition.status.CONFIRMED")}</SelectItem>
                 <SelectItem value="FAILED">{t("coalition.status.FAILED")}</SelectItem>
                 <SelectItem value="REVERSED">{t("coalition.status.REVERSED")}</SelectItem>
+                <SelectItem value="NEEDS_REVIEW">{t("coalition.status.NEEDS_REVIEW")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -423,6 +466,47 @@ export function CoalitionTransactionsPage(): JSX.Element {
                 </Button>
               </div>
             )}
+
+            {/* Manual Reconciliation Actions (SUPER_ADMIN on PENDING/NEEDS_REVIEW) */}
+            {canReview &&
+              (selectedTx.status === "PENDING" || selectedTx.status === "NEEDS_REVIEW") && (
+                <div className="mt-6 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={retryMutation.isPending}
+                    onClick={() => {
+                      retryMutation.mutate(selectedTx.id);
+                    }}
+                  >
+                    <RefreshCw
+                      className={`mr-2 h-4 w-4 ${retryMutation.isPending ? "animate-spin" : ""}`}
+                    />
+                    {t("coalition.transactions.retryNow")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={confirmMutation.isPending}
+                    onClick={() => {
+                      confirmMutation.mutate(selectedTx.id);
+                    }}
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {t("coalition.transactions.markConfirmed")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFailDialogOpen(true);
+                    }}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    {t("coalition.transactions.markFailed")}
+                  </Button>
+                </div>
+              )}
           </CardContent>
         </Card>
       )}
@@ -474,6 +558,60 @@ export function CoalitionTransactionsPage(): JSX.Element {
               {reverseMutation.error instanceof Error
                 ? reverseMutation.error.message
                 : t("coalition.transactions.reverseFailed")}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark as Failed Dialog (obligatory comment) */}
+      <Dialog open={failDialogOpen} onOpenChange={setFailDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("coalition.transactions.markFailedDialogTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("coalition.transactions.markFailedDialogDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="fail-comment">{t("coalition.transactions.comment")}</Label>
+              <Input
+                id="fail-comment"
+                value={failComment}
+                onChange={(e) => {
+                  setFailComment(e.target.value);
+                }}
+                placeholder={t("coalition.transactions.commentPlaceholder")}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFailDialogOpen(false);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!failComment || failMutation.isPending}
+              onClick={() => {
+                if (selectedTx && failComment) {
+                  failMutation.mutate({ txId: selectedTx.id, comment: failComment });
+                }
+              }}
+            >
+              {failMutation.isPending ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("coalition.transactions.confirmMarkFailed")}
+            </Button>
+          </DialogFooter>
+          {failMutation.isError && (
+            <p className="text-sm text-destructive">
+              {failMutation.error instanceof Error
+                ? failMutation.error.message
+                : t("coalition.transactions.actionFailed")}
             </p>
           )}
         </DialogContent>

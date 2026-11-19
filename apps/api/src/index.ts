@@ -6,6 +6,7 @@ await initTracing("loyaltyos-api");
 import { buildApp, getBullMQMetrics, prisma } from "./app.js";
 import { assertMasterKeyConfigured, assertNoDefaultApiKey } from "./lib/boot-guards.js";
 import { getBusinessMetrics } from "./lib/business-metrics.js";
+import { scheduleCoalitionReconciliation } from "./lib/coalition-reconciliation-setup.js";
 import { setupApprecioFallback } from "./lib/coalition-setup.js";
 import {
   scheduleGiftCardExpiration,
@@ -15,6 +16,7 @@ import { scheduleMemberTokenCleanup } from "./lib/member-session-token-setup.js"
 import { schedulePointAdjustmentExpiry } from "./lib/point-adjustment-setup.js";
 import { schedulePointsExpiry, schedulePointsSettlement } from "./lib/points-job-setup.js";
 import { createQueue } from "./lib/queue.js";
+import { startCoalitionReconciliationWorker } from "./workers/coalition-reconciliation.js";
 import {
   startGiftCardExpireWorker,
   startGiftCardGenerateWorker,
@@ -57,12 +59,14 @@ try {
   startPointAdjustmentExpiryWorker();
   startPointsSettlementWorker();
   startPointsExpiryWorker();
+  startCoalitionReconciliationWorker();
   await scheduleGiftCardExpiration();
   await scheduleOutstandingBalanceRefresh();
   await scheduleMemberTokenCleanup();
   await schedulePointAdjustmentExpiry();
   await schedulePointsSettlement();
   await schedulePointsExpiry();
+  await scheduleCoalitionReconciliation();
 
   // Collect BullMQ queue depth metrics periodically
   const bullmqMetrics = getBullMQMetrics();
@@ -77,6 +81,7 @@ try {
       "point-adjustments.expire",
       "points.settle-pending",
       "points.expire",
+      "coalition.reconciliation",
     ];
     const queues = queueNames.map((name) => createQueue(name));
 

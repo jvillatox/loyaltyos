@@ -3,6 +3,7 @@ import { encrypt, getMasterKey } from "@loyaltyos/coalition";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
+import { audit } from "../../lib/audit.js";
 import { coalitionService } from "../../lib/coalition-setup.js";
 
 // Credentials are write-only: never echo encryptedCredentials back over the API.
@@ -29,6 +30,12 @@ const configSchema = z.object({
   redemptionEnabled: z.boolean().optional(),
   conversionEnabled: z.boolean().optional(),
   minConversionPoints: z.number().int().positive().optional(),
+});
+
+const transactionIdSchema = z.object({ id: z.string().min(1) });
+
+const failTransactionSchema = z.object({
+  comment: z.string().min(1).max(1000),
 });
 
 // ── Routes ─────────────────────────────────────────────────────────
@@ -107,6 +114,71 @@ export function adminCoalitionRoutes(app: FastifyInstance, _opts: unknown, done:
     const transactions = await coalitionService.listTransactions(programId, query);
 
     return reply.send({ data: transactions });
+  });
+
+  // ═══ Manual Reconciliation ═══
+
+  app.post("/admin/coalition/transactions/:id/retry", async (request, reply) => {
+    const { id } = transactionIdSchema.parse(request.params);
+    const programId = request.programId;
+
+    const outcome = await coalitionService.manuallyRetryTransaction(programId, id);
+
+    await audit(
+      request.programId,
+      request.actor,
+      "COALITION_TRANSACTION_REVIEW",
+      "coalition_transaction",
+      id,
+      {
+        action: "retry",
+        outcome,
+      },
+    );
+
+    return reply.send({ data: { outcome } });
+  });
+
+  app.post("/admin/coalition/transactions/:id/confirm", async (request, reply) => {
+    const { id } = transactionIdSchema.parse(request.params);
+    const programId = request.programId;
+
+    const tx = await coalitionService.manuallyConfirmTransaction(programId, id);
+
+    await audit(
+      request.programId,
+      request.actor,
+      "COALITION_TRANSACTION_REVIEW",
+      "coalition_transaction",
+      id,
+      {
+        action: "confirm",
+      },
+    );
+
+    return reply.send({ data: tx });
+  });
+
+  app.post("/admin/coalition/transactions/:id/fail", async (request, reply) => {
+    const { id } = transactionIdSchema.parse(request.params);
+    const { comment } = failTransactionSchema.parse(request.body);
+    const programId = request.programId;
+
+    const tx = await coalitionService.manuallyFailTransaction(programId, id, comment);
+
+    await audit(
+      request.programId,
+      request.actor,
+      "COALITION_TRANSACTION_REVIEW",
+      "coalition_transaction",
+      id,
+      {
+        action: "fail",
+        comment,
+      },
+    );
+
+    return reply.send({ data: tx });
   });
 
   // ═══ Reconciliation ═══

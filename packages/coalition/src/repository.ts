@@ -246,7 +246,14 @@ export function createRepository(prisma: PrismaClient) {
       where: {
         account: { programId: input.programId },
         ...(input.status
-          ? { status: input.status as "PENDING" | "CONFIRMED" | "FAILED" | "REVERSED" }
+          ? {
+              status: input.status as
+                | "PENDING"
+                | "CONFIRMED"
+                | "FAILED"
+                | "REVERSED"
+                | "NEEDS_REVIEW",
+            }
           : {}),
         ...(input.memberId ? { account: { memberId: input.memberId } } : {}),
         ...(input.from != null || input.to != null
@@ -296,6 +303,50 @@ export function createRepository(prisma: PrismaClient) {
     });
   }
 
+  async function getTxById(id: string): Promise<CoalitionTransactionRow | null> {
+    return prisma.coalitionTransaction.findUnique({ where: { id } });
+  }
+
+  /**
+   * Atomically claims a PENDING transaction for reconciliation. Only the first
+   * caller whose `lastAttemptAt` is null or older than `minAttemptIntervalMs`
+   * wins; concurrent instances race on the same `updateMany` and exactly one
+   * observes a matching row. Returns the fresh row, or null if another instance
+   * claimed it first.
+   */
+  async function claimTx(
+    txId: string,
+    now: Date,
+    minAttemptIntervalMs: number,
+    status = "PENDING",
+  ): Promise<CoalitionTransactionRow | null> {
+    const cutoff = new Date(now.getTime() - minAttemptIntervalMs);
+    const claimed = await prisma.coalitionTransaction.updateMany({
+      where: {
+        id: txId,
+        status,
+        OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: cutoff } }],
+      },
+      data: { lastAttemptAt: now },
+    });
+    if (claimed.count === 0) return null;
+    return prisma.coalitionTransaction.findUnique({ where: { id: txId } });
+  }
+
+  async function updateTxNeedsReview(txId: string, reason: string): Promise<void> {
+    await prisma.coalitionTransaction.update({
+      where: { id: txId },
+      data: { status: "NEEDS_REVIEW", lastError: reason },
+    });
+  }
+
+  async function listPendingForReconciliation(olderThan: Date): Promise<CoalitionTransactionRow[]> {
+    return prisma.coalitionTransaction.findMany({
+      where: { status: "PENDING", createdAt: { lt: olderThan } },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
   return {
     getConfig,
     countPrograms,
@@ -317,6 +368,10 @@ export function createRepository(prisma: PrismaClient) {
     updateTxFailed,
     updateTxPending,
     updateTxReversed,
+    getTxById,
+    claimTx,
+    updateTxNeedsReview,
+    listPendingForReconciliation,
   };
 }
 

@@ -22,12 +22,14 @@ import type {
   ConvertInput,
   MemberHistoryEntry,
   RedeemInput,
+  TxResult,
 } from "./types.js";
 import {
   CoalitionAccountNotLinkedError,
   CoalitionBusinessError,
   CoalitionCircuitOpenError,
   CoalitionConfigNotFoundError,
+  CoalitionDuplicateTsError,
   CoalitionTransientError,
   CoalitionUnsupportedError,
 } from "./types.js";
@@ -44,9 +46,14 @@ const BREAKER_OPTIONS: CircuitBreaker.Options = {
   rollingCountTimeout: 10000,
 };
 
+// Reconciliation windows (see reconcilePendingTransaction).
+const RECONCILE_RETRY_INTERVAL_MS = 5 * 60 * 1000; // claim a tx at most once per 5 min
+const RECONCILE_NEEDS_REVIEW_AGE_MS = 24 * 60 * 60 * 1000; // unresolved after 24h → review
+
 export interface CoalitionServiceMetrics {
   recordOperation(provider: string, operation: string, status: string, idempotent: boolean): void;
   setCircuitBreakerState(adapter: string, state: number): void;
+  recordNeedsReview(provider: string): void;
 }
 
 interface ApprecioCredentials {
@@ -117,6 +124,25 @@ function filterHistoryByMember(entries: unknown[], externalId: string): unknown[
   }
   return result;
 }
+
+/**
+ * A convert() transaction is stored with type "REDEEM" but carries local
+ * debit + credit side effects; a plain redeem() does not. The idempotency key
+ * prefix is the reliable signal (convert- vs redeem-).
+ */
+function isConvertTransaction(tx: CoalitionTransactionRow): boolean {
+  return tx.type === "REDEEM" && tx.idempotencyKey.startsWith("convert-");
+}
+
+/** Outcome of a single reconciliation attempt. */
+export type ReconcileOutcome =
+  | "not_found"
+  | "not_pending"
+  | "claimed_by_other"
+  | "confirmed"
+  | "needs_review"
+  | "failed"
+  | "still_pending";
 
 export class CoalitionService {
   private repo: Repository;
@@ -354,55 +380,15 @@ export class CoalitionService {
         adapterResult.balanceAfter ?? account.externalBalance,
       );
 
-      // 6. Redeem own points locally
+      // 6. Redeem own points locally, then earn converted points. Idempotent
+      // keys derived from txRef allow reconciliation to re-run this safely.
       try {
-        await this.pointsService.redeem({
-          memberId,
-          programId,
-          amount: ownPoints,
-          source: `coalition:convert:${adapterResult.externalTxId}`,
-          idempotencyKey: `local-debit-${txRef}`,
-        });
-
-        // 7. Calculate and earn converted points
-        const coalitionPoints = Math.round(ownPoints * config.conversionRate);
-        await this.pointsService.earn({
-          memberId,
-          programId,
-          amount: coalitionPoints,
-          source: `coalition:convert:${adapterResult.externalTxId}`,
-          idempotencyKey: `local-credit-${txRef}`,
-          metadata: { coalitionTxId: adapterResult.externalTxId },
-        });
+        await this.applyConvertLocalPoints(config, account, tx, adapterResult.externalTxId);
       } catch (coreError) {
         // Compensation: reverse the external operation (if supported)
         const reason =
           coreError instanceof Error ? coreError.message : "Local core operation failed";
-        if (adapter.capabilities.reverseTransaction) {
-          try {
-            if (!adapter.reverseTransaction) {
-              throw new CoalitionUnsupportedError("reverseTransaction", adapter.name);
-            }
-            await adapter.reverseTransaction(adapterResult.externalTxId, reason);
-            await this.repo.updateTxReversed(tx.id, reason);
-          } catch (reverseError) {
-            console.error(
-              `[Coalition] Compensation reversal failed for ${adapterResult.externalTxId}:`,
-              reverseError,
-            );
-            await this.repo.updateTxFailed(
-              tx.id,
-              `Local core failed AND compensation reversal failed: ${reason}`,
-              tx.attempts,
-            );
-          }
-        } else {
-          await this.repo.updateTxFailed(
-            tx.id,
-            `Local core failed (reverse not supported by adapter): ${reason}`,
-            tx.attempts,
-          );
-        }
+        await this.compensateConvert(adapter, tx, adapterResult.externalTxId, reason);
         throw new CoalitionBusinessError(
           `Convert: local operation failed, reversal attempted: ${reason}`,
         );
@@ -601,6 +587,217 @@ export class CoalitionService {
     await this.repo.updateTxReversed(tx.id, reason);
   }
 
+  /**
+   * Reconciles a single PENDING transaction by re-issuing the same external
+   * operation with the same `ts` (the transaction id). The claim (via
+   * `lastAttemptAt`) makes this safe to run concurrently from two instances.
+   *
+   * - success → CONFIRMED
+   * - duplicate-ts + matching history → CONFIRMED
+   * - duplicate-ts without matching history → NEEDS_REVIEW (nothing assumed)
+   * - business error (not duplicate-ts) → FAILED (convert local points reversed)
+   * - transient → stays PENDING (attempts+1), NEEDS_REVIEW after 24h
+   */
+  async reconcilePendingTransaction(
+    txId: string,
+    options: { force?: boolean } = {},
+  ): Promise<ReconcileOutcome> {
+    const tx = await this.repo.getTxById(txId);
+    if (!tx) return "not_found";
+
+    const allowed = options.force ? ["PENDING", "NEEDS_REVIEW"] : ["PENDING"];
+    if (!allowed.includes(tx.status)) return "not_pending";
+
+    const account = await this.repo.getAccountById(tx.accountId);
+    if (!account) {
+      await this.repo.updateTxNeedsReview(txId, "Coalition account no longer exists");
+      this.alertNeedsReview("", "unknown", tx);
+      return "needs_review";
+    }
+
+    const now = new Date();
+    const interval = options.force ? 0 : RECONCILE_RETRY_INTERVAL_MS;
+    const claimed = await this.repo.claimTx(txId, now, interval, tx.status);
+    if (!claimed) return "claimed_by_other";
+
+    const config = await this.repo.getConfig(account.programId);
+    if (!config) {
+      await this.repo.updateTxNeedsReview(txId, "No coalition config for program");
+      this.alertNeedsReview(account.programId, account.provider, claimed);
+      return "needs_review";
+    }
+
+    let adapter: CoalitionAdapter;
+    try {
+      adapter = await this.getActiveAdapter(account.programId);
+    } catch (err) {
+      await this.repo.updateTxPending(txId, (err as Error).message, claimed.attempts);
+      return "still_pending";
+    }
+
+    try {
+      const adapterResult = await this.runExternalOperation(adapter, account, claimed);
+      if (isConvertTransaction(claimed)) {
+        await this.applyConvertLocalPoints(config, account, claimed, adapterResult.externalTxId);
+      }
+      await this.repo.updateTxSuccess(
+        claimed.id,
+        adapterResult.externalTxId,
+        adapterResult.balanceAfter,
+      );
+      await this.repo.updateExternalBalance(
+        account.id,
+        adapterResult.balanceAfter ?? account.externalBalance,
+      );
+      this.metrics?.recordOperation(config.provider, claimed.type, "CONFIRMED", false);
+      return "confirmed";
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+
+      if (error instanceof CoalitionDuplicateTsError) {
+        const found = await this.historyContainsTxReference(
+          adapter,
+          account.externalId,
+          claimed.id,
+          claimed.createdAt,
+          now,
+        );
+        if (found) {
+          if (isConvertTransaction(claimed)) {
+            await this.applyConvertLocalPoints(config, account, claimed, claimed.localTxRef);
+          }
+          await this.repo.updateTxSuccess(claimed.id, claimed.localTxRef, undefined);
+          this.metrics?.recordOperation(config.provider, claimed.type, "CONFIRMED", false);
+          return "confirmed";
+        }
+        await this.repo.updateTxNeedsReview(
+          claimed.id,
+          "Duplicate ts rejected but no matching history entry was found",
+        );
+        this.alertNeedsReview(account.programId, account.provider, claimed);
+        return "needs_review";
+      }
+
+      if (error instanceof CoalitionBusinessError) {
+        if (isConvertTransaction(claimed)) {
+          await this.compensateConvert(adapter, claimed, claimed.localTxRef, error.message);
+        }
+        await this.repo.updateTxFailed(claimed.id, error.message, claimed.attempts);
+        this.metrics?.recordOperation(config.provider, claimed.type, "FAILED", false);
+        return "failed";
+      }
+
+      // Transient (or open circuit / breaker timeout): outcome still unknown.
+      if (now.getTime() - claimed.createdAt.getTime() >= RECONCILE_NEEDS_REVIEW_AGE_MS) {
+        await this.repo.updateTxNeedsReview(claimed.id, `Unresolved after 24h: ${error.message}`);
+        this.alertNeedsReview(account.programId, account.provider, claimed);
+        return "needs_review";
+      }
+
+      await this.repo.updateTxPending(claimed.id, error.message, claimed.attempts + 1);
+      this.metrics?.recordOperation(config.provider, claimed.type, "PENDING", false);
+      return "still_pending";
+    }
+  }
+
+  /** Reconciles every PENDING transaction older than the retry window. */
+  async runReconciliationSweep(now: Date = new Date()): Promise<{
+    scanned: number;
+    confirmed: number;
+    failed: number;
+    needsReview: number;
+    stillPending: number;
+    skipped: number;
+  }> {
+    const olderThan = new Date(now.getTime() - RECONCILE_RETRY_INTERVAL_MS);
+    const txs = await this.repo.listPendingForReconciliation(olderThan);
+    const summary = {
+      scanned: txs.length,
+      confirmed: 0,
+      failed: 0,
+      needsReview: 0,
+      stillPending: 0,
+      skipped: 0,
+    };
+    for (const tx of txs) {
+      const outcome = await this.reconcilePendingTransaction(tx.id);
+      if (outcome === "confirmed") summary.confirmed += 1;
+      else if (outcome === "failed") summary.failed += 1;
+      else if (outcome === "needs_review") summary.needsReview += 1;
+      else if (outcome === "still_pending") summary.stillPending += 1;
+      else summary.skipped += 1;
+    }
+    return summary;
+  }
+
+  /** Manual "retry now" for a PENDING/NEEDS_REVIEW transaction (super-admin). */
+  async manuallyRetryTransaction(programId: string, txId: string): Promise<ReconcileOutcome> {
+    const tx = await this.repo.getTxById(txId);
+    if (!tx) throw new CoalitionBusinessError(`Transaction "${txId}" not found`);
+    const account = await this.repo.getAccountById(tx.accountId);
+    if (!account || account.programId !== programId) {
+      throw new CoalitionBusinessError(`Transaction "${txId}" not found in program`);
+    }
+    if (tx.status !== "PENDING" && tx.status !== "NEEDS_REVIEW") {
+      throw new CoalitionBusinessError(
+        `Transaction "${txId}" is ${tx.status}; only PENDING or NEEDS_REVIEW can be retried`,
+      );
+    }
+    return this.reconcilePendingTransaction(txId, { force: true });
+  }
+
+  /** Manual "mark as confirmed" for a PENDING/NEEDS_REVIEW transaction (super-admin). */
+  async manuallyConfirmTransaction(
+    programId: string,
+    txId: string,
+  ): Promise<CoalitionTransactionRow> {
+    const tx = await this.repo.getTxById(txId);
+    if (!tx) throw new CoalitionBusinessError(`Transaction "${txId}" not found`);
+    const account = await this.repo.getAccountById(tx.accountId);
+    if (!account || account.programId !== programId) {
+      throw new CoalitionBusinessError(`Transaction "${txId}" not found in program`);
+    }
+    if (tx.status !== "PENDING" && tx.status !== "NEEDS_REVIEW") {
+      throw new CoalitionBusinessError(
+        `Transaction "${txId}" is ${tx.status}; only PENDING or NEEDS_REVIEW can be confirmed manually`,
+      );
+    }
+
+    // A convert carries local debit + credit that only ever ran after external
+    // success; apply them idempotently so a manual confirm keeps the ledger whole.
+    if (isConvertTransaction(tx)) {
+      const config = await this.repo.getConfig(account.programId);
+      if (!config) throw new CoalitionConfigNotFoundError(account.programId);
+      await this.applyConvertLocalPoints(config, account, tx, tx.localTxRef);
+    }
+
+    await this.repo.updateTxSuccess(tx.id, tx.externalTxRef ?? tx.localTxRef, undefined);
+    this.metrics?.recordOperation(account.provider, tx.type, "CONFIRMED", false);
+    return { ...tx, status: "CONFIRMED" };
+  }
+
+  /** Manual "mark as failed" for a PENDING/NEEDS_REVIEW transaction (super-admin). */
+  async manuallyFailTransaction(
+    programId: string,
+    txId: string,
+    comment: string,
+  ): Promise<CoalitionTransactionRow> {
+    const tx = await this.repo.getTxById(txId);
+    if (!tx) throw new CoalitionBusinessError(`Transaction "${txId}" not found`);
+    const account = await this.repo.getAccountById(tx.accountId);
+    if (!account || account.programId !== programId) {
+      throw new CoalitionBusinessError(`Transaction "${txId}" not found in program`);
+    }
+    if (tx.status !== "PENDING" && tx.status !== "NEEDS_REVIEW") {
+      throw new CoalitionBusinessError(
+        `Transaction "${txId}" is ${tx.status}; only PENDING or NEEDS_REVIEW can be failed manually`,
+      );
+    }
+    await this.repo.updateTxFailed(tx.id, `Manual failure: ${comment}`, tx.attempts);
+    this.metrics?.recordOperation(account.provider, tx.type, "FAILED", false);
+    return { ...tx, status: "FAILED" };
+  }
+
   // ── Internal ──────────────────────────────────────────────────
 
   private async executeWithTwoPhaseCommit(
@@ -744,5 +941,112 @@ export class CoalitionService {
     if (!adapter.capabilities[capability]) {
       throw new CoalitionUnsupportedError(method, adapter.name);
     }
+  }
+
+  /**
+   * Re-issues the external operation for a stored transaction using the SAME
+   * `ts` (the transaction id) so the partner deduplicates it.
+   */
+  private async runExternalOperation(
+    adapter: CoalitionAdapter,
+    account: CoalitionAccountRow,
+    tx: CoalitionTransactionRow,
+  ): Promise<TxResult> {
+    const metadata = (tx.metadata ?? {}) as Record<string, unknown>;
+    if (isConvertTransaction(tx)) {
+      if (!adapter.convert) throw new CoalitionUnsupportedError("convert", adapter.name);
+      return adapter.convert(account.externalId, tx.amount, tx.localTxRef, tx.id);
+    }
+    if (tx.type === "EARN") {
+      return adapter.accumulate(account.externalId, tx.amount, tx.localTxRef, metadata, tx.id);
+    }
+    if (!adapter.redeem) throw new CoalitionUnsupportedError("redeem", adapter.name);
+    return adapter.redeem(account.externalId, tx.amount, tx.localTxRef, metadata);
+  }
+
+  /** Applies the local debit + credit of a convert, idempotently. */
+  private async applyConvertLocalPoints(
+    config: CoalitionConfigRow,
+    account: CoalitionAccountRow,
+    tx: CoalitionTransactionRow,
+    externalTxId: string,
+  ): Promise<void> {
+    const coalitionPoints = Math.round(tx.amount * config.conversionRate);
+    await this.pointsService.redeem({
+      memberId: account.memberId,
+      programId: account.programId,
+      amount: tx.amount,
+      source: `coalition:convert:${externalTxId}`,
+      idempotencyKey: `local-debit-${tx.localTxRef}`,
+    });
+    await this.pointsService.earn({
+      memberId: account.memberId,
+      programId: account.programId,
+      amount: coalitionPoints,
+      source: `coalition:convert:${externalTxId}`,
+      idempotencyKey: `local-credit-${tx.localTxRef}`,
+      metadata: { coalitionTxId: externalTxId },
+    });
+  }
+
+  /** Reverses a convert's external operation (best effort) after a local failure. */
+  private async compensateConvert(
+    adapter: CoalitionAdapter,
+    tx: CoalitionTransactionRow,
+    externalTxId: string,
+    reason: string,
+  ): Promise<void> {
+    if (adapter.capabilities.reverseTransaction) {
+      try {
+        if (!adapter.reverseTransaction) {
+          throw new CoalitionUnsupportedError("reverseTransaction", adapter.name);
+        }
+        await adapter.reverseTransaction(externalTxId, reason);
+        await this.repo.updateTxReversed(tx.id, reason);
+      } catch (reverseError) {
+        console.error(
+          `[Coalition] Compensation reversal failed for ${externalTxId}:`,
+          reverseError,
+        );
+        await this.repo.updateTxFailed(
+          tx.id,
+          `Local core failed AND compensation reversal failed: ${reason}`,
+          tx.attempts,
+        );
+      }
+    } else {
+      await this.repo.updateTxFailed(
+        tx.id,
+        `Local core failed (reverse not supported by adapter): ${reason}`,
+        tx.attempts,
+      );
+    }
+  }
+
+  /** Searches the partner's history for the `[LOS:<txId>]` reference marker. */
+  private async historyContainsTxReference(
+    adapter: CoalitionAdapter,
+    externalId: string,
+    txId: string,
+    from: Date,
+    to: Date,
+  ): Promise<boolean> {
+    if (!adapter.capabilities.historyQuery || !adapter.queryHistory) return false;
+    const entries = await adapter.queryHistory(externalId, from, to);
+    const marker = `[LOS:${txId}]`;
+    return entries.some((entry) => {
+      const record = (entry ?? {}) as Record<string, unknown>;
+      const description = String(record.descripcion ?? record.description ?? "");
+      return description.includes(marker);
+    });
+  }
+
+  /** Records a NEEDS_REVIEW metric and an error log for alerting. */
+  private alertNeedsReview(programId: string, provider: string, tx: CoalitionTransactionRow): void {
+    this.metrics?.recordNeedsReview(provider);
+    console.error(
+      `[Coalition] NEEDS_REVIEW program=${programId} provider=${provider} tx=${tx.id} ` +
+        `type=${tx.type} localTxRef=${tx.localTxRef} attempts=${String(tx.attempts)}`,
+    );
   }
 }

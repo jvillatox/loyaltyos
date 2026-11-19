@@ -65,6 +65,9 @@ export function adaptCoalitionMetrics(bm: BusinessMetrics): CoalitionServiceMetr
     setCircuitBreakerState(adapter, state) {
       bm.coalitionCircuitBreakerState.set({ adapter }, state);
     },
+    recordNeedsReview(provider) {
+      bm.coalitionNeedsReviewTotal.inc({ provider });
+    },
   };
 }
 

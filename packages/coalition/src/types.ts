@@ -68,6 +68,19 @@ export class CoalitionBusinessError extends Error {
   }
 }
 
+/**
+ * The partner rejected the operation because the `ts` (transaction id) was
+ * already used. This signals the operation was previously applied upstream even
+ * though we did not record its outcome — reconciliation must confirm it against
+ * the partner's history rather than assume success or failure.
+ */
+export class CoalitionDuplicateTsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CoalitionDuplicateTsError";
+  }
+}
+
 export class CoalitionCircuitOpenError extends Error {
   constructor(adapter: string) {
     super(`Circuit breaker open for adapter "${adapter}"`);
@@ -178,6 +191,8 @@ export interface CoalitionTransactionRow {
   metadata: Prisma.JsonValue | null;
   idempotencyKey: string;
   createdAt: Date;
+  lastAttemptAt: Date | null;
+  updatedAt: Date;
 }
 
 /** Safe projection of a coalition transaction exposed to a member (no internal or partner fields). */

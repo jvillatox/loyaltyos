@@ -152,7 +152,8 @@
       "PENDING": "Pendiente",
       "CONFIRMED": "Confirmado",
       "FAILED": "Fallido",
-      "REVERSED": "Revertido"
+      "REVERSED": "Revertido",
+      "NEEDS_REVIEW": "Requiere revisión"
     },
     "transactionTypes": {
       "EARN": "Ganancia",
@@ -259,7 +260,16 @@
       "reason": "Motivo",
       "reasonPlaceholder": "p. ej., devolución al cliente, error del sistema",
       "confirmReverse": "Confirmar reversión",
-      "reverseFailed": "Falló la reversión"
+      "reverseFailed": "Falló la reversión",
+      "retryNow": "Reintentar ahora",
+      "markConfirmed": "Marcar como confirmada",
+      "markFailed": "Marcar como fallida",
+      "markFailedDialogTitle": "Marcar transacción como fallida",
+      "markFailedDialogDescription": "Proporciona un motivo para marcar esta transacción como fallida. Esta acción no se puede deshacer.",
+      "comment": "Comentario",
+      "commentPlaceholder": "Motivo para marcar esta transacción como fallida",
+      "confirmMarkFailed": "Confirmar",
+      "actionFailed": "Falló la acción"
     },
     "linkedMembers": {
       "title": "Miembros de Coalición vinculados",

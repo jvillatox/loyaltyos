@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 
 import type { CoalitionAdapter, TxResult } from "../types.js";
-import { CoalitionBusinessError, CoalitionTransientError } from "../types.js";
+import {
+  CoalitionBusinessError,
+  CoalitionDuplicateTsError,
+  CoalitionTransientError,
+} from "../types.js";
 import {
   type ApprecioAccumulateResponse,
   type ApprecioBalanceResponse,
@@ -70,6 +74,53 @@ function buildDescription(base: string, txId: string): string {
   return trimmed + suffix;
 }
 
+/**
+ * Detects an Apprecio rejection for a repeated `ts` (transaction id).
+ *
+ * TODO(#60): Apprecio does not document the exact JSON shape returned when a
+ * `ts` is reused. The fixtures below are provisional — tighten them to the
+ * observed field(s) once real sandbox/staging responses are captured.
+ */
+function isDuplicateTsResponse(json: unknown): boolean {
+  if (!json || typeof json !== "object") return false;
+  const body = json as {
+    success?: unknown;
+    message?: unknown;
+    error?: unknown;
+    code?: unknown;
+    status?: unknown;
+    data?: unknown;
+  };
+
+  const data = body.data as { duplicated?: unknown; duplicate?: unknown } | undefined;
+  if (data?.duplicated === true || data?.duplicate === true) return true;
+
+  const haystack = [body.message, body.error, body.code, body.status]
+    .map((v) => String(v ?? ""))
+    .join(" ")
+    .toLowerCase();
+
+  // Provisional fixtures (lower-cased).
+  const fixtures = [
+    "duplicat",
+    "duplicado",
+    "ya existe",
+    "ya fue",
+    "ya registrado",
+    "ya aplicada",
+    "ts repetido",
+    "ts duplicado",
+    "repeated ts",
+    "transaccion duplicada",
+    "carga duplicada",
+    "duplicate transaction",
+    "duplicate_ts",
+    "ts_duplicado",
+  ];
+
+  return fixtures.some((f) => haystack.includes(f));
+}
+
 // ── Adapter ─────────────────────────────────────────────────────
 
 export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter {
@@ -132,6 +183,14 @@ export function createApprecioAdapter(config: ApprecioConfig): CoalitionAdapter 
     const safeDetail = (json.message ?? json.error ?? "unknown")
       .split(privateToken)
       .join("[REDACTED]");
+
+    // A repeated `ts` means the operation was already applied upstream in a
+    // prior call whose outcome we did not record. Surface it as a distinct
+    // error so reconciliation can confirm against the partner's history instead
+    // of treating it as a generic business failure.
+    if (isDuplicateTsResponse(json)) {
+      throw new CoalitionDuplicateTsError(`Apprecio duplicate ts rejected: ${safeDetail}`);
+    }
 
     // Auth errors — no retry
     if (response.status === 401 || response.status === 403) {
