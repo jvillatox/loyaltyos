@@ -350,7 +350,19 @@ export class CoalitionService {
     const account = await this.repo.getAccount(memberId, programId);
     if (!account) throw new CoalitionAccountNotLinkedError(memberId, programId);
 
-    // 4. Create PENDING tx
+    // 4. Debit own points locally FIRST. This validates the balance and throws
+    // InsufficientBalanceError before any external call, so a member can never
+    // convert points they do not have. Idempotent by txRef so a retry never
+    // double-debits.
+    await this.pointsService.redeem({
+      memberId,
+      programId,
+      amount: ownPoints,
+      source: `coalition:convert:${txRef}`,
+      idempotencyKey: `local-debit-${txRef}`,
+    });
+
+    // 5. Create PENDING tx (the debit is already settled).
     const tx = await this.repo.createTx({
       accountId: account.id,
       programId,
@@ -360,14 +372,16 @@ export class CoalitionService {
       idempotencyKey: `convert-${txRef}`,
     });
 
-    // 5. Call adapter.convert() with retry + circuit breaker
+    // 6. Send the converted amount (not ownPoints) to the partner. No local
+    // credit is made — the partner's coalition balance is the only "earn".
+    const coalitionPoints = Math.round(ownPoints * config.conversionRate);
     try {
       const adapter = await this.getActiveAdapter(programId);
       this.requireCapability(adapter, "convert", "convert");
 
       const adapterResult = await this.callAdapter(adapter, () => {
         if (!adapter.convert) throw new CoalitionUnsupportedError("convert", adapter.name);
-        return adapter.convert(externalMemberRef, ownPoints, txRef, tx.id);
+        return adapter.convert(externalMemberRef, coalitionPoints, txRef, tx.id);
       });
 
       await this.repo.updateTxSuccess(
@@ -380,20 +394,6 @@ export class CoalitionService {
         adapterResult.balanceAfter ?? account.externalBalance,
       );
 
-      // 6. Redeem own points locally, then earn converted points. Idempotent
-      // keys derived from txRef allow reconciliation to re-run this safely.
-      try {
-        await this.applyConvertLocalPoints(config, account, tx, adapterResult.externalTxId);
-      } catch (coreError) {
-        // Compensation: reverse the external operation (if supported)
-        const reason =
-          coreError instanceof Error ? coreError.message : "Local core operation failed";
-        await this.compensateConvert(adapter, tx, adapterResult.externalTxId, reason);
-        throw new CoalitionBusinessError(
-          `Convert: local operation failed, reversal attempted: ${reason}`,
-        );
-      }
-
       this.metrics?.recordOperation(config.provider, "CONVERT", "CONFIRMED", false);
 
       return {
@@ -405,11 +405,15 @@ export class CoalitionService {
       };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      if (error instanceof CoalitionTransientError) {
+      if (error instanceof CoalitionTransientError || error instanceof CoalitionCircuitOpenError) {
+        // Outcome unknown (or never attempted): keep the points debited so the
+        // reconciliation sweep can decide, and let the transaction stay PENDING.
         await this.repo.updateTxPending(tx.id, error.message, tx.attempts + 1);
         this.metrics?.recordOperation(config.provider, "CONVERT", "PENDING", false);
         throw error;
       }
+      // Definitive failure: refund the debited points and mark the tx FAILED.
+      await this.refundConvertLocalPoints(account, tx);
       await this.repo.updateTxFailed(tx.id, error.message, tx.attempts + 1);
       this.metrics?.recordOperation(config.provider, "CONVERT", "FAILED", false);
       throw error;
@@ -636,10 +640,12 @@ export class CoalitionService {
     }
 
     try {
-      const adapterResult = await this.runExternalOperation(adapter, account, claimed);
-      if (isConvertTransaction(claimed)) {
-        await this.applyConvertLocalPoints(config, account, claimed, adapterResult.externalTxId);
-      }
+      const adapterResult = await this.runExternalOperation(
+        adapter,
+        account,
+        claimed,
+        config.conversionRate,
+      );
       await this.repo.updateTxSuccess(
         claimed.id,
         adapterResult.externalTxId,
@@ -663,9 +669,6 @@ export class CoalitionService {
           now,
         );
         if (found) {
-          if (isConvertTransaction(claimed)) {
-            await this.applyConvertLocalPoints(config, account, claimed, claimed.localTxRef);
-          }
           await this.repo.updateTxSuccess(claimed.id, claimed.localTxRef, undefined);
           this.metrics?.recordOperation(config.provider, claimed.type, "CONFIRMED", false);
           return "confirmed";
@@ -680,7 +683,7 @@ export class CoalitionService {
 
       if (error instanceof CoalitionBusinessError) {
         if (isConvertTransaction(claimed)) {
-          await this.compensateConvert(adapter, claimed, claimed.localTxRef, error.message);
+          await this.refundConvertLocalPoints(account, claimed);
         }
         await this.repo.updateTxFailed(claimed.id, error.message, claimed.attempts);
         this.metrics?.recordOperation(config.provider, claimed.type, "FAILED", false);
@@ -763,14 +766,8 @@ export class CoalitionService {
       );
     }
 
-    // A convert carries local debit + credit that only ever ran after external
-    // success; apply them idempotently so a manual confirm keeps the ledger whole.
-    if (isConvertTransaction(tx)) {
-      const config = await this.repo.getConfig(account.programId);
-      if (!config) throw new CoalitionConfigNotFoundError(account.programId);
-      await this.applyConvertLocalPoints(config, account, tx, tx.localTxRef);
-    }
-
+    // The local debit already settled when the transaction was created, so a
+    // manual confirm only finalizes the status — no local points move.
     await this.repo.updateTxSuccess(tx.id, tx.externalTxRef ?? tx.localTxRef, undefined);
     this.metrics?.recordOperation(account.provider, tx.type, "CONFIRMED", false);
     return { ...tx, status: "CONFIRMED" };
@@ -792,6 +789,9 @@ export class CoalitionService {
       throw new CoalitionBusinessError(
         `Transaction "${txId}" is ${tx.status}; only PENDING or NEEDS_REVIEW can be failed manually`,
       );
+    }
+    if (isConvertTransaction(tx)) {
+      await this.refundConvertLocalPoints(account, tx);
     }
     await this.repo.updateTxFailed(tx.id, `Manual failure: ${comment}`, tx.attempts);
     this.metrics?.recordOperation(account.provider, tx.type, "FAILED", false);
@@ -951,11 +951,13 @@ export class CoalitionService {
     adapter: CoalitionAdapter,
     account: CoalitionAccountRow,
     tx: CoalitionTransactionRow,
+    conversionRate: number,
   ): Promise<TxResult> {
     const metadata = (tx.metadata ?? {}) as Record<string, unknown>;
     if (isConvertTransaction(tx)) {
       if (!adapter.convert) throw new CoalitionUnsupportedError("convert", adapter.name);
-      return adapter.convert(account.externalId, tx.amount, tx.localTxRef, tx.id);
+      const coalitionPoints = Math.round(tx.amount * conversionRate);
+      return adapter.convert(account.externalId, coalitionPoints, tx.localTxRef, tx.id);
     }
     if (tx.type === "EARN") {
       return adapter.accumulate(account.externalId, tx.amount, tx.localTxRef, metadata, tx.id);
@@ -964,63 +966,18 @@ export class CoalitionService {
     return adapter.redeem(account.externalId, tx.amount, tx.localTxRef, metadata);
   }
 
-  /** Applies the local debit + credit of a convert, idempotently. */
-  private async applyConvertLocalPoints(
-    config: CoalitionConfigRow,
+  /** Credits back the own points a convert debited, idempotently by txRef. */
+  private async refundConvertLocalPoints(
     account: CoalitionAccountRow,
     tx: CoalitionTransactionRow,
-    externalTxId: string,
   ): Promise<void> {
-    const coalitionPoints = Math.round(tx.amount * config.conversionRate);
-    await this.pointsService.redeem({
-      memberId: account.memberId,
-      programId: account.programId,
-      amount: tx.amount,
-      source: `coalition:convert:${externalTxId}`,
-      idempotencyKey: `local-debit-${tx.localTxRef}`,
-    });
     await this.pointsService.earn({
       memberId: account.memberId,
       programId: account.programId,
-      amount: coalitionPoints,
-      source: `coalition:convert:${externalTxId}`,
-      idempotencyKey: `local-credit-${tx.localTxRef}`,
-      metadata: { coalitionTxId: externalTxId },
+      amount: tx.amount,
+      source: `coalition:convert-refund:${tx.localTxRef}`,
+      idempotencyKey: `local-refund-${tx.localTxRef}`,
     });
-  }
-
-  /** Reverses a convert's external operation (best effort) after a local failure. */
-  private async compensateConvert(
-    adapter: CoalitionAdapter,
-    tx: CoalitionTransactionRow,
-    externalTxId: string,
-    reason: string,
-  ): Promise<void> {
-    if (adapter.capabilities.reverseTransaction) {
-      try {
-        if (!adapter.reverseTransaction) {
-          throw new CoalitionUnsupportedError("reverseTransaction", adapter.name);
-        }
-        await adapter.reverseTransaction(externalTxId, reason);
-        await this.repo.updateTxReversed(tx.id, reason);
-      } catch (reverseError) {
-        console.error(
-          `[Coalition] Compensation reversal failed for ${externalTxId}:`,
-          reverseError,
-        );
-        await this.repo.updateTxFailed(
-          tx.id,
-          `Local core failed AND compensation reversal failed: ${reason}`,
-          tx.attempts,
-        );
-      }
-    } else {
-      await this.repo.updateTxFailed(
-        tx.id,
-        `Local core failed (reverse not supported by adapter): ${reason}`,
-        tx.attempts,
-      );
-    }
   }
 
   /** Searches the partner's history for the `[LOS:<txId>]` reference marker. */

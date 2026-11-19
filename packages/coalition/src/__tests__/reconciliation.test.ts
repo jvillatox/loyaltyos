@@ -183,6 +183,25 @@ describe("reconcilePendingTransaction", () => {
     );
   });
 
+  it("reconciling a PENDING convert does not re-debit local points and sends the converted amount", async () => {
+    const tx = txRow({ type: "REDEEM", idempotencyKey: "convert-ref-1", amount: 100 });
+    mockPrisma.coalitionTransaction.findUnique.mockResolvedValue(tx);
+    mockPrisma.coalitionAccount.findUnique.mockResolvedValue(accountRow());
+    mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow({ conversionRate: 2 }));
+    mockPrisma.coalitionTransaction.updateMany.mockResolvedValue({ count: 1 });
+
+    const adapter = new MockAdapter({ externalTxId: "ext-1" });
+    const svc = makeService(adapter);
+
+    await expect(svc.reconcilePendingTransaction("tx-1")).resolves.toBe("confirmed");
+
+    // The partner receives ownPoints × conversionRate, and the local debit was
+    // already settled at convert() time — reconciliation must not debit again.
+    expect(adapter.convertCalls[0]?.ownPoints).toBe(200);
+    expect(mockRedeem).not.toHaveBeenCalled();
+    expect(mockEarn).not.toHaveBeenCalled();
+  });
+
   it("transient error keeps the transaction pending (not yet confirmed)", async () => {
     const tx = txRow({ createdAt: new Date() });
     mockPrisma.coalitionTransaction.findUnique.mockResolvedValue(tx);
@@ -262,6 +281,30 @@ describe("manual reconciliation actions", () => {
         }),
       }),
     );
+  });
+
+  it("manuallyFailTransaction refunds a convert's debited points exactly once", async () => {
+    const tx = txRow({ type: "REDEEM", idempotencyKey: "convert-ref-1", amount: 100 });
+    mockPrisma.coalitionTransaction.findUnique.mockResolvedValue(tx);
+    mockPrisma.coalitionAccount.findUnique.mockResolvedValue(accountRow());
+
+    const svc = makeService(new MockAdapter());
+    await svc.manuallyFailTransaction("prog-1", "tx-1", "customer dispute");
+
+    // Refund is idempotent by txRef, so a repeat would not double-credit.
+    expect(mockEarn).toHaveBeenCalledTimes(1);
+    expect(mockEarn).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 100, idempotencyKey: "local-refund-ref-1" }),
+    );
+
+    // A second attempt on a now-FAILED transaction is rejected without a refund.
+    mockPrisma.coalitionTransaction.findUnique.mockResolvedValue(
+      txRow({ type: "REDEEM", idempotencyKey: "convert-ref-1", status: "FAILED" }),
+    );
+    await expect(svc.manuallyFailTransaction("prog-1", "tx-1", "again")).rejects.toThrow(
+      "only PENDING or NEEDS_REVIEW",
+    );
+    expect(mockEarn).toHaveBeenCalledTimes(1);
   });
 
   it("manual actions reject a transaction that is not PENDING/NEEDS_REVIEW", async () => {
