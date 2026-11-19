@@ -5,6 +5,40 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2026-11-19
+
+> **Security release.** All deployments of v1.9.1 and earlier should upgrade. See advisory GHSA-388r-m42q-5f6x.
+
+### Security
+
+- **Coalition member history no longer leaks other members' transactions.** The
+  `GET /members/:id/coalition/history` endpoint previously returned the partner's
+  full account history — the Apprecio adapter ignores the member reference — so a
+  member, whether authenticated by portal session or `lomem_` widget token, could
+  see another member's loads. Members now receive only their own local
+  `CoalitionTransaction` rows, never the partner's raw response. The server-side
+  path filters the partner's response by the member's identifier and falls back
+  to local history when the partner's format cannot be filtered with certainty.
+- **The API refuses to start in production without a strong master encryption
+  key.** Coalition credentials are encrypted with `KMS_MASTER_KEY`. In
+  `NODE_ENV=production` the API now fails to boot when the key is missing or
+  shorter than 32 characters instead of silently falling back to a well-known
+  development key. The development fallback remains active only outside
+  production.
+
+### Upgrade notes
+
+1. **Set `KMS_MASTER_KEY` to at least 32 characters in production.** The API
+   refuses to start otherwise. Use a strong, randomly generated secret.
+2. **Re-encrypt credentials written with the development fallback key.** If
+   coalition credentials were stored while `KMS_MASTER_KEY` was unset (and were
+   therefore encrypted with the development fallback key), re-encrypt them after
+   setting the new key:
+
+   ```
+   pnpm --filter @loyaltyos/api coalition:reencrypt --from-key <old-key>
+   ```
+
 ## [1.9.1] - 2026-11-19
 
 ### Changed
