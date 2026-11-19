@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   admin, and portal images are built for both `linux/amd64` and `linux/arm64`, so
   they run natively on Apple Silicon and ARM servers.
 
+### Known limitations
+
+- Coalition transactions left `PENDING` after a timeout are not reconciled
+  automatically (#60).
+
 ## [1.9.0] - 2026-11-18
 
 ### Added
