@@ -179,3 +179,12 @@ export interface CoalitionTransactionRow {
   idempotencyKey: string;
   createdAt: Date;
 }
+
+/** Safe projection of a coalition transaction exposed to a member (no internal or partner fields). */
+export interface MemberHistoryEntry {
+  id: string;
+  type: TransactionType;
+  amount: number;
+  status: string;
+  createdAt: Date;
+}

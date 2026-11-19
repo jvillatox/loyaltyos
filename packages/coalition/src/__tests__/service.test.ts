@@ -957,9 +957,23 @@ describe("CoalitionService", () => {
   // ═══ History isolation ═══
 
   describe("history isolation", () => {
-    it("getLocalHistory returns only the member's own local transactions", async () => {
-      const localRows = [txRow({ id: "tx-a" }), txRow({ id: "tx-b" })];
-      mockPrisma.coalitionTransaction.findMany.mockResolvedValue(localRows);
+    it("getLocalHistory returns only the member's own local transactions, trimmed to safe fields", async () => {
+      const createdA = new Date("2026-01-05T10:00:00Z");
+      const createdB = new Date("2026-01-06T10:00:00Z");
+      const fullRows = [
+        txRow({
+          id: "tx-a",
+          createdAt: createdA,
+          lastError: "internal error detail",
+          metadata: { partnerNote: "confidential" },
+          idempotencyKey: "idem-secret",
+          accountId: "acct-secret",
+          externalTxRef: "ext-secret",
+          localTxRef: "local-secret",
+        }),
+        txRow({ id: "tx-b", createdAt: createdB }),
+      ];
+      mockPrisma.coalitionTransaction.findMany.mockResolvedValue(fullRows);
 
       const svc = new CoalitionService(mockPrisma as never);
       const from = new Date("2026-01-01");
@@ -967,7 +981,18 @@ describe("CoalitionService", () => {
 
       const result = await svc.getLocalHistory("mem-1", "prog-1", from, to);
 
-      expect(result).toEqual(localRows);
+      expect(result).toEqual([
+        { id: "tx-a", type: "EARN", amount: 100, status: "PENDING", createdAt: createdA },
+        { id: "tx-b", type: "EARN", amount: 100, status: "PENDING", createdAt: createdB },
+      ]);
+      for (const entry of result) {
+        expect(entry).not.toHaveProperty("lastError");
+        expect(entry).not.toHaveProperty("metadata");
+        expect(entry).not.toHaveProperty("idempotencyKey");
+        expect(entry).not.toHaveProperty("accountId");
+        expect(entry).not.toHaveProperty("externalTxRef");
+        expect(entry).not.toHaveProperty("localTxRef");
+      }
       expect(mockPrisma.coalitionTransaction.findMany).toHaveBeenCalledWith({
         where: {
           account: { programId: "prog-1", memberId: "mem-1" },
@@ -1003,6 +1028,50 @@ describe("CoalitionService", () => {
       ]);
       expect(adapter.queryHistoryCalls).toHaveLength(1);
       expect(adapter.queryHistoryCalls[0]?.externalMemberRef).toBe("a@b.com");
+    });
+
+    it("getExternalHistory matches emails case-insensitively", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(
+        accountRow({ externalId: "a@b.com" }),
+      );
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({
+        historyEntries: [
+          { email: "A@B.com", amount: 10 },
+          { email: "x@y.com", amount: 20 },
+        ],
+      });
+      svc.registerAdapter(adapter);
+
+      const from = new Date("2026-01-01");
+      const to = new Date("2026-02-01");
+      const result = await svc.getExternalHistory("mem-1", "prog-1", from, to);
+
+      expect(result).toEqual([{ email: "A@B.com", amount: 10 }]);
+    });
+
+    it("getExternalHistory matches a normalized RUT (dots and hyphen stripped)", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(
+        accountRow({ externalId: "12.345.678-9" }),
+      );
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({
+        historyEntries: [
+          { rut: "123456789", amount: 10 },
+          { rut: "98.765.432-1", amount: 20 },
+        ],
+      });
+      svc.registerAdapter(adapter);
+
+      const from = new Date("2026-01-01");
+      const to = new Date("2026-02-01");
+      const result = await svc.getExternalHistory("mem-1", "prog-1", from, to);
+
+      expect(result).toEqual([{ rut: "123456789", amount: 10 }]);
     });
 
     it("getExternalHistory falls back to local history when entries cannot be filtered", async () => {

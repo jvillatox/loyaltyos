@@ -19,6 +19,7 @@ export type {
   CoalitionOperationResult,
   CoalitionTransactionRow,
   ConvertInput,
+  MemberHistoryEntry,
   RedeemInput,
   TxResult,
 } from "./types.js";

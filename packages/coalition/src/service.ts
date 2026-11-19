@@ -20,6 +20,7 @@ import type {
   CoalitionOperationResult,
   CoalitionTransactionRow,
   ConvertInput,
+  MemberHistoryEntry,
   RedeemInput,
 } from "./types.js";
 import {
@@ -88,17 +89,31 @@ function extractMemberIdentifier(entry: unknown): string | null {
 }
 
 /**
+ * Normalizes a member identifier so two spellings of the same value compare
+ * equal: emails are compared case-insensitively, and RUTs are compared with
+ * dots and hyphens stripped (check digit uppercased).
+ */
+function normalizeMemberIdentifier(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.includes("@")) {
+    return trimmed.toLowerCase();
+  }
+  return trimmed.replace(/[.\-\s]/g, "").toUpperCase();
+}
+
+/**
  * Keeps only the entries whose member identifier matches `externalId`. Returns
  * `null` when the entries do not expose a member identifier (so the result could
  * not be filtered with certainty); the caller then falls back to local history.
  */
 function filterHistoryByMember(entries: unknown[], externalId: string): unknown[] | null {
   if (entries.length === 0) return [];
+  const normalizedExternalId = normalizeMemberIdentifier(externalId);
   const result: unknown[] = [];
   for (const entry of entries) {
     const identifier = extractMemberIdentifier(entry);
     if (identifier === null) return null;
-    if (identifier === externalId) result.push(entry);
+    if (normalizeMemberIdentifier(identifier) === normalizedExternalId) result.push(entry);
   }
   return result;
 }
@@ -422,14 +437,26 @@ export class CoalitionService {
     return adapter.getBalance(account.externalId);
   }
 
-  /** Returns the member's own local coalition transactions (never the partner's raw history). */
+  /**
+   * Returns the member's own local coalition transactions, trimmed to the safe
+   * fields only (no lastError, metadata, idempotencyKey, accountId or external
+   * references). This is the member-facing path and never exposes the partner's
+   * raw history.
+   */
   async getLocalHistory(
     memberId: string,
     programId: string,
     from?: Date,
     to?: Date,
-  ): Promise<CoalitionTransactionRow[]> {
-    return this.repo.listMemberTransactions(programId, memberId, from, to);
+  ): Promise<MemberHistoryEntry[]> {
+    const rows = await this.repo.listMemberTransactions(programId, memberId, from, to);
+    return rows.map(({ id, type, amount, status, createdAt }) => ({
+      id,
+      type,
+      amount,
+      status,
+      createdAt,
+    }));
   }
 
   /**
@@ -448,12 +475,12 @@ export class CoalitionService {
 
     const adapter = await this.getActiveAdapter(programId);
     if (!adapter.capabilities.historyQuery || !adapter.queryHistory) {
-      return this.getLocalHistory(memberId, programId, from, to);
+      return this.repo.listMemberTransactions(programId, memberId, from, to);
     }
 
     const entries = await adapter.queryHistory(account.externalId, from, to);
     const filtered = filterHistoryByMember(entries, account.externalId);
-    return filtered ?? (await this.getLocalHistory(memberId, programId, from, to));
+    return filtered ?? (await this.repo.listMemberTransactions(programId, memberId, from, to));
   }
 
   async linkExternalAccount(input: {
