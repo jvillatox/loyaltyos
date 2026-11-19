@@ -28,6 +28,7 @@ const mockPrisma = vi.hoisted(() => ({
     create: vi.fn(),
     findUnique: vi.fn(),
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     update: vi.fn(),
   },
   pointAccount: {
@@ -950,6 +951,103 @@ describe("CoalitionService", () => {
       } finally {
         globalThis.fetch = originalFetch;
       }
+    });
+  });
+
+  // ═══ History isolation ═══
+
+  describe("history isolation", () => {
+    it("getLocalHistory returns only the member's own local transactions", async () => {
+      const localRows = [txRow({ id: "tx-a" }), txRow({ id: "tx-b" })];
+      mockPrisma.coalitionTransaction.findMany.mockResolvedValue(localRows);
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const from = new Date("2026-01-01");
+      const to = new Date("2026-02-01");
+
+      const result = await svc.getLocalHistory("mem-1", "prog-1", from, to);
+
+      expect(result).toEqual(localRows);
+      expect(mockPrisma.coalitionTransaction.findMany).toHaveBeenCalledWith({
+        where: {
+          account: { programId: "prog-1", memberId: "mem-1" },
+          createdAt: { gte: from, lte: to },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    });
+
+    it("getExternalHistory filters partner entries to the member's identifier", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(
+        accountRow({ externalId: "a@b.com" }),
+      );
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({
+        historyEntries: [
+          { email: "a@b.com", amount: 10 },
+          { email: "b@b.com", amount: 20 },
+          { email: "a@b.com", amount: 30 },
+        ],
+      });
+      svc.registerAdapter(adapter);
+
+      const from = new Date("2026-01-01");
+      const to = new Date("2026-02-01");
+      const result = await svc.getExternalHistory("mem-1", "prog-1", from, to);
+
+      expect(result).toEqual([
+        { email: "a@b.com", amount: 10 },
+        { email: "a@b.com", amount: 30 },
+      ]);
+      expect(adapter.queryHistoryCalls).toHaveLength(1);
+      expect(adapter.queryHistoryCalls[0]?.externalMemberRef).toBe("a@b.com");
+    });
+
+    it("getExternalHistory falls back to local history when entries cannot be filtered", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(
+        accountRow({ externalId: "a@b.com" }),
+      );
+      const localRows = [txRow({ id: "tx-local" })];
+      mockPrisma.coalitionTransaction.findMany.mockResolvedValue(localRows);
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({
+        historyEntries: [
+          { amount: 10, reference: "no-identifier-here" },
+          { amount: 20, reference: "still-no-identifier" },
+        ],
+      });
+      svc.registerAdapter(adapter);
+
+      const from = new Date("2026-01-01");
+      const to = new Date("2026-02-01");
+      const result = await svc.getExternalHistory("mem-1", "prog-1", from, to);
+
+      expect(result).toEqual(localRows);
+      expect(mockPrisma.coalitionTransaction.findMany).toHaveBeenCalled();
+    });
+
+    it("getExternalHistory falls back to local history when historyQuery is unsupported", async () => {
+      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow());
+      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(
+        accountRow({ externalId: "a@b.com" }),
+      );
+      const localRows = [txRow({ id: "tx-local" })];
+      mockPrisma.coalitionTransaction.findMany.mockResolvedValue(localRows);
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({ capabilities: { historyQuery: false } });
+      svc.registerAdapter(adapter);
+
+      const from = new Date("2026-01-01");
+      const to = new Date("2026-02-01");
+      const result = await svc.getExternalHistory("mem-1", "prog-1", from, to);
+
+      expect(result).toEqual(localRows);
+      expect(adapter.queryHistoryCalls).toHaveLength(0);
     });
   });
 });

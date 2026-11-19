@@ -264,6 +264,28 @@ export function createRepository(prisma: PrismaClient) {
     });
   }
 
+  async function listMemberTransactions(
+    programId: string,
+    memberId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<CoalitionTransactionRow[]> {
+    return prisma.coalitionTransaction.findMany({
+      where: {
+        account: { programId, memberId },
+        ...(from != null || to != null
+          ? {
+              createdAt: {
+                ...(from != null ? { gte: from } : {}),
+                ...(to != null ? { lte: to } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   async function updateTxReversed(txId: string, reason: string): Promise<void> {
     await prisma.coalitionTransaction.update({
       where: { id: txId },
@@ -286,6 +308,7 @@ export function createRepository(prisma: PrismaClient) {
     linkAccount,
     unlinkAccount,
     listTransactions,
+    listMemberTransactions,
     updateExternalBalance,
     createTx,
     findTxByIdempotencyKey,

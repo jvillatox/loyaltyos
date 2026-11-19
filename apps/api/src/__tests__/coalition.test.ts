@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockPrisma = vi.hoisted(() => ({
   apiKey: { findUnique: vi.fn(), update: vi.fn() },
-  member: { findFirst: vi.fn() },
+  member: { name: "Member", findFirst: vi.fn() },
   coalitionTransaction: { findFirst: vi.fn() },
+  session: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  memberSessionToken: { findUnique: vi.fn() },
 }));
 
 vi.mock("../db.js", () => ({ prisma: mockPrisma }));
@@ -19,6 +21,7 @@ const mockCoalitionService = vi.hoisted(() => ({
   reverseCoalitionTransaction: vi.fn(),
   getExternalBalance: vi.fn(),
   getExternalHistory: vi.fn(),
+  getLocalHistory: vi.fn(),
   linkExternalAccount: vi.fn(),
   unlinkExternalAccount: vi.fn(),
   getAdapterCapabilities: vi.fn(),
@@ -35,6 +38,7 @@ vi.mock("../lib/coalition-setup.js", () => ({
 import type { FastifyInstance } from "fastify";
 
 import { buildApp } from "../app.js";
+import { lucia } from "../lib/auth/lucia.js";
 
 let app: FastifyInstance;
 
@@ -421,6 +425,126 @@ describe("Coalition API routes", () => {
       });
 
       expect(res.statusCode).toBe(201);
+    });
+  });
+
+  // ═══ History isolation (MEMBER principal) ═══
+
+  describe("GET /members/:id/coalition/history — member isolation", () => {
+    function memberRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: "member-1",
+        programId: "prog-1",
+        email: null,
+        firstName: null,
+        lastName: null,
+        name: null,
+        role: null,
+        deletedAt: null,
+        ...overrides,
+      };
+    }
+
+    // The shared beforeEach hook forces an admin identity so the SERVER-scoped
+    // routes pass; member requests must instead carry no admin identity so the
+    // principal resolves to MEMBER.
+    function dropAdminIdentity() {
+      app.addHook("onRequest", async (request) => {
+        request.adminId = null;
+        request.adminRole = null;
+      });
+    }
+
+    it("MEMBER session: returns the member's local history, never the partner's raw history", async () => {
+      mockCoalitionService.getLocalHistory.mockResolvedValue([{ id: "local-a" }]);
+      mockCoalitionService.getExternalHistory.mockResolvedValue([{ id: "raw-b" }]);
+
+      mockPrisma.session.create.mockResolvedValue({
+        id: "sess-1",
+        userId: "member-1",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      const session = await lucia.createSession("member-1", {});
+      mockPrisma.session.findUnique.mockResolvedValue({
+        id: session.id,
+        userId: "member-1",
+        expiresAt: session.expiresAt,
+        member: memberRow(),
+      });
+
+      dropAdminIdentity();
+
+      const cookieHeader = lucia.createSessionCookie(session.id).serialize().split(";")[0] ?? "";
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/members/member-1/coalition/history",
+        headers: { cookie: cookieHeader, "x-program-id": "prog-1" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ data: [{ id: "local-a" }] });
+      expect(mockCoalitionService.getLocalHistory).toHaveBeenCalledWith(
+        "member-1",
+        "prog-1",
+        expect.any(Date),
+        expect.any(Date),
+      );
+      expect(mockCoalitionService.getExternalHistory).not.toHaveBeenCalled();
+    });
+
+    it("MEMBER lomem_ token: returns the member's local history, never the partner's raw history", async () => {
+      mockCoalitionService.getLocalHistory.mockResolvedValue([{ id: "local-a" }]);
+      mockCoalitionService.getExternalHistory.mockResolvedValue([{ id: "raw-b" }]);
+
+      mockPrisma.memberSessionToken.findUnique.mockResolvedValue({
+        tokenHash: "hash-abc",
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+        readOnly: false,
+        member: memberRow(),
+      });
+
+      dropAdminIdentity();
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/members/member-1/coalition/history",
+        headers: { authorization: "Bearer lomem_abc123", "x-program-id": "prog-1" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ data: [{ id: "local-a" }] });
+      expect(mockCoalitionService.getLocalHistory).toHaveBeenCalledWith(
+        "member-1",
+        "prog-1",
+        expect.any(Date),
+        expect.any(Date),
+      );
+      expect(mockCoalitionService.getExternalHistory).not.toHaveBeenCalled();
+    });
+  });
+
+  // ═══ History — SERVER principal ═══
+
+  describe("GET /members/:id/coalition/history — SERVER principal", () => {
+    it("delegates to getExternalHistory (filtered at the service layer)", async () => {
+      mockCoalitionService.getExternalHistory.mockResolvedValue([{ id: "ext-1" }]);
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/members/member-1/coalition/history",
+        headers: authHeaders,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ data: [{ id: "ext-1" }] });
+      expect(mockCoalitionService.getExternalHistory).toHaveBeenCalledWith(
+        "member-1",
+        "prog-1",
+        expect.any(Date),
+        expect.any(Date),
+      );
+      expect(mockCoalitionService.getLocalHistory).not.toHaveBeenCalled();
     });
   });
 });

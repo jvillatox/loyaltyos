@@ -207,7 +207,13 @@ export function coalitionRoutes(app: FastifyInstance, _opts: unknown, done: () =
     const from = query.from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const to = query.to ?? new Date();
 
-    const history = await coalitionService.getExternalHistory(memberId, programId, from, to);
+    // A member (portal session or lomem_ widget token) must only ever see their
+    // own local transactions — never the partner's raw history, which is not
+    // scoped to a single member.
+    const history =
+      request.memberId != null
+        ? await coalitionService.getLocalHistory(memberId, programId, from, to)
+        : await coalitionService.getExternalHistory(memberId, programId, from, to);
 
     return reply.send({ data: history });
   });

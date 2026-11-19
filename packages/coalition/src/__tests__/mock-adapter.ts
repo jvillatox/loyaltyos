@@ -18,6 +18,8 @@ export interface MockAdapterOptions {
   balanceAfter?: number;
   /** Override capabilities flags. */
   capabilities?: Partial<AdapterCapabilities>;
+  /** Entries returned by queryHistory (defaults to an empty list). */
+  historyEntries?: unknown[];
 }
 
 const DEFAULT_CAPABILITIES: AdapterCapabilities = {
@@ -38,6 +40,7 @@ export class MockAdapter implements CoalitionAdapter {
   balanceOverride: number;
   externalTxId: string;
   balanceAfter: number;
+  historyEntries: unknown[];
 
   // Spies for test assertions
   accumulateCalls: {
@@ -61,6 +64,7 @@ export class MockAdapter implements CoalitionAdapter {
   healthcheckCalls = 0;
   getBalanceCalls: string[] = [];
   reverseCalls: { txRef: string; reason: string }[] = [];
+  queryHistoryCalls: { externalMemberRef: string; from: Date; to: Date }[] = [];
 
   private transientCount = 0;
 
@@ -73,6 +77,7 @@ export class MockAdapter implements CoalitionAdapter {
     this.balanceOverride = options.balanceOverride ?? 0;
     this.externalTxId = options.externalTxId ?? "mock-ext-tx-1";
     this.balanceAfter = options.balanceAfter ?? 1000;
+    this.historyEntries = options.historyEntries ?? [];
   }
 
   private async delay(): Promise<void> {
@@ -162,5 +167,12 @@ export class MockAdapter implements CoalitionAdapter {
   async reverseTransaction(txRef: string, reason: string): Promise<void> {
     this.reverseCalls.push({ txRef, reason });
     await this.delay();
+  }
+
+  async queryHistory(externalMemberRef: string, from: Date, to: Date): Promise<unknown[]> {
+    this.queryHistoryCalls.push({ externalMemberRef, from, to });
+    this.maybeThrow();
+    await this.delay();
+    return this.historyEntries;
   }
 }

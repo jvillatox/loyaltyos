@@ -62,6 +62,47 @@ interface CachedProgramAdapter {
   updatedAt: Date;
 }
 
+// Fields a partner's history entry may use to identify the owning member. When
+// an entry carries none of these, the partner's format cannot be filtered per
+// member with certainty, and the caller must fall back to local history.
+const MEMBER_IDENTIFIER_FIELDS = [
+  "email",
+  "rut",
+  "correo",
+  "externalId",
+  "externalMemberRef",
+  "memberId",
+  "identificador",
+  "usuario",
+  "identifier",
+] as const;
+
+function extractMemberIdentifier(entry: unknown): string | null {
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as Record<string, unknown>;
+  for (const field of MEMBER_IDENTIFIER_FIELDS) {
+    const value = record[field];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return null;
+}
+
+/**
+ * Keeps only the entries whose member identifier matches `externalId`. Returns
+ * `null` when the entries do not expose a member identifier (so the result could
+ * not be filtered with certainty); the caller then falls back to local history.
+ */
+function filterHistoryByMember(entries: unknown[], externalId: string): unknown[] | null {
+  if (entries.length === 0) return [];
+  const result: unknown[] = [];
+  for (const entry of entries) {
+    const identifier = extractMemberIdentifier(entry);
+    if (identifier === null) return null;
+    if (identifier === externalId) result.push(entry);
+  }
+  return result;
+}
+
 export class CoalitionService {
   private repo: Repository;
   private pointsService: PointsService;
@@ -381,18 +422,38 @@ export class CoalitionService {
     return adapter.getBalance(account.externalId);
   }
 
+  /** Returns the member's own local coalition transactions (never the partner's raw history). */
+  async getLocalHistory(
+    memberId: string,
+    programId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<CoalitionTransactionRow[]> {
+    return this.repo.listMemberTransactions(programId, memberId, from, to);
+  }
+
+  /**
+   * Server-side history: query the partner and filter to the member's entries.
+   * When the partner's format cannot be filtered per member with certainty, fall
+   * back to the member's local transactions so no other member's data is returned.
+   */
   async getExternalHistory(
     memberId: string,
     programId: string,
     from: Date,
     to: Date,
   ): Promise<unknown[]> {
-    const adapter = await this.getActiveAdapter(programId);
-    if (!adapter.capabilities.historyQuery) return [];
     const account = await this.repo.getAccount(memberId, programId);
     if (!account) throw new CoalitionAccountNotLinkedError(memberId, programId);
-    if (!adapter.queryHistory) return [];
-    return adapter.queryHistory(account.externalId, from, to);
+
+    const adapter = await this.getActiveAdapter(programId);
+    if (!adapter.capabilities.historyQuery || !adapter.queryHistory) {
+      return this.getLocalHistory(memberId, programId, from, to);
+    }
+
+    const entries = await adapter.queryHistory(account.externalId, from, to);
+    const filtered = filterHistoryByMember(entries, account.externalId);
+    return filtered ?? (await this.getLocalHistory(memberId, programId, from, to));
   }
 
   async linkExternalAccount(input: {
