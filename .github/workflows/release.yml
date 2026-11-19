@@ -129,16 +129,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  verify-public-images:
+    name: Verify images are public
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [docker]
+
+    steps:
+      - name: Check anonymous pull of each image
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          for image in api admin portal; do
+            repo="loyaltyos-${image}"
+            token="$(curl -fsSL "https://ghcr.io/token?scope=repository:${OWNER}/${repo}:pull" | jq -r '.token')"
+            code="$(curl -s -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer ${token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json" \
+              "https://ghcr.io/v2/${OWNER}/${repo}/manifests/${VERSION}")"
+            if [ "${code}" != "200" ]; then
+              echo "::error::La imagen ${repo} no es pública en GHCR (HTTP ${code})."
+              exit 1
+            fi
+            echo "::notice::${repo}:${VERSION} es pública (HTTP ${code})"
+          done
+
   publish-widget:
     name: Publish widget to npm
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test, mcp-e2e]
-    # Best-effort publish: only attempt it when an npm token is configured.
-    # The @loyaltyos scope is not registered on npm yet, so a fresh scope
-    # returns E404 and must not fail the release. To enable publishing, claim
-    # the @loyaltyos scope on npmjs.org (create the org or package) and give
-    # NPM_TOKEN write access to it, then drop the `continue-on-error` below.
+    # Best-effort publish: only attempted when an npm token is configured. The
+    # @loyaltyos scope is not registered on npm yet, so a fresh scope returns
+    # E404 and the publish is reported as omitted instead of failing the
+    # release. To enable publishing, claim the @loyaltyos scope on npmjs.org
+    # (create the org or package) and give NPM_TOKEN write access to it.
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -159,8 +186,15 @@ jobs:
 
       - name: Publish to npm
         if: ${{ env.NODE_AUTH_TOKEN != '' }}
-        continue-on-error: true
-        run: pnpm --filter @loyaltyos/widget publish --access public --no-git-checks
+        run: |
+          if LOG="$(pnpm --filter @loyaltyos/widget publish --access public --no-git-checks 2>&1)"; then
+            echo "- \`@loyaltyos/widget\`: publicado en npm" >> "${GITHUB_STEP_SUMMARY}"
+          elif echo "${LOG}" | grep -qiE "E404|404 Not Found|Not found"; then
+            echo "- \`@loyaltyos/widget\`: omitido (scope @loyaltyos no registrado)" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "${LOG}"
+            echo "::warning::npm publish falló (ver log anterior)"
+          fi
 
   helm-lint:
     name: Helm Lint
@@ -248,7 +282,7 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [docker, helm-lint]
+    needs: [docker, verify-public-images, helm-lint]
 
     steps:
       - uses: actions/checkout@v7
