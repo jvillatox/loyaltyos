@@ -362,7 +362,10 @@ export class CoalitionService {
       idempotencyKey: `local-debit-${txRef}`,
     });
 
-    // 5. Create PENDING tx (the debit is already settled).
+    // 5. Fix the converted amount (and the rate used) on the PENDING tx so a
+    // later reconciliation retry re-sends the SAME coalition points even if the
+    // program's conversionRate changes in the meantime.
+    const coalitionPoints = Math.round(ownPoints * config.conversionRate);
     const tx = await this.repo.createTx({
       accountId: account.id,
       programId,
@@ -370,11 +373,11 @@ export class CoalitionService {
       amount: ownPoints,
       localTxRef: txRef,
       idempotencyKey: `convert-${txRef}`,
+      metadata: { coalitionPoints, conversionRate: config.conversionRate },
     });
 
     // 6. Send the converted amount (not ownPoints) to the partner. No local
     // credit is made — the partner's coalition balance is the only "earn".
-    const coalitionPoints = Math.round(ownPoints * config.conversionRate);
     try {
       const adapter = await this.getActiveAdapter(programId);
       this.requireCapability(adapter, "convert", "convert");
@@ -640,12 +643,7 @@ export class CoalitionService {
     }
 
     try {
-      const adapterResult = await this.runExternalOperation(
-        adapter,
-        account,
-        claimed,
-        config.conversionRate,
-      );
+      const adapterResult = await this.runExternalOperation(adapter, account, claimed);
       await this.repo.updateTxSuccess(
         claimed.id,
         adapterResult.externalTxId,
@@ -951,12 +949,16 @@ export class CoalitionService {
     adapter: CoalitionAdapter,
     account: CoalitionAccountRow,
     tx: CoalitionTransactionRow,
-    conversionRate: number,
   ): Promise<TxResult> {
     const metadata = (tx.metadata ?? {}) as Record<string, unknown>;
     if (isConvertTransaction(tx)) {
       if (!adapter.convert) throw new CoalitionUnsupportedError("convert", adapter.name);
-      const coalitionPoints = Math.round(tx.amount * conversionRate);
+      const coalitionPoints = metadata.coalitionPoints;
+      if (typeof coalitionPoints !== "number") {
+        throw new CoalitionBusinessError(
+          `Convert transaction "${tx.id}" has no stored coalition points`,
+        );
+      }
       return adapter.convert(account.externalId, coalitionPoints, tx.localTxRef, tx.id);
     }
     if (tx.type === "EARN") {

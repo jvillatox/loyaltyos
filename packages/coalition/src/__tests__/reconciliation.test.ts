@@ -183,8 +183,13 @@ describe("reconcilePendingTransaction", () => {
     );
   });
 
-  it("reconciling a PENDING convert does not re-debit local points and sends the converted amount", async () => {
-    const tx = txRow({ type: "REDEEM", idempotencyKey: "convert-ref-1", amount: 100 });
+  it("reconciling a PENDING convert does not re-debit local points and sends the stored amount", async () => {
+    const tx = txRow({
+      type: "REDEEM",
+      idempotencyKey: "convert-ref-1",
+      amount: 100,
+      metadata: { coalitionPoints: 200, conversionRate: 2 },
+    });
     mockPrisma.coalitionTransaction.findUnique.mockResolvedValue(tx);
     mockPrisma.coalitionAccount.findUnique.mockResolvedValue(accountRow());
     mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow({ conversionRate: 2 }));
@@ -195,11 +200,33 @@ describe("reconcilePendingTransaction", () => {
 
     await expect(svc.reconcilePendingTransaction("tx-1")).resolves.toBe("confirmed");
 
-    // The partner receives ownPoints × conversionRate, and the local debit was
-    // already settled at convert() time — reconciliation must not debit again.
+    // The partner receives the coalition points stored at convert() time, and the
+    // local debit was already settled then — reconciliation must not debit again.
     expect(adapter.convertCalls[0]?.ownPoints).toBe(200);
     expect(mockRedeem).not.toHaveBeenCalled();
     expect(mockEarn).not.toHaveBeenCalled();
+  });
+
+  it("reconciliation re-sends the stored amount when the conversion rate changes", async () => {
+    const tx = txRow({
+      type: "REDEEM",
+      idempotencyKey: "convert-ref-1",
+      amount: 100,
+      metadata: { coalitionPoints: 200, conversionRate: 2 },
+    });
+    mockPrisma.coalitionTransaction.findUnique.mockResolvedValue(tx);
+    mockPrisma.coalitionAccount.findUnique.mockResolvedValue(accountRow());
+    // The rate was raised after the convert was created; the retry must NOT
+    // recompute with the new rate.
+    mockPrisma.coalitionConfig.findUnique.mockResolvedValue(configRow({ conversionRate: 5 }));
+    mockPrisma.coalitionTransaction.updateMany.mockResolvedValue({ count: 1 });
+
+    const adapter = new MockAdapter({ externalTxId: "ext-1" });
+    const svc = makeService(adapter);
+
+    await expect(svc.reconcilePendingTransaction("tx-1")).resolves.toBe("confirmed");
+
+    expect(adapter.convertCalls[0]?.ownPoints).toBe(200);
   });
 
   it("transient error keeps the transaction pending (not yet confirmed)", async () => {

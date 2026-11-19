@@ -407,6 +407,14 @@ describe("CoalitionService", () => {
         expect.objectContaining({ amount: 300, idempotencyKey: "local-debit-ref-cnv-2" }),
       );
       expect(mockEarn).not.toHaveBeenCalled();
+      // The converted amount and the rate used are fixed on the tx at creation.
+      expect(mockPrisma.coalitionTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { coalitionPoints: 600, conversionRate: 2 },
+          }),
+        }),
+      );
     });
 
     it("throws when conversion is disabled", async () => {
