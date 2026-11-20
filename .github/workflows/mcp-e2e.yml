@@ -58,7 +58,6 @@ jobs:
       DATABASE_URL: postgresql://loyaltyos_app:loyaltyos_app@localhost:5432/loyaltyos_test
       MIGRATION_DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
       LOYALTYOS_APP_DB_PASSWORD: loyaltyos_app
-      LOYALTYOS_PLATFORM_DB_PASSWORD: loyaltyos_platform
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: test-jwt-secret-for-ci-at-least-32-chars
       API_KEY_SALT: test-salt-for-ci

@@ -277,24 +277,58 @@ Docker Compose and Helm create `POSTGRES_USER` as a superuser, which bypasses RL
 even under `FORCE ROW LEVEL SECURITY`. The runtime must never connect as a
 superuser.
 
-| URL                      | Role              | Attributes                                                                                  | Used by                                   |
-| ------------------------ | ----------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `DATABASE_URL`           | `loyaltyos_app`   | `NOSUPERUSER NOBYPASSRLS`; `SELECT/INSERT/UPDATE/DELETE` on business tables; `USAGE` on seq | the API runtime and BullMQ workers        |
-| `MIGRATION_DATABASE_URL` | `loyaltyos_owner` | owns tables, full DDL, `BYPASSRLS`                                                          | `prisma migrate deploy`, backfill/scripts |
+| URL                      | Role            | Attributes                                                                                  | Used by                                   |
+| ------------------------ | --------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `DATABASE_URL`           | `loyaltyos_app` | `NOSUPERUSER NOBYPASSRLS`; `SELECT/INSERT/UPDATE/DELETE` on business tables; `USAGE` on seq | the API runtime and BullMQ workers        |
+| `MIGRATION_DATABASE_URL` | `owner`         | owns tables, full DDL; needs `CREATEROLE` to run provisioning                               | `prisma migrate deploy`, backfill/scripts |
 
 A migration/script provisions the app role and its grants (idempotent), and
 `docker-compose.yml`, the Helm values and `.env.example` are updated to wire both
 URLs.
 
-A third role, `loyaltyos_platform` (`BYPASSRLS`), exists for one narrow purpose:
-listing organizations in worker sweeps (§2.4). It is never used to process
-business data.
+**No `BYPASSRLS` runtime role.** Creating a `BYPASSRLS` role requires superuser,
+which the managed-Postgres owner (RDS, Cloud SQL, Azure) does not have — so
+provisioning would fail exactly where Cloud runs. Instead, a `SECURITY DEFINER`
+function owned by the migration owner replaces the old `loyaltyos_platform` role
+for the one privileged listing worker sweeps need:
+
+```sql
+CREATE OR REPLACE FUNCTION public.app_list_organization_ids()
+RETURNS SETOF text
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY SELECT id FROM public."Organization" ORDER BY id;
+END
+$$;
+
+GRANT EXECUTE ON FUNCTION public.app_list_organization_ids() TO loyaltyos_app;
+```
+
+It runs as its owner (which owns the tables) and returns **only** organization
+ids.
+
+**Provisioning requires `CREATEROLE`.** The provisioning script issues
+`CREATE ROLE`, so the `MIGRATION_DATABASE_URL` owner must have `CREATEROLE` (a
+plain DB owner does). On managed Postgres the provisioned admin may not; in that
+case a DBA runs the equivalent SQL once by hand and `LOYALTYOS_APP_DB_PASSWORD`
+is left unset so provisioning skips:
+
+```sql
+CREATE ROLE loyaltyos_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '<password>';
+GRANT USAGE ON SCHEMA public TO loyaltyos_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO loyaltyos_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO loyaltyos_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO loyaltyos_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO loyaltyos_app;
+```
 
 `ALTER TABLE … FORCE ROW LEVEL SECURITY` is applied to every tenant table so that
 even the table owner is subject to the policy (only superusers are exempt). The
 `app.organization_id` GUC is a plain text GUC, so it is not itself a security
 control against a compromised DB role — it is a guardrail for correct application
-code. That is why `BYPASSRLS` is confined to the owner/platform roles and the
+code. That is why `BYPASSRLS` is confined to the owner role and the
 boot guard below.
 
 **Boot guard.** With `TENANCY_RLS=audit|enforce`, the API refuses to start if the
@@ -314,15 +348,15 @@ exits non-zero. A test asserts the guard.
   per-tenant pooling or connection pinning is required.
 - **BullMQ workers / sweeps (no request):** expiry, reminders, settlement,
   reconciliation, token cleanup. Each sweep runs in two phases: (1) list
-  organizations under the owner/platform role (`SELECT id FROM "Organization"` —
-  the **only** `BYPASSRLS` use); (2) for each organization, run the per-org work
-  inside `tenantStorage.run(ctx)` under the **app role**. `BYPASSRLS` is never
-  used to process business data.
+  organizations via `app_list_organization_ids()` — the owner's `SECURITY DEFINER`
+  function, the **only** privileged listing; (2) for each organization, run the
+  per-org work inside `tenantStorage.run(ctx)` under the **app role**. No
+  `BYPASSRLS` runtime role exists, and the function returns only ids.
 - **Scripts** (`admin:create`, `admin:token:*`, `coalition:reencrypt`,
   `tenancy:backfill`, `tenancy:move-program`): administrative, cross-tenant →
-  run under the owner role (`BYPASSRLS`), not the app role.
-- **Migrations:** run under the owner role (`BYPASSRLS`). With `FORCE RLS` and no
-  context, a backfill `UPDATE` under the app role would match zero rows.
+  run under the owner role, not the app role.
+- **Migrations:** run under the owner role. With `FORCE RLS` and no context, a
+  backfill `UPDATE` under the app role would match zero rows.
 
 ### 2.5 Resolving program → organization before context
 
@@ -540,7 +574,7 @@ sweeps.
 | 8   | **PAT + member-token + API-key rebind** — PAT→membership, effective-role rule, org on credentials                                                                                                                                                   | PAT effective role `min(token, membership)`; cross-org PAT denied; member token inherits org                                                     |
 | 9   | **Security: hash API keys** — `ApiKey.keyHash` + `prefix`, migration hashes existing keys, auth looks up by hash, plaintext column dropped later                                                                                                    | migration hashes without collision; lookup by hash; plaintext no longer readable; seed shows key once                                            |
 | 10  | **Security: Fastify 5 + `@fastify/helmet`** — Fastify `4.28 → 5`, `@fastify/helmet` `11 → 13` (compatible), all plugins bumped                                                                                                                      | full suite (unit + MCP E2E + smoke) green                                                                                                        |
-| 11  | **Workers: org-scoped sweeps** — expiry, reminders, settlement, reconciliation, token cleanup list orgs (owner/platform) then process per-org under the app role                                                                                    | `BYPASSRLS` used only to list orgs; per-org processing under app role; sweep tests green under `enforce`                                         |
+| 11  | **Workers: org-scoped sweeps** — expiry, reminders, settlement, reconciliation, token cleanup list orgs via `app_list_organization_ids()` then process per-org under the app role                                                                   | the listing function returns only ids and runs `SECURITY DEFINER`; per-org processing under app role; sweep tests green under `enforce`          |
 | 12  | **Admin org selector + MCP + docs** — UI switcher, MCP scoping, `UPGRADING.md`, `.env.example`/docker-compose/Helm docs                                                                                                                             | admin UI switch; MCP scoped; docs accurate                                                                                                       |
 | 13  | **RLS benchmark + report** — k6 `POST /events`, p50/p95, `docs/cloud/benchmarks/`                                                                                                                                                                   | +15 % p95 AND absolute p95 < 150 ms verified, or plan B documented                                                                               |
 

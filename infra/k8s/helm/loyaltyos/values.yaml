@@ -413,11 +413,11 @@ postgresql:
 tenancy:
   # -- Split the runtime into a least-privileged `loyaltyos_app` role.
   # When disabled, the API and migrations both use the owner role (postgresql.auth).
+  # Provisioning issues CREATE ROLE: the owner needs CREATEROLE. On managed
+  # Postgres, have a DBA run the SQL in docs/design/tenancy.md §2.3 by hand.
   enabled: false
   # -- Password for the `loyaltyos_app` runtime role (required when enabled).
   appRolePassword: ""
-  # -- Password for the `loyaltyos_platform` BYPASSRLS role (optional; NOLOGIN if empty).
-  platformRolePassword: ""
   # -- Row-level security mode: off | audit | enforce
   rlsMode: off
 

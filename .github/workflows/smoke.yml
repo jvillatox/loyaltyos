@@ -46,10 +46,8 @@ jobs:
           echo "METRICS_TOKEN=$(openssl rand -hex 32)" >> infra/docker/.env.production
           # Split roles: the API connects as loyaltyos_app, migrations as the owner.
           APP_DB_PASSWORD="$(openssl rand -hex 16)"
-          PLATFORM_DB_PASSWORD="$(openssl rand -hex 16)"
           echo "DATABASE_URL=postgresql://loyaltyos_app:${APP_DB_PASSWORD}@postgres:5432/loyaltyos" >> infra/docker/.env.production
           echo "LOYALTYOS_APP_DB_PASSWORD=${APP_DB_PASSWORD}" >> infra/docker/.env.production
-          echo "LOYALTYOS_PLATFORM_DB_PASSWORD=${PLATFORM_DB_PASSWORD}" >> infra/docker/.env.production
           # audit mode proves DATABASE_URL is really the app role: the boot guard
           # refuses to start on a superuser/BYPASSRLS connection.
           echo "TENANCY_RLS=audit" >> infra/docker/.env.production

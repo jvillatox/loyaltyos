@@ -11,11 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Database role separation for row-level security (M1 groundwork).** A new
   idempotent provisioning script (`apps/api/src/tenancy-provision.ts`) creates the
-  least-privileged `loyaltyos_app` runtime role (`NOSUPERUSER NOBYPASSRLS`) and the
-  `loyaltyos_platform` `BYPASSRLS` role, grants the app role DML on existing tables,
-  and installs `ALTER DEFAULT PRIVILEGES` so tables created by future migrations
-  stay reachable. Passwords come from `LOYALTYOS_APP_DB_PASSWORD` /
-  `LOYALTYOS_PLATFORM_DB_PASSWORD` (never from the repository).
+  least-privileged `loyaltyos_app` runtime role (`NOSUPERUSER NOBYPASSRLS`), grants
+  it DML on existing tables, and installs `ALTER DEFAULT PRIVILEGES` so tables
+  created by future migrations stay reachable. It also creates a `SECURITY DEFINER`
+  `app_list_organization_ids()` function (owned by the migration owner) so worker
+  sweeps can list organizations without any `BYPASSRLS` runtime role. The password
+  comes from `LOYALTYOS_APP_DB_PASSWORD` (never from the repository).
 
 - **Two database URLs.** `DATABASE_URL` now targets the app role for the API and
   workers, while `MIGRATION_DATABASE_URL` (owner) drives `prisma migrate deploy` and
@@ -31,9 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    script no-ops when `LOYALTYOS_APP_DB_PASSWORD` is unset, so existing
    single-role deployments keep working unchanged.
 2. **When the role split is activated** (a future M1 release), set
-   `LOYALTYOS_APP_DB_PASSWORD` (and optionally `LOYALTYOS_PLATFORM_DB_PASSWORD`),
-   point `DATABASE_URL` at `loyaltyos_app`, keep `MIGRATION_DATABASE_URL` on the
-   owner, and move `TENANCY_RLS` from `off` through `audit` to `enforce`.
+   `LOYALTYOS_APP_DB_PASSWORD`, point `DATABASE_URL` at `loyaltyos_app`, keep
+   `MIGRATION_DATABASE_URL` on the owner, and move `TENANCY_RLS` from `off`
+   through `audit` to `enforce`.
+3. **Provisioning requires `CREATEROLE`.** The provisioning script issues
+   `CREATE ROLE`, so the `MIGRATION_DATABASE_URL` owner must have `CREATEROLE`. A
+   plain DB owner has it, but on managed Postgres (RDS, Cloud SQL, Azure) the
+   provisioned admin may not — have a DBA run the equivalent SQL from
+   `docs/design/tenancy.md` §2.3 once, then leave `LOYALTYOS_APP_DB_PASSWORD`
+   unset to skip re-provisioning.
 
 ## [1.9.2] - 2026-11-19
 
