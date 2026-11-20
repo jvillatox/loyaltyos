@@ -43,10 +43,9 @@ services:
       # Owner URL for migrations and role provisioning. Defaults to the same
       # superuser; set DATABASE_URL to the `loyaltyos_app` role to split roles.
       MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-postgresql://${POSTGRES_USER:-loyaltyos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-loyaltyos}}
-      # Tenancy role passwords (see .env.production.example). Leave unset to keep
+      # Tenancy role password (see .env.production.example). Leave unset to keep
       # the current single-role setup.
       LOYALTYOS_APP_DB_PASSWORD: ${LOYALTYOS_APP_DB_PASSWORD:-}
-      LOYALTYOS_PLATFORM_DB_PASSWORD: ${LOYALTYOS_PLATFORM_DB_PASSWORD:-}
       TENANCY_RLS: ${TENANCY_RLS:-off}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
