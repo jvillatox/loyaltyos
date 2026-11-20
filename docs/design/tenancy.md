@@ -10,8 +10,8 @@
 
 LoyaltyOS currently isolates data with a single column, `programId`, derived from
 the authenticated credential (`admin`/`member`/PAT/member-token/API key). M1
-introduces an explicit tenant root — **`Organization`** — and makes it the
-hard database isolation boundary with **PostgreSQL Row-Level Security (RLS)**.
+introduces an explicit tenant root — **`Organization`** — and makes it the hard
+database isolation boundary with **PostgreSQL Row-Level Security (RLS)**.
 `Program` stays the application-level scope, exactly as today.
 
 Two decisions shape everything:
@@ -25,17 +25,32 @@ Two decisions shape everything:
    `Organization`. Cloud may add its own `tenant`/`cloud_*` tables later without
    touching the core's isolation column.
 2. **`organizationId` is the RLS column**, denormalized onto every business table
-   (the same pattern `programId` already follows). `programId` remains for
-   defense-in-depth and for per-member/program scope.
+   (the same pattern `programId` already follows) and kept consistent by a
+   composite foreign key `(programId, organizationId) → Program`. `programId`
+   remains for defense-in-depth and for per-member/program scope.
 
 Roles stay `SUPER_ADMIN` / `OPERATOR` / `ANALYST`. Renaming them to
 `BUSINESS_OWNER`/`BUSINESS_MANAGER`/`BUSINESS_ANALYST` is cosmetic churn for
 self-hosters and is left to Cloud; the `@loyaltyos/permissions` map and the
 admin UI are untouched by the naming.
 
+The security posture is explicit rather than implicit:
+
+- **Two DB URLs.** `DATABASE_URL` (role `loyaltyos_app`, `NOSUPERUSER
+NOBYPASSRLS`) for the API and workers; `MIGRATION_DATABASE_URL` (owner) for
+  migrations and scripts. A boot guard refuses to start on a superuser/BYPASSRLS
+  connection under `audit`/`enforce`.
+- **Fail visible.** A query with no tenant context throws `TenantContextMissing`
+  in `enforce` mode (logs + counts in `audit`), except the listed global tables.
+- **Pre-context resolution.** Entry points that only know a `programId` (member
+  login, magic link, widget, `/auth/*`) resolve the organization through a
+  scoped `SECURITY DEFINER` function, never by reading `Program` without context.
+
 The migration is **expand → backfill → contract**: additive and reversible at
 every step, with a single default `Organization` for existing installs and
 `AdminUser` evolving to `User` + `OrganizationMembership`.
+
+MFA (TOTP) is **out of scope for M1**; it ships with the Cloud platform roles.
 
 ---
 
@@ -66,7 +81,7 @@ enum OrgStatus {
 `legalName`, `country`, `locale`, `timezone`, `slug`, billing and contract fields
 are commercial and belong to Cloud; adding them here would pollute the MIT core.
 
-`Program` gains one column:
+`Program` gains one column plus an FK-target unique:
 
 ```prisma
 model Program {
@@ -75,6 +90,7 @@ model Program {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
+  @@unique([id, organizationId]) // FK target for the composite child FKs (§2.6)
 }
 ```
 
@@ -95,7 +111,6 @@ model User {
   email        String     @unique
   passwordHash String?
   name         String
-  mfaSecretEnc String?     // TOTP secret, encrypted at rest
   status       UserStatus @default(ACTIVE)
   locale       String     @default("es-MX")
   lastLoginAt  DateTime?
@@ -139,13 +154,16 @@ The **role** moves from `User` to the membership: the same person can be
 role of a request is the role of the user's **active** membership in the
 request's organization.
 
+There is no `mfaSecretEnc` column here: MFA (TOTP) is out of scope for M1 and
+arrives with the Cloud platform roles.
+
 ### 1.3 Relationship to the existing auth surface
 
 | Existing concept                  | Today (v1.9.2)                                                                                                                                                      | After M1                                                                                                                                                        |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Admin session                     | `AdminSession.userId → AdminUser`; role from `AdminUser.role`                                                                                                       | `AdminSession.userId → User`; session carries `activeMembershipId` (or `activeOrganizationId`) so a multi-org user's org choice survives the cookie             |
 | Personal access token (`lopat_…`) | `PersonalAccessToken.adminUserId → AdminUser`; already hashed (`tokenHash` + `prefix`); `role` stamped on the token; effective role = `min(token.role, owner.role)` | `PersonalAccessToken.membershipId → OrganizationMembership` (implies `userId` + `organizationId` + `role`); effective role = `min(token.role, membership.role)` |
-| API key (`X-API-Key`)             | `ApiKey.programId` + `scope` (`SERVER`/`CLIENT`); **plaintext `key`**                                                                                               | `ApiKey.organizationId` + `keyHash` + `prefix` (hashed; see §7.2)                                                                                               |
+| API key (`X-API-Key`)             | `ApiKey.programId` + `scope` (`SERVER`/`CLIENT`); **plaintext `key`**                                                                                               | `ApiKey.organizationId` + `keyHash` + `prefix` (hashed; see §7)                                                                                                 |
 | Member session token (`lomem_…`)  | `MemberSessionToken.memberId` + `programId`, hashed                                                                                                                 | unchanged shape; org is derived `member.program.organizationId`                                                                                                 |
 | Member session / magic link       | `Session.userId → Member`, `MagicLinkToken.memberId`                                                                                                                | unchanged; member identity stays a separate domain (never mixed with `User`)                                                                                    |
 | `AuditLog`                        | `programId`, `adminUserId → AdminUser`, `actorType`/`actorId`                                                                                                       | `organizationId` added; `adminUserId → User`; `actorType`/`actorId` unchanged (already generic)                                                                 |
@@ -176,8 +194,11 @@ Rationale:
   `request.programId`; RLS is the outer hard boundary, `programId` the inner one.
   A self-hosted multi-program install keeps its existing program isolation even
   though all its programs share one organization.
+- **The two columns cannot diverge** — every `programId` table carries a
+  composite FK `(programId, organizationId) → Program(id, organizationId)`
+  (§2.6), so a row's `organizationId` is always its program's `organizationId`.
 
-### 2.2 Setting the context per request with Prisma
+### 2.2 Setting context without per-query interactive transactions
 
 The context is a transaction-local Postgres GUC:
 
@@ -186,9 +207,25 @@ SELECT set_config('app.organization_id', $1, /* is_local */ true);
 ```
 
 `is_local = true` makes it equivalent to `SET LOCAL`: it lives only for the
-current transaction and is discarded at commit/rollback. This is what makes it
+current transaction and is discarded at commit/rollback. That is what makes it
 safe with a connection pool — a pooled connection never leaks one tenant's
 context into the next request.
+
+**We do not open an interactive transaction per query.** That would collide with
+the ledger's `$transaction(… SELECT … FOR UPDATE …)` blocks (Prisma does not nest
+interactive transactions) and would add a round-trip per query. Instead the
+context is applied in three shapes, all through one `withTenantContext` helper:
+
+1. **Inside an existing `$transaction`:** the extension wraps
+   `prisma.$transaction` so its first statement is `set_config(…, true)`; every
+   statement in the block inherits the GUC. One `set_config` per transaction, and
+   `FOR UPDATE` inside it is unaffected.
+2. **A loose query outside any transaction:** wrapped as a batch —
+   `prisma.$transaction([$executeRaw set_config, query])` — so the query runs in
+   its own transaction with context.
+3. **`$queryRaw` / `$executeRaw`:** `$allModels` does not intercept raw queries,
+   so the same helper wraps them explicitly; raw SQL carries context exactly like
+   model queries.
 
 Implementation shape (in the new `packages/tenancy`):
 
@@ -199,70 +236,151 @@ export interface TenantContext {
   programId?: string;
 }
 
-// A Prisma client extension wraps every query in an interactive transaction
-// that first sets the GUC, then runs the operation.
+const GLOBAL_MODELS = new Set([
+  /* the §3.2 tables */
+]);
+
 const prisma = basePrisma.$extends({
   query: {
     $allModels: {
-      async $allOperations({ args, query }) {
+      async $allOperations({ model, args, query }) {
         const ctx = tenantStorage.getStore();
-        if (!ctx) return query(args); // no context → 0 rows (RLS denies)
-        return prisma.$transaction(async (tx) => {
-          await tx.$executeRaw`SELECT set_config('app.organization_id', ${ctx.organizationId}, true)`;
-          return query(args);
-        });
+        if (!ctx) {
+          if (GLOBAL_MODELS.has(model)) return query(args);
+          if (rlpMode === "enforce") throw new TenantContextMissing(model);
+          auditNoContext(model); // audit: log + metric, then RLS returns zero rows
+        }
+        return withTenantContext(ctx, () => query(args));
       },
+    },
+    async $transaction(args) {
+      // wrap: issue set_config once at the start of the transaction
+      // so all statements inside inherit the GUC.
     },
   },
 });
 ```
 
-The Fastify `preHandler` (or a `onRequest` hook) derives the context from the
-authenticated credential and runs the handler inside `tenantStorage.run(ctx, …)`.
+The Fastify `preHandler` derives the context from the authenticated credential
+and runs the handler inside `tenantStorage.run(ctx, …)`.
 
-Two guarantees fall out of this design:
+**Fail visible.** Under `TENANCY_RLS=enforce`, a query with no context on a
+non-global model throws `TenantContextMissing` at the application layer — the DB
+would silently return zero rows under RLS, so the extension turns a silent empty
+result into a loud bug. Under `audit`, the extension logs the operation and
+increments a counter so missing-context hotspots are measured before flipping to
+`enforce`. Global tables (§3.2) are exempt.
 
-- **No context → zero rows.** `FORCE ROW LEVEL SECURITY` plus a policy that
-  matches only `current_setting('app.organization_id')` means a query without
-  context matches nothing.
-- **Deny-by-default at the DB**, independent of any application bug. Even a
-  missing `where` clause in a repository cannot leak rows across organizations.
+### 2.3 Database roles and two connection URLs
 
-### 2.3 Database roles
+Docker Compose and Helm create `POSTGRES_USER` as a superuser, which bypasses RLS
+even under `FORCE ROW LEVEL SECURITY`. The runtime must never connect as a
+superuser.
 
-| Role                 | Grants                                                                 | BYPASSRLS | Used by                                   |
-| -------------------- | ---------------------------------------------------------------------- | --------- | ----------------------------------------- |
-| `loyaltyos_owner`    | owns tables, full DDL                                                  | yes       | `prisma migrate deploy`                   |
-| `loyaltyos_app`      | `SELECT/INSERT/UPDATE/DELETE` on business tables, `USAGE` on sequences | **no**    | the API runtime                           |
-| `loyaltyos_platform` | DML + BYPASSRLS                                                        | yes       | audited cross-tenant background jobs only |
+| URL                      | Role              | Attributes                                                                                  | Used by                                   |
+| ------------------------ | ----------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `DATABASE_URL`           | `loyaltyos_app`   | `NOSUPERUSER NOBYPASSRLS`; `SELECT/INSERT/UPDATE/DELETE` on business tables; `USAGE` on seq | the API runtime and BullMQ workers        |
+| `MIGRATION_DATABASE_URL` | `loyaltyos_owner` | owns tables, full DDL, `BYPASSRLS`                                                          | `prisma migrate deploy`, backfill/scripts |
 
-`ALTER TABLE … FORCE ROW LEVEL SECURITY` is applied to every tenant table so
-that even the table owner is subject to the policy (only superusers are exempt).
-This matters for self-hosted installs that connect with a single role that owns
-the tables: RLS still applies to the app's queries.
+A migration/script provisions the app role and its grants (idempotent), and
+`docker-compose.yml`, the Helm values and `.env.example` are updated to wire both
+URLs.
 
-The `app.organization_id` GUC is a plain text GUC, so it is not itself a
-security control against a compromised DB role — it is a guardrail for correct
-application code. A role with `BYPASSRLS` (owner/platform) can always read
-everything, which is why `loyaltyos_platform` is restricted to narrow, audited
-jobs.
+A third role, `loyaltyos_platform` (`BYPASSRLS`), exists for one narrow purpose:
+listing organizations in worker sweeps (§2.4). It is never used to process
+business data.
+
+`ALTER TABLE … FORCE ROW LEVEL SECURITY` is applied to every tenant table so that
+even the table owner is subject to the policy (only superusers are exempt). The
+`app.organization_id` GUC is a plain text GUC, so it is not itself a security
+control against a compromised DB role — it is a guardrail for correct application
+code. That is why `BYPASSRLS` is confined to the owner/platform roles and the
+boot guard below.
+
+**Boot guard.** With `TENANCY_RLS=audit|enforce`, the API refuses to start if the
+connection's `current_user` is a superuser or has `BYPASSRLS`:
+
+```sql
+SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+```
+
+If either is true the API logs a clear message ("refusing to start:
+`DATABASE_URL` connects as a superuser/BYPASSRLS role; use `loyaltyos_app`") and
+exits non-zero. A test asserts the guard.
 
 ### 2.4 Connection pool, workers, scripts, migrations
 
-- **Connection pool:** safe, because `set_config(…, true)` is transaction-local.
-  No per-tenant pooling or connection pinning is required in the base design.
-- **BullMQ workers (no request):** each job carries `organizationId` in its
-  payload (or derives it from the row it operates on, e.g.
-  `PointLot.programId → Program.organizationId`), and the worker runs its body
-  inside `tenantStorage.run(ctx, …)`. Jobs that legitimately span tenants (rare
-  in the core — e.g. a global sweep) run under `loyaltyos_platform` and are
-  audited.
+- **Connection pool:** safe — `set_config(…, true)` is transaction-local. No
+  per-tenant pooling or connection pinning is required.
+- **BullMQ workers / sweeps (no request):** expiry, reminders, settlement,
+  reconciliation, token cleanup. Each sweep runs in two phases: (1) list
+  organizations under the owner/platform role (`SELECT id FROM "Organization"` —
+  the **only** `BYPASSRLS` use); (2) for each organization, run the per-org work
+  inside `tenantStorage.run(ctx)` under the **app role**. `BYPASSRLS` is never
+  used to process business data.
 - **Scripts** (`admin:create`, `admin:token:*`, `coalition:reencrypt`,
-  `tenancy:backfill`): administrative, cross-tenant by nature → run under
-  `loyaltyos_owner`/`loyaltyos_platform` (BYPASSRLS), not the app role.
-- **Migrations:** run under `loyaltyos_owner` (BYPASSRLS). This is essential:
-  with `FORCE RLS` and no context, a backfill `UPDATE` under the app role would
-  match zero rows.
+  `tenancy:backfill`, `tenancy:move-program`): administrative, cross-tenant →
+  run under the owner role (`BYPASSRLS`), not the app role.
+- **Migrations:** run under the owner role (`BYPASSRLS`). With `FORCE RLS` and no
+  context, a backfill `UPDATE` under the app role would match zero rows.
+
+### 2.5 Resolving program → organization before context
+
+Several entry points run before a session or credential has established tenant
+context: member login, magic-link validation, widget calls carrying only
+`X-Program-Id`, and the `/auth/*` routes. They know a `programId` and must derive
+`organizationId` to establish context — but `Program` is RLS-scoped, so reading
+it with no context returns zero rows (or throws).
+
+The answer is a narrowly-scoped `SECURITY DEFINER` function owned by the owner
+role, returning **only** the `organizationId`:
+
+```sql
+CREATE FUNCTION app_org_for_program(p_program_id text) RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$ SELECT "organizationId" FROM "Program" WHERE id = p_program_id $$;
+```
+
+Because it is `SECURITY DEFINER` (runs as its owner, which has `BYPASSRLS`), it
+can read `Program` without context; because it returns only the `organizationId`,
+it leaks nothing else. An optional short-TTL application cache in front of it
+removes the round-trip on hot paths.
+
+Entry points that use it (each documented and tested):
+
+| Entry point                              | Input                      | How it resolves the organization                                                      |
+| ---------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------- |
+| Member login (`POST /auth/member/login`) | `programId` + credentials  | `app_org_for_program(programId)` → context                                            |
+| Magic link (`MagicLinkToken`)            | opaque token               | token lookup is global (§3.2); then `app_org_for_program(member.programId)` → context |
+| Widget (`X-Program-Id`)                  | `programId` header         | `app_org_for_program(programId)` → context                                            |
+| Other `/auth/*` routes                   | `programId` in header/body | `app_org_for_program(programId)` → context                                            |
+
+### 2.6 Consistency: composite foreign key
+
+Every table that has `programId` also gets `organizationId`, and the two are kept
+in lock-step by a composite foreign key referencing `Program(id, organizationId)`:
+
+```prisma
+model Program {
+  id             String   @id @default(cuid())
+  organizationId String
+  // …
+  @@unique([id, organizationId]) // FK target
+}
+
+model PointTransaction {
+  programId      String
+  organizationId String
+  program        Program @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  // …
+}
+```
+
+This makes it structurally impossible for a row's `organizationId` to diverge
+from its `Program.organizationId`. The `@@unique([id, organizationId])` on
+`Program` is required by Postgres as the FK target (technically redundant with
+the primary key, but harmless).
 
 ---
 
@@ -286,8 +404,8 @@ matching `WITH CHECK`), under `FORCE ROW LEVEL SECURITY`:
 This includes the child tables that today lack `programId`
 (`MemberTier`, `CampaignApplication`, `CouponRedemption`, `RewardRedemption`,
 `MemberBadge`, `GiftCard`, `Notification`). They need `organizationId` (or a
-policy that joins through their parent) so that "no context → zero rows" holds
-for _every_ table, not just the ones with `programId`.
+policy that joins through their parent) so that "no context → `TenantContextMissing`
+/ zero rows" holds for _every_ table, not just the ones with `programId`.
 
 ### 3.2 Global (no RLS)
 
@@ -306,32 +424,44 @@ Credential rows still carry `organizationId` (denormalized) so the **admin list
 routes** can filter by org at the application layer; they are simply not
 RLS-protected because the auth-time lookup must run without context.
 
+The one pre-context read of a tenant table — resolving `programId → organizationId`
+— goes through the `SECURITY DEFINER` function (§2.5), never a direct `Program`
+read under the app role.
+
 ---
 
 ## 4. Migration from 1.9.x (expand → backfill → contract)
 
 All steps are additive and reversible until the final `NOT NULL`/RLS-`enforce`
 step. `TENANCY_RLS=off|audit|enforce` gates the behavior; new installs default to
-`enforce`, upgrades start at `off` and move through `audit` → `enforce`.
+`enforce`, upgrades start at `off` and move through `audit` → `enforce`. Role
+provisioning and the two URLs (§2.3) ship first and are orthogonal to the schema
+migration.
 
 1. **Expand (reversible: drop).** Create `Organization`, `User`,
-   `OrganizationMembership`, and add `organizationId` (nullable) to every
-   business table plus `Program.organizationId`. Add `ApiKey.keyHash` +
-   `ApiKey.prefix`. `AdminUser` and all existing behavior keep working (a
-   compatibility path resolves `AdminUser → (User, membership)` behind the
-   scenes for 1–2 releases).
+   `OrganizationMembership`; add nullable `organizationId` to every business
+   table plus `Program.organizationId` and `Program.@@unique([id, organizationId])`;
+   add the composite FK on every `programId` table (with `MATCH SIMPLE` it only
+   enforces once `organizationId` is non-null). Add `ApiKey.keyHash` +
+   `ApiKey.prefix`. `AdminUser` and all existing behavior keep working through a
+   compatibility path (`AdminUser → (User, membership)`) that lives for **two
+   releases**.
 2. **Backfill (idempotent, resumable, batched).** Create a single `default`
    `Organization`. Assign every existing `Program` to it. Copy `organizationId`
    into every child row by join (batch 10k rows, outside peak). Convert each
    `AdminUser` into one `User` (by email) + one `OrganizationMembership` in the
    default org with its current `role` and `programIds = [its programId]`.
    Hash every `ApiKey.key` into `keyHash` + `prefix`.
-   `pnpm --filter @loyaltyos/api tenancy:backfill --dry-run` first.
-3. **Contract (partially reversible).** Set `organizationId NOT NULL`, create
-   composite indexes `(organizationId, …)`, and enable RLS. Flip
-   `TENANCY_RLS` to `audit` (log queries that would be denied), observe, then
-   `enforce`. Drop the `AdminUser` compatibility path and the `ApiKey.key`
-   plaintext column in a later release (one-release window).
+   `pnpm --filter @loyaltyos/api tenancy:backfill --dry-run` first. A
+   `tenancy:move-program <programId> <organizationId>` script moves a program to
+   a new or existing organization later, updating the composite-key rows
+   atomically in one transaction (with tests).
+3. **Contract (partially reversible).** Set `organizationId NOT NULL` (the
+   composite FK is now fully enforced), create composite indexes
+   `(organizationId, …)`, and enable RLS. Flip `TENANCY_RLS` to `audit` (log
+   queries that would be denied), observe, then `enforce`. Drop the `AdminUser`
+   compatibility path and the `ApiKey.key` plaintext column after the two-release
+   window.
 
 Self-hosted single-program installs: the `default` org is created once; from the
 user's point of view nothing changes — same credentials, same program, RLS
@@ -343,98 +473,106 @@ always scoped to the one org.
 
 - **API.** `request.programId` remains; the auth plugin additionally derives
   `request.organizationId` (directly from the credential's owner, or via
-  `Program.organizationId`). Route policy and `can(role, permission)` are
-  unchanged except that `role` comes from the active membership. `X-Program-Id`
-  may only narrow to a program of the same organization (already enforced today
-  for PAT/member-token/API-key).
+  `Program.organizationId` / `app_org_for_program`). Route policy and
+  `can(role, permission)` are unchanged except that `role` comes from the active
+  membership. `X-Program-Id` may only narrow to a program of the same
+  organization (already enforced today for PAT/member-token/API-key).
 - **Admin UI.** A user with one membership sees no change. A user with two
   memberships gets an **organization selector** in the top bar; switching it
   swaps the active membership (and thus the visible program set and role).
 - **MCP.** PATs resolve through their membership, so MCP tools are automatically
   scoped to the token's organization; no new wiring beyond the auth change.
-- **Documentation.** `UPGRADING.md` gains the tenancy steps (backfill command,
-  `TENANCY_RLS` transition); new docs describe the multi-organization model.
+- **Configuration.** `DATABASE_URL` (app role) and `MIGRATION_DATABASE_URL`
+  (owner) replace a single URL; `.env.example`, `docker-compose.yml`, and the
+  Helm values are updated, and the boot guard refuses to start on a
+  superuser/BYPASSRLS connection under `audit`/`enforce`.
+- **Documentation.** `UPGRADING.md` gains the tenancy steps (role provisioning,
+  backfill command, `tenancy:move-program`, `TENANCY_RLS` transition); new docs
+  describe the multi-organization model.
 - **Existing users.** Nothing visible changes in a single-program install. The
-  only observable difference is the presence of the default organization and the
-  (optional) hashing of API keys.
+  only observable differences are the presence of the default organization, the
+  two URLs, and the (optional) hashing of API keys.
 
 ---
 
 ## 6. Risks and performance
 
-**RLS overhead.** Every query gains `organization_id = $n`, and the
-`set_config` inside an interactive transaction adds a round-trip per query. The
-benchmark (k6, M1) measures `POST /events` p50/p95 with and without RLS on a
-seeded database. **Threshold: p95 regression ≤ +15 %.**
+**RLS overhead.** Every query gains `organization_id = $n`, and `set_config` runs
+once per transaction (not per query). The benchmark (k6, M1) measures
+`POST /events` p50/p95 with and without RLS on a seeded database.
+**Thresholds: p95 regression ≤ +15 % AND absolute p95 < 150 ms** on the reference
+benchmark.
 
-**Plan B if the threshold is exceeded, in order:**
+**Plan B if either threshold is exceeded, in order:**
 
 1. Composite indexes leading with `organization_id` (so the RLS predicate is an
    index probe, not a filter-after-scan) — likely enough on its own.
-2. Amortize `set_config`: set the GUC once per _request_ (one interactive
-   transaction spanning the handler) instead of once per query.
-3. If the per-request transaction serializes too much, keep per-query
-   transactions but move `set_config` to a `SET LOCAL` issued once on connection
-   checkout with a request-scoped pool.
-4. As a last resort, disable RLS on the hottest tables and rely on the existing
+2. Move `set_config` out of the transaction to a `SET LOCAL` issued once on
+   connection checkout with a request-scoped pool, dropping the extra statement
+   per transaction.
+3. As a last resort, disable RLS on the hottest tables and rely on the existing
    application-level `programId` filtering — documented and gated behind
    `TENANCY_RLS`, with an explicit, named acceptance of the weakened guarantee.
 
 **Other risks.** Backfill on large tables (`PointTransaction`) must be batched
-and resumable; the composite unique keys already scoped by `programId` do not
-collide (the `organizationId` is derived, not a new key). The `loyaltyos_app`
-role must never be granted `BYPASSRLS` — a CI test asserts this.
+and resumable. The composite FK adds a constraint check on writes — measured in
+the benchmark. The `loyaltyos_app` role must never be granted `BYPASSRLS` — a CI
+test asserts this, and the boot guard enforces it at runtime.
 
 ---
 
 ## 7. Rollout as small PRs (tests per PR)
 
-Each PR is independently mergeable and leaves the suite green.
+Each PR is independently mergeable and leaves the suite green. The plan grew from
+10 to **13** PRs to absorb the role provisioning, the composite FK, the
+`SECURITY DEFINER` function + fail-visible context, and the org-scoped worker
+sweeps.
 
-| #   | PR                                                                                                                                                      | Tests / acceptance criteria                                                                            |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 1   | **`Organization` + `User` + `OrganizationMembership` (additive)** — schema, migration, seed; `AdminUser` compatibility path                             | migration idempotent; seed creates `default` org; existing admin tests still green                     |
-| 2   | **`organizationId` on all business tables + backfill** — nullable column, batched backfill script (`--dry-run`)                                         | backfill idempotent/resumable; data-integrity check; `organizationId` correct across child joins       |
-| 3   | **`packages/tenancy`** — `TenantContext`, `AsyncLocalStorage`, Prisma `$extends`, DB roles                                                              | "no context → 0 rows" per table; context set/cleared across pooled connections                         |
-| 4   | **RLS policies + `TENANCY_RLS=audit→enforce`** — generated policies, audit mode logs denials                                                            | two-org DB test: cross-org read/write denied, same-org allowed                                         |
-| 5   | **`User`/membership auth flow + org selector** — login resolves membership; org switch; `AdminUser` compat for 1–2 releases                             | login; role resolution; two-org user switches and sees only the active org; `admin:create` still works |
-| 6   | **PAT + member-token + API-key rebind** — PAT→membership, effective-role rule, org on credentials                                                       | PAT effective role `min(token, membership)`; cross-org PAT denied; member token inherits org           |
-| 7   | **Security: hash API keys** — `ApiKey.keyHash` + `prefix`, migration hashes existing keys, auth looks up by hash, plaintext column dropped next release | migration hashes without collision; lookup by hash; plaintext no longer readable; seed shows key once  |
-| 8   | **Security: Fastify 5 + `@fastify/helmet`** — Fastify `4.28 → 5`, `@fastify/helmet` `11 → 13` (compatible), all plugins bumped                          | full suite (unit + MCP E2E + smoke) green                                                              |
-| 9   | **Admin org selector + MCP + docs** — UI switcher, MCP scoping, `UPGRADING.md`                                                                          | admin UI switch; MCP scoped; docs accurate                                                             |
-| 10  | **RLS benchmark + report** — k6 `POST /events`, p50/p95, `docs/cloud/benchmarks/`                                                                       | report published; threshold +15 % p95 verified or plan B documented                                    |
+| #   | PR                                                                                                                                                                                                                                                  | Tests / acceptance criteria                                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **DB role provisioning + two URLs + boot guard** — migration/script creates `loyaltyos_app` (`NOSUPERUSER NOBYPASSRLS`) + grants; `DATABASE_URL` vs `MIGRATION_DATABASE_URL`; docker-compose, Helm, `.env.example`                                  | app role lacks `BYPASSRLS`; boot refuses under superuser/BYPASSRLS with `audit\|enforce`; suite green under the new role                         |
+| 2   | **`Organization` + `User` + `OrganizationMembership` (additive)** — schema, migration, seed `default` org; `AdminUser` compatibility path                                                                                                           | migration idempotent; seed creates `default` org; existing admin tests green                                                                     |
+| 3   | **`organizationId` on all tables + composite FK + backfill + `move-program`** — nullable column; `Program.@@unique([id, organizationId])`; composite FK `(programId, organizationId)→Program`; batched backfill                                     | backfill idempotent/resumable; composite FK rejects divergent rows; `move-program` tests                                                         |
+| 4   | **`packages/tenancy` core** — `TenantContext`, `AsyncLocalStorage`, transaction-aware Prisma `$extends` (wrap `$transaction`, batch form, raw), `SECURITY DEFINER app_org_for_program`, fail-visible `TenantContextMissing`, global-model exemption | `set_config` once per transaction; loose query batch; raw covered; raw `FOR UPDATE` respects RLS; no-context throws (`enforce`) / logs (`audit`) |
+| 5   | **RLS policies + `TENANCY_RLS=audit→enforce`** — generated policies, audit mode logs denials                                                                                                                                                        | two-org DB test: cross-org read/write denied, same-org allowed                                                                                   |
+| 6   | **Pre-context entry points** — member login, magic link, widget `X-Program-Id`, `/auth/*` resolve org via `app_org_for_program`/cache                                                                                                               | each entry point resolves org without reading `Program` under the app role; ledger 20-run concurrency suite green under `enforce`                |
+| 7   | **`User`/membership auth flow + org selector (backend)** — login resolves membership; org switch; `AdminUser` compat for 2 releases                                                                                                                 | login; role resolution; two-org user switches and sees only the active org; `admin:create` still works                                           |
+| 8   | **PAT + member-token + API-key rebind** — PAT→membership, effective-role rule, org on credentials                                                                                                                                                   | PAT effective role `min(token, membership)`; cross-org PAT denied; member token inherits org                                                     |
+| 9   | **Security: hash API keys** — `ApiKey.keyHash` + `prefix`, migration hashes existing keys, auth looks up by hash, plaintext column dropped later                                                                                                    | migration hashes without collision; lookup by hash; plaintext no longer readable; seed shows key once                                            |
+| 10  | **Security: Fastify 5 + `@fastify/helmet`** — Fastify `4.28 → 5`, `@fastify/helmet` `11 → 13` (compatible), all plugins bumped                                                                                                                      | full suite (unit + MCP E2E + smoke) green                                                                                                        |
+| 11  | **Workers: org-scoped sweeps** — expiry, reminders, settlement, reconciliation, token cleanup list orgs (owner/platform) then process per-org under the app role                                                                                    | `BYPASSRLS` used only to list orgs; per-org processing under app role; sweep tests green under `enforce`                                         |
+| 12  | **Admin org selector + MCP + docs** — UI switcher, MCP scoping, `UPGRADING.md`, `.env.example`/docker-compose/Helm docs                                                                                                                             | admin UI switch; MCP scoped; docs accurate                                                                                                       |
+| 13  | **RLS benchmark + report** — k6 `POST /events`, p50/p95, `docs/cloud/benchmarks/`                                                                                                                                                                   | +15 % p95 AND absolute p95 < 150 ms verified, or plan B documented                                                                               |
 
-**Definition of Done (M1):** every business table has `organizationId NOT NULL`
-and RLS `enforce` in CI; `loyaltyos_app` has no `BYPASSRLS`; the isolation suite
-runs against **two organizations × two programs**; a v1.9.2 seeded DB upgrades
-and is verified; the RLS overhead report is published.
+**Definition of Done (M1):** every business table has `organizationId NOT NULL`, a
+composite FK to `Program`, and RLS `enforce` in CI; the app role is `NOSUPERUSER
+NOBYPASSRLS` and the boot guard rejects superuser/BYPASSRLS connections; the
+pre-context entry points resolve org via `app_org_for_program`; worker sweeps
+list orgs under the owner role and process per-org under the app role; the
+isolation suite runs against **two organizations × two programs**; the ledger
+20-run concurrency suite passes under `enforce`; a v1.9.2 seeded DB upgrades and
+is verified; the RLS benchmark report is published.
 
 **Rollback:** `TENANCY_RLS=off`; the added columns don't break 1.9.x; the
-`AdminUser` compatibility path stays for 1–2 releases.
+`AdminUser` compatibility path stays for 2 releases.
 
 ---
 
-## 8. Open questions (need a decision)
+## 8. Decisions (previously open questions)
 
-1. **Skip `Tenant` in the core?** Recommended **yes** (organization _is_ the
-   tenant boundary; `Tenant` is Cloud billing/provisioning). Confirm, or decide
-   whether Cloud needs a `tenant` table keyed by `organizationId`.
-2. **Role naming.** Keep `SUPER_ADMIN`/`OPERATOR`/`ANALYST` (recommended), or
-   rename to `BUSINESS_*` now? Renaming touches `@loyaltyos/permissions`, the
-   admin UI, PATs, seed, and tests.
-3. **One default org for existing multi-program installs.** This collapses the
-   current per-program admin model into one org with program-scoped memberships;
-   cross-program isolation then relies on the (existing, tested) application
-   `programId` filtering. Acceptable, or should each program become its own
-   organization?
-4. **`organizationId` denormalized on every table** vs. RLS policies that join
-   through `Program`. Recommended: denormalize (fast, trivial policies, matches
-   `programId`). Confirm you accept ~40 added columns.
-5. **RLS default on self-hosted upgrade.** Recommended `off → audit → enforce`
-   via `TENANCY_RLS`. Confirm the default for _new_ installs (`enforce`).
-6. **API keys:** just hash in M1 (recommended), or also introduce
-   `IntegrationClient` with scopes now? Full scopes can wait.
-7. **Benchmark threshold.** Confirm +15 % p95 on `POST /events` as the acceptance
-   number.
-8. **`AdminUser` compatibility window.** Keep the compatibility path for 1 or 2
-   releases before removing it?
+1. **No `Tenant` in the core.** Confirmed — `Organization` is the tenant
+   boundary; `Tenant` is Cloud billing/provisioning.
+2. **Role names.** Keep `SUPER_ADMIN`/`OPERATOR`/`ANALYST`.
+3. **Default org + move-program.** One `default` organization for existing
+   installs, plus a `tenancy:move-program` script (with tests) to move a program
+   to a new organization.
+4. **Denormalize `organizationId`.** Yes, with the composite FK (§2.6)
+   guaranteeing consistency.
+5. **RLS defaults.** Upgrades `off → audit → enforce`; new installs `enforce`.
+6. **API keys.** Hash-only in M1; `IntegrationClient` with scopes deferred.
+7. **Benchmark.** +15 % p95 on `POST /events` AND absolute p95 < 150 ms on the
+   reference benchmark.
+8. **`AdminUser` compatibility.** Two releases.
+
+**Out of scope for M1:** MFA (TOTP) — it ships with the Cloud platform roles, not
+in the OSS tenancy foundation.
