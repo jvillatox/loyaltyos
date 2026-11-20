@@ -14,10 +14,6 @@ data:
   {{- if .Values.api.env.TWILIO_PHONE_NUMBER }}
   TWILIO_PHONE_NUMBER: {{ .Values.api.env.TWILIO_PHONE_NUMBER | quote }}
   {{- end }}
-  {{- if .Values.externalDatabase.enabled }}
-  DATABASE_URL: {{ include "loyaltyos.databaseUrl" . | quote }}
-  {{- else }}
-  DATABASE_URL: {{ include "loyaltyos.databaseUrl" . | quote }}
-  {{- end }}
+  TENANCY_RLS: {{ .Values.tenancy.rlsMode | default "off" | quote }}
   REDIS_URL: {{ include "loyaltyos.redisUrl" . | quote }}
 {{- end }}

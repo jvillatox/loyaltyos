@@ -20,8 +20,8 @@ const externalizeThirdParty = {
 };
 
 const result = await build({
-  entryPoints: ["src/index.ts"],
-  outfile: "dist/index.js",
+  entryPoints: ["src/index.ts", "src/tenancy-provision.ts"],
+  outdir: "dist",
   bundle: true,
   platform: "node",
   format: "esm",
@@ -32,12 +32,19 @@ const result = await build({
   plugins: [externalizeThirdParty],
 });
 
-const output = result.metafile.outputs["dist/index.js"];
-const externals = [...new Set(output.imports.filter((i) => i.external).map((i) => i.path))].sort();
+const outputs = result.metafile.outputs;
+const externals = [
+  ...new Set(
+    Object.values(outputs)
+      .flatMap((o) => o.imports)
+      .filter((i) => i.external)
+      .map((i) => i.path),
+  ),
+].sort();
 const moduleCount = Object.keys(result.metafile.inputs).length;
-const bundleBytes = output.bytes;
+const totalBytes = Object.values(outputs).reduce((sum, o) => sum + o.bytes, 0);
 
 console.log(
-  `\nBundled ${moduleCount} modules → dist/index.js (${(bundleBytes / 1024).toFixed(1)} kB), ${externals.length} externals:`,
+  `\nBundled ${moduleCount} modules → ${Object.keys(outputs).length} files (${(totalBytes / 1024).toFixed(1)} kB), ${externals.length} externals:`,
 );
 for (const name of externals) console.log(`  - ${name}`);

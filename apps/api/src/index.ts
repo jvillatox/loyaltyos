@@ -4,7 +4,11 @@ import { initTracing } from "@loyaltyos/telemetry";
 await initTracing("loyaltyos-api");
 
 import { buildApp, getBullMQMetrics, prisma } from "./app.js";
-import { assertMasterKeyConfigured, assertNoDefaultApiKey } from "./lib/boot-guards.js";
+import {
+  assertMasterKeyConfigured,
+  assertNoDefaultApiKey,
+  assertTenantDbRole,
+} from "./lib/boot-guards.js";
 import { getBusinessMetrics } from "./lib/business-metrics.js";
 import { setupApprecioFallback } from "./lib/coalition-setup.js";
 import {
@@ -35,6 +39,7 @@ await setupApprecioFallback();
 try {
   assertMasterKeyConfigured();
   await assertNoDefaultApiKey();
+  await assertTenantDbRole();
 } catch (err) {
   console.error(`FATAL: ${(err as Error).message}`);
   process.exit(1);

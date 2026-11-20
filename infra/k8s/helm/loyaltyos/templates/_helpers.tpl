@@ -143,6 +143,28 @@ Create the DATABASE_URL from either external config or the postgresql sub-chart
 {{- end }}
 
 {{/*
+Create the DATABASE_URL for the least-privileged `loyaltyos_app` role.
+*/}}
+{{- define "loyaltyos.appDatabaseUrl" -}}
+{{- if .Values.externalDatabase.enabled }}
+{{- printf "postgresql://loyaltyos_app:%s@%s:%d/%s?sslmode=%s" .Values.tenancy.appRolePassword .Values.externalDatabase.host (int .Values.externalDatabase.port) .Values.externalDatabase.database (ternary "require" "disable" .Values.externalDatabase.ssl) }}
+{{- else if .Values.postgresql.enabled }}
+{{- printf "postgresql://loyaltyos_app:%s@%s-postgresql:%d/%s" .Values.tenancy.appRolePassword .Release.Name 5432 .Values.postgresql.auth.database }}
+{{- end }}
+{{- end }}
+
+{{/*
+Effective runtime DATABASE_URL — app role when tenancy is enabled, owner otherwise.
+*/}}
+{{- define "loyaltyos.runtimeDatabaseUrl" -}}
+{{- if .Values.tenancy.enabled }}
+{{- include "loyaltyos.appDatabaseUrl" . }}
+{{- else }}
+{{- include "loyaltyos.databaseUrl" . }}
+{{- end }}
+{{- end }}
+
+{{/*
 Create the REDIS_URL from either external config or the redis sub-chart
 */}}
 {{- define "loyaltyos.redisUrl" -}}

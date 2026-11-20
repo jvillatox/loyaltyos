@@ -408,6 +408,20 @@ postgresql:
         memory: 512Mi
 
 # =============================================================================
+# Tenancy (PostgreSQL row-level security, optional)
+# =============================================================================
+tenancy:
+  # -- Split the runtime into a least-privileged `loyaltyos_app` role.
+  # When disabled, the API and migrations both use the owner role (postgresql.auth).
+  enabled: false
+  # -- Password for the `loyaltyos_app` runtime role (required when enabled).
+  appRolePassword: ""
+  # -- Password for the `loyaltyos_platform` BYPASSRLS role (optional; NOLOGIN if empty).
+  platformRolePassword: ""
+  # -- Row-level security mode: off | audit | enforce
+  rlsMode: off
+
+# =============================================================================
 # Redis (Bitnami sub-chart)
 # =============================================================================
 redis:
