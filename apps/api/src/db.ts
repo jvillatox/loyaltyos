@@ -6,7 +6,7 @@ import { resolve } from "path";
 // value from loaded .env files at compile time, which can be undefined in CI
 // even when a CI env var or .env file sets it. Manually parse any .env file
 // to ensure DATABASE_URL is always available for the Prisma query engine.
-function loadDotEnv() {
+export function loadDotEnv() {
   const candidates = [resolve(".env"), resolve("apps/api/.env")];
   for (const path of candidates) {
     try {

@@ -80,6 +80,8 @@ jobs:
       - name: Write .env for vitest
         run: |
           echo "DATABASE_URL=$DATABASE_URL" > apps/api/.env
+          echo "MIGRATION_DATABASE_URL=$MIGRATION_DATABASE_URL" >> apps/api/.env
+          echo "LOYALTYOS_APP_DB_PASSWORD=$LOYALTYOS_APP_DB_PASSWORD" >> apps/api/.env
           echo "REDIS_URL=$REDIS_URL" >> apps/api/.env
           echo "--- apps/api/.env written ($(wc -c < apps/api/.env) bytes) ---"
 
