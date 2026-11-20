@@ -1,5 +1,9 @@
 import type { AdapterCapabilities, CoalitionAdapter, TxResult } from "../types.js";
-import { CoalitionBusinessError, CoalitionTransientError } from "../types.js";
+import {
+  CoalitionBusinessError,
+  CoalitionDuplicateTsError,
+  CoalitionTransientError,
+} from "../types.js";
 
 export interface MockAdapterOptions {
   /** Simulated network latency in ms. */
@@ -18,6 +22,8 @@ export interface MockAdapterOptions {
   balanceAfter?: number;
   /** Override capabilities flags. */
   capabilities?: Partial<AdapterCapabilities>;
+  /** Throw CoalitionDuplicateTsError on external operations (accumulate/redeem/convert). */
+  duplicateTs?: boolean;
   /** Entries returned by queryHistory (defaults to an empty list). */
   historyEntries?: unknown[];
 }
@@ -40,6 +46,7 @@ export class MockAdapter implements CoalitionAdapter {
   balanceOverride: number;
   externalTxId: string;
   balanceAfter: number;
+  duplicateTs: boolean;
   historyEntries: unknown[];
 
   // Spies for test assertions
@@ -77,6 +84,7 @@ export class MockAdapter implements CoalitionAdapter {
     this.balanceOverride = options.balanceOverride ?? 0;
     this.externalTxId = options.externalTxId ?? "mock-ext-tx-1";
     this.balanceAfter = options.balanceAfter ?? 1000;
+    this.duplicateTs = options.duplicateTs ?? false;
     this.historyEntries = options.historyEntries ?? [];
   }
 
@@ -95,6 +103,12 @@ export class MockAdapter implements CoalitionAdapter {
       throw new CoalitionTransientError(
         `Transient failure ${String(this.transientCount)}/${String(this.transientFails)}`,
       );
+    }
+  }
+
+  private maybeThrowDuplicateTs(): void {
+    if (this.duplicateTs) {
+      throw new CoalitionDuplicateTsError("Duplicate ts");
     }
   }
 
@@ -126,6 +140,7 @@ export class MockAdapter implements CoalitionAdapter {
     internalTxId?: string,
   ): Promise<TxResult> {
     this.accumulateCalls.push({ externalMemberRef, points, txRef, metadata, internalTxId });
+    this.maybeThrowDuplicateTs();
     this.maybeThrow();
     await this.delay();
     this.balanceAfter += points;
@@ -139,6 +154,7 @@ export class MockAdapter implements CoalitionAdapter {
     metadata?: object,
   ): Promise<TxResult> {
     this.redeemCalls.push({ externalMemberRef, points, txRef, metadata });
+    this.maybeThrowDuplicateTs();
     this.maybeThrow();
     await this.delay();
 
@@ -158,6 +174,7 @@ export class MockAdapter implements CoalitionAdapter {
 
   async convert(externalMemberRef: string, ownPoints: number, txRef: string): Promise<TxResult> {
     this.convertCalls.push({ externalMemberRef, ownPoints, txRef });
+    this.maybeThrowDuplicateTs();
     this.maybeThrow();
     await this.delay();
     this.balanceAfter += ownPoints;

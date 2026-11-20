@@ -343,9 +343,9 @@ describe("CoalitionService", () => {
   // ═══ Convert ═══
 
   describe("convert", () => {
-    it("happy path: adapter convert → core redeem + earn", async () => {
+    function convertSetup(conversionRate = 1): void {
       mockPrisma.coalitionConfig.findUnique.mockResolvedValue(
-        configRow({ minConversionPoints: 100 }),
+        configRow({ minConversionPoints: 100, conversionRate }),
       );
       mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
       mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
@@ -353,19 +353,16 @@ describe("CoalitionService", () => {
       mockPrisma.coalitionTransaction.update.mockResolvedValue(
         txRow({ type: "REDEEM", status: "CONFIRMED", externalTxRef: "ext-cnv-1" }),
       );
-      mockEarn.mockResolvedValue({
-        transactionId: "earn-tx-1",
-        amount: 300,
-        multiplier: 1,
-        balanceAfter: 5300,
-        idempotent: false,
-      });
       mockRedeem.mockResolvedValue({
         transactionId: "redeem-tx-1",
         amount: 300,
         balanceAfter: 4700,
         idempotent: false,
       });
+    }
+
+    it("debits ownPoints locally, sends ownPoints × rate, and never credits back (rate 1)", async () => {
+      convertSetup(1);
 
       const svc = new CoalitionService(mockPrisma as never);
       const adapter = new MockAdapter({ externalTxId: "ext-cnv-1" });
@@ -381,8 +378,43 @@ describe("CoalitionService", () => {
 
       expect(result.status).toBe("CONFIRMED");
       expect(adapter.convertCalls).toHaveLength(1);
-      expect(mockRedeem).toHaveBeenCalledTimes(1);
-      expect(mockEarn).toHaveBeenCalledTimes(1);
+      expect(adapter.convertCalls[0]?.ownPoints).toBe(300);
+      expect(mockRedeem).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 300, idempotencyKey: "local-debit-ref-cnv-1" }),
+      );
+      // No local credit — the partner's balance is the only "earn".
+      expect(mockEarn).not.toHaveBeenCalled();
+    });
+
+    it("sends ownPoints × rate for rate 2", async () => {
+      convertSetup(2);
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({ externalTxId: "ext-cnv-1" });
+      svc.registerAdapter(adapter);
+
+      await svc.convert({
+        programId: "prog-1",
+        memberId: "mem-1",
+        externalMemberRef: "ext-ref-1",
+        ownPoints: 300,
+        txRef: "ref-cnv-2",
+      });
+
+      expect(adapter.convertCalls).toHaveLength(1);
+      expect(adapter.convertCalls[0]?.ownPoints).toBe(600);
+      expect(mockRedeem).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 300, idempotencyKey: "local-debit-ref-cnv-2" }),
+      );
+      expect(mockEarn).not.toHaveBeenCalled();
+      // The converted amount and the rate used are fixed on the tx at creation.
+      expect(mockPrisma.coalitionTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { coalitionPoints: 600, conversionRate: 2 },
+          }),
+        }),
+      );
     });
 
     it("throws when conversion is disabled", async () => {
@@ -423,20 +455,12 @@ describe("CoalitionService", () => {
       ).rejects.toThrow("Minimum conversion is 1000 points");
     });
 
-    it("compensates (calls reverseTransaction) when core redeem fails after adapter success", async () => {
-      mockPrisma.coalitionConfig.findUnique.mockResolvedValue(
-        configRow({ minConversionPoints: 100 }),
-      );
-      mockPrisma.coalitionAccount.findFirst.mockResolvedValue(accountRow());
-      mockPrisma.coalitionTransaction.findFirst.mockResolvedValue(null);
-      mockPrisma.coalitionTransaction.create.mockResolvedValue(txRow({ type: "REDEEM" }));
-      mockPrisma.coalitionTransaction.update.mockResolvedValue(
-        txRow({ type: "REDEEM", status: "CONFIRMED", externalTxRef: "ext-cnv-2" }),
-      );
-      mockRedeem.mockRejectedValue(new Error("Insufficient local balance"));
+    it("does not call the partner when local balance is insufficient", async () => {
+      convertSetup(1);
+      mockRedeem.mockRejectedValue(new Error("Insufficient balance"));
 
       const svc = new CoalitionService(mockPrisma as never);
-      const adapter = new MockAdapter({ externalTxId: "ext-cnv-2" });
+      const adapter = new MockAdapter({ externalTxId: "ext-cnv-1" });
       svc.registerAdapter(adapter);
 
       await expect(
@@ -445,13 +469,41 @@ describe("CoalitionService", () => {
           memberId: "mem-1",
           externalMemberRef: "ext-ref-1",
           ownPoints: 300,
-          txRef: "ref-compensate",
+          txRef: "ref-no-funds",
+        }),
+      ).rejects.toThrow("Insufficient balance");
+
+      expect(adapter.convertCalls).toHaveLength(0);
+      expect(mockPrisma.coalitionTransaction.create).not.toHaveBeenCalled();
+      expect(mockEarn).not.toHaveBeenCalled();
+    });
+
+    it("refunds the local debit on a business error", async () => {
+      convertSetup(1);
+      mockPrisma.coalitionTransaction.create.mockResolvedValue(
+        txRow({ type: "REDEEM", amount: 300, localTxRef: "ref-business" }),
+      );
+
+      const svc = new CoalitionService(mockPrisma as never);
+      const adapter = new MockAdapter({ businessError: "partner rejected" });
+      svc.registerAdapter(adapter);
+
+      await expect(
+        svc.convert({
+          programId: "prog-1",
+          memberId: "mem-1",
+          externalMemberRef: "ext-ref-1",
+          ownPoints: 300,
+          txRef: "ref-business",
         }),
       ).rejects.toThrow(CoalitionBusinessError);
 
-      // Compensation must have been called
-      expect(adapter.reverseCalls).toHaveLength(1);
-      expect(adapter.reverseCalls[0]?.txRef).toBe("ext-cnv-2");
+      expect(mockEarn).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 300, idempotencyKey: "local-refund-ref-business" }),
+      );
+      expect(mockPrisma.coalitionTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: "FAILED" }) }),
+      );
     });
   });
 

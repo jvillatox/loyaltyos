@@ -19,7 +19,8 @@
     "admin:token:create": "tsx src/admin-token.ts create",
     "admin:token:list": "tsx src/admin-token.ts list",
     "admin:token:revoke": "tsx src/admin-token.ts revoke",
-    "coalition:reencrypt": "tsx src/coalition-reencrypt.ts"
+    "coalition:reencrypt": "tsx src/coalition-reencrypt.ts",
+    "coalition:reconcile:staging": "tsx src/coalition-reconcile-staging.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

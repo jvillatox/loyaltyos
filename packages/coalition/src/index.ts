@@ -8,7 +8,7 @@ export {
 export { decrypt, encrypt, getMasterKey, MIN_MASTER_KEY_LENGTH } from "./crypto.js";
 export type { Repository } from "./repository.js";
 export { createRepository } from "./repository.js";
-export type { CoalitionServiceMetrics } from "./service.js";
+export type { CoalitionServiceMetrics, ReconcileOutcome } from "./service.js";
 export { CoalitionService } from "./service.js";
 export type {
   AccumulateInput,
@@ -28,6 +28,7 @@ export {
   CoalitionBusinessError,
   CoalitionCircuitOpenError,
   CoalitionConfigNotFoundError,
+  CoalitionDuplicateTsError,
   CoalitionTransientError,
   CoalitionUnsupportedError,
 } from "./types.js";

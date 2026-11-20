@@ -86,6 +86,7 @@ export interface BusinessMetrics {
   // Coalition
   coalitionOperationsTotal: Counter;
   coalitionCircuitBreakerState: Gauge;
+  coalitionNeedsReviewTotal: Counter;
   // Members
   activeMembersTotal: Gauge;
   // Gift Cards
@@ -181,6 +182,13 @@ export function createBusinessMetrics(registry: Registry): BusinessMetrics {
     registers: [registry],
   });
 
+  const coalitionNeedsReviewTotal = new Counter({
+    name: "loyaltyos_coalition_needs_review_total",
+    help: "Total number of coalition transactions flagged for manual review",
+    labelNames: ["provider"] as unknown as string[],
+    registers: [registry],
+  });
+
   const activeMembersTotal = new Gauge({
     name: "loyaltyos_active_members_total",
     help: "Number of active members per program",
@@ -229,6 +237,7 @@ export function createBusinessMetrics(registry: Registry): BusinessMetrics {
     couponsDiscountAmount,
     coalitionOperationsTotal,
     coalitionCircuitBreakerState,
+    coalitionNeedsReviewTotal,
     activeMembersTotal,
     giftCardsGeneratedTotal,
     giftCardsRedeemedTotal,
