@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { loadDotEnv } from "../db.js";
 import {
   assertTenantDbRole,
   evaluateDbRoleGuard,
@@ -216,9 +217,15 @@ describe("provisionRoles", () => {
 
 // Integration: requires a provisioned database (CI runs the provision script as
 // the owner and points DATABASE_URL at the app role). Skipped locally without it.
-const ownerUrl = process.env.MIGRATION_DATABASE_URL || process.env.TEST_DATABASE_URL;
-const appUrl = process.env.DATABASE_URL;
-const appPassword = process.env.LOYALTYOS_APP_DB_PASSWORD;
+//
+// turbo forwards only a curated set of env vars to task processes, so the job
+// `env:` block never reaches vitest. Load the .env at runtime (as db.ts does)
+// and read the values through dynamic access so the URLs/password resolve.
+loadDotEnv();
+const env = (name: string): string | undefined => process.env[name];
+const ownerUrl = env("MIGRATION_DATABASE_URL") || env("TEST_DATABASE_URL");
+const appUrl = env("DATABASE_URL");
+const appPassword = env("LOYALTYOS_APP_DB_PASSWORD");
 
 describe.skipIf(!ownerUrl || !appUrl || !appPassword)("tenancy DB roles (integration)", () => {
   it("provisions loyaltyos_app as neither superuser nor BYPASSRLS", async () => {
