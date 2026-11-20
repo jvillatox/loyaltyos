@@ -5,6 +5,36 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Database role separation for row-level security (M1 groundwork).** A new
+  idempotent provisioning script (`apps/api/src/tenancy-provision.ts`) creates the
+  least-privileged `loyaltyos_app` runtime role (`NOSUPERUSER NOBYPASSRLS`) and the
+  `loyaltyos_platform` `BYPASSRLS` role, grants the app role DML on existing tables,
+  and installs `ALTER DEFAULT PRIVILEGES` so tables created by future migrations
+  stay reachable. Passwords come from `LOYALTYOS_APP_DB_PASSWORD` /
+  `LOYALTYOS_PLATFORM_DB_PASSWORD` (never from the repository).
+
+- **Two database URLs.** `DATABASE_URL` now targets the app role for the API and
+  workers, while `MIGRATION_DATABASE_URL` (owner) drives `prisma migrate deploy` and
+  administrative scripts; it falls back to `DATABASE_URL` when unset.
+
+- **Tenancy boot guard.** With `TENANCY_RLS=audit|enforce`, the API refuses to start
+  if `DATABASE_URL` connects as a superuser or `BYPASSRLS` role; with `off` it only
+  logs an informational warning.
+
+### Upgrade notes
+
+1. **No action required yet.** `TENANCY_RLS` defaults to `off`, and the provision
+   script no-ops when `LOYALTYOS_APP_DB_PASSWORD` is unset, so existing
+   single-role deployments keep working unchanged.
+2. **When the role split is activated** (a future M1 release), set
+   `LOYALTYOS_APP_DB_PASSWORD` (and optionally `LOYALTYOS_PLATFORM_DB_PASSWORD`),
+   point `DATABASE_URL` at `loyaltyos_app`, keep `MIGRATION_DATABASE_URL` on the
+   owner, and move `TENANCY_RLS` from `off` through `audit` to `enforce`.
+
 ## [1.9.2] - 2026-11-19
 
 > **Security release.** All deployments of v1.9.1 and earlier should upgrade. See advisory GHSA-388r-m42q-5f6x.

@@ -12,14 +12,21 @@ permissions:
 
 jobs:
   smoke:
-    name: Docker Compose Smoke Test
+    name: Docker Compose Smoke Test (${{ matrix.mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # single-url: current owner-only setup (backward compat — provisioning skips).
+        # two-url: API as `loyaltyos_app`, migrations as owner, RLS audit mode.
+        mode: [single-url, two-url]
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Create .env.production
+      - name: Create .env.production (single-URL)
+        if: matrix.mode == 'single-url'
         run: |
           cp infra/docker/.env.production.example infra/docker/.env.production
           echo "JWT_SECRET=$(openssl rand -hex 64)" >> infra/docker/.env.production
@@ -28,12 +35,32 @@ jobs:
           echo "GIFTCARD_HMAC_SECRET=$(openssl rand -hex 32)" >> infra/docker/.env.production
           echo "METRICS_TOKEN=$(openssl rand -hex 32)" >> infra/docker/.env.production
 
+      - name: Create .env.production (two-URL)
+        if: matrix.mode == 'two-url'
+        run: |
+          cp infra/docker/.env.production.example infra/docker/.env.production
+          echo "JWT_SECRET=$(openssl rand -hex 64)" >> infra/docker/.env.production
+          echo "API_KEY_SALT=$(openssl rand -hex 32)" >> infra/docker/.env.production
+          echo "KMS_MASTER_KEY=$(openssl rand -hex 32)" >> infra/docker/.env.production
+          echo "GIFTCARD_HMAC_SECRET=$(openssl rand -hex 32)" >> infra/docker/.env.production
+          echo "METRICS_TOKEN=$(openssl rand -hex 32)" >> infra/docker/.env.production
+          # Split roles: the API connects as loyaltyos_app, migrations as the owner.
+          APP_DB_PASSWORD="$(openssl rand -hex 16)"
+          PLATFORM_DB_PASSWORD="$(openssl rand -hex 16)"
+          echo "DATABASE_URL=postgresql://loyaltyos_app:${APP_DB_PASSWORD}@postgres:5432/loyaltyos" >> infra/docker/.env.production
+          echo "LOYALTYOS_APP_DB_PASSWORD=${APP_DB_PASSWORD}" >> infra/docker/.env.production
+          echo "LOYALTYOS_PLATFORM_DB_PASSWORD=${PLATFORM_DB_PASSWORD}" >> infra/docker/.env.production
+          # audit mode proves DATABASE_URL is really the app role: the boot guard
+          # refuses to start on a superuser/BYPASSRLS connection.
+          echo "TENANCY_RLS=audit" >> infra/docker/.env.production
+
       - name: Start services
         run: |
           docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.production up -d --build
-          # Wait for the API to finish `prisma migrate deploy` and bind port 3002.
-          # `depends_on` only gates the API on postgres/redis health; the API
-          # still runs migrations before listening, so poll /healthz directly.
+          # Wait for the API to finish provisioning + `prisma migrate deploy` and
+          # bind port 3002. `depends_on` only gates the API on postgres/redis
+          # health; the API still runs provisioning/migrations before listening,
+          # so poll /healthz directly.
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:3002/healthz >/dev/null 2>&1; then
               echo "API ready (after ~$((i * 2))s)"

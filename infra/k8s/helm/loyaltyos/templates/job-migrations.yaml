@@ -39,8 +39,11 @@ spec:
             - -c
             - |
               set -e
+              echo "==> Provisioning tenancy database roles..."
+              node apps/api/dist/tenancy-provision.js
               echo "==> Running Prisma migrations..."
-              npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
+              MIGRATION_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}"
+              DATABASE_URL="$MIGRATION_URL" npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
               echo "==> Migrations complete."
           envFrom:
             - configMapRef:
