@@ -1,6 +1,6 @@
 import { memberListQuerySchema, memberTransactionsQuerySchema } from "@loyaltyos/api-contract";
 import { BadgesService, TiersService } from "@loyaltyos/badges";
-import { PointsService } from "@loyaltyos/core";
+import { deriveOrganizationId, PointsService, requireOrganizationId } from "@loyaltyos/core";
 import { type PointAdjustmentRequest, Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
@@ -110,11 +110,13 @@ async function handleExistingAdjustment(
 export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   app.post("/members", async (request, reply) => {
     const body = createMemberSchema.parse(request.body);
+    const organizationId = await deriveOrganizationId(prisma, request.programId);
     const member = await prisma.member.create({
       data: {
         ...body,
         metadata: body.metadata as Prisma.InputJsonValue,
         programId: request.programId,
+        organizationId,
       },
     });
     return reply.status(201).send({ data: member });
@@ -394,6 +396,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
       const program = await prisma.program.findUniqueOrThrow({
         where: { id: request.programId },
       });
+      const organizationId = requireOrganizationId(program, `Program "${request.programId}"`);
       const limits = adjustmentLimits(program);
       const expiresAt = new Date(Date.now() + ADJUSTMENT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
@@ -433,6 +436,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
           const created = await db.pointAdjustmentRequest.create({
             data: {
               programId: request.programId,
+              organizationId,
               memberId: id,
               amount: body.amount,
               reasonCategory: reasonCategory,
@@ -456,6 +460,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
           requestRow = await prisma.pointAdjustmentRequest.create({
             data: {
               programId: request.programId,
+              organizationId,
               memberId: id,
               amount: body.amount,
               reasonCategory: reasonCategory,
@@ -554,11 +559,13 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
     const { id } = z.object({ id: z.string() }).parse(request.params);
     const body = deviceCreateSchema.parse(request.body);
 
+    const organizationId = await deriveOrganizationId(prisma, request.programId);
     const device = await prisma.memberDevice.upsert({
       where: { token: body.token },
       create: {
         memberId: id,
         programId: request.programId,
+        organizationId,
         token: body.token,
         platform: body.platform,
         lastSeenAt: new Date(),

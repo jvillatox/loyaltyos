@@ -1,3 +1,4 @@
+import { deriveOrganizationId, requireOrganizationId } from "@loyaltyos/core";
 import type {
   GiftCard,
   GiftCardBatch,
@@ -23,7 +24,8 @@ export function createRepository(prisma: PrismaClient) {
     // ── Batch operations ──────────────────
 
     async createBatch(input: CreateBatchInput, tx?: Tx): Promise<GiftCardBatch> {
-      return db(tx).giftCardBatch.create({ data: input });
+      const organizationId = await deriveOrganizationId(db(tx), input.programId);
+      return db(tx).giftCardBatch.create({ data: { ...input, organizationId } });
     },
 
     async findBatchById(id: string, tx?: Tx): Promise<GiftCardBatch | null> {
@@ -100,8 +102,22 @@ export function createRepository(prisma: PrismaClient) {
       }[],
       tx?: Tx,
     ): Promise<number> {
+      const batchIds = [...new Set(inputs.map((i) => i.batchId))];
+      const orgByBatch = new Map<string, string>();
+      await Promise.all(
+        batchIds.map(async (batchId) => {
+          const batch = await db(tx).giftCardBatch.findUnique({
+            where: { id: batchId },
+            select: { organizationId: true },
+          });
+          orgByBatch.set(batchId, requireOrganizationId(batch, `GiftCardBatch "${batchId}"`));
+        }),
+      );
       const result = await db(tx).giftCard.createMany({
-        data: inputs,
+        data: inputs.map((input) => ({
+          ...input,
+          organizationId: orgByBatch.get(input.batchId)!,
+        })),
         skipDuplicates: true,
       });
       return result.count;
@@ -215,7 +231,10 @@ export function createRepository(prisma: PrismaClient) {
       },
       tx?: Tx,
     ): Promise<GiftCardTransaction> {
-      return db(tx).giftCardTransaction.create({ data: input as never });
+      const organizationId = await deriveOrganizationId(db(tx), input.programId);
+      return db(tx).giftCardTransaction.create({
+        data: { ...input, organizationId } as never,
+      });
     },
 
     async findTransactionByIdempotencyKey(
@@ -257,7 +276,8 @@ export function createRepository(prisma: PrismaClient) {
     // ── Terms template operations ──────────
 
     async createTermsTemplate(input: CreateTermsTemplateInput, tx?: Tx): Promise<TermsTemplate> {
-      return db(tx).termsTemplate.create({ data: input });
+      const organizationId = await deriveOrganizationId(db(tx), input.programId);
+      return db(tx).termsTemplate.create({ data: { ...input, organizationId } });
     },
 
     async findTermsTemplateById(id: string, tx?: Tx): Promise<TermsTemplate | null> {

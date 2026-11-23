@@ -1,3 +1,4 @@
+import { deriveOrganizationId, requireOrganizationId } from "@loyaltyos/core";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import type { CampaignCreateInput, CampaignUpdateInput, CampaignWithVariants } from "./types.js";
@@ -22,9 +23,11 @@ export function createRepository(prisma: PrismaClient) {
   return {
     async createCampaign(input: CampaignCreateInput): Promise<CampaignWithVariants> {
       const { variants, ...data } = input;
+      const organizationId = await deriveOrganizationId(prisma, data.programId);
       return (await prisma.campaign.create({
         data: {
           ...data,
+          organizationId,
           conditions: asJson(data.conditions),
           variants: variants
             ? {
@@ -32,6 +35,7 @@ export function createRepository(prisma: PrismaClient) {
                   name: v.name,
                   trafficPct: v.trafficPct,
                   config: asJson(v.config),
+                  organizationId,
                 })),
               }
             : undefined,
@@ -111,8 +115,13 @@ export function createRepository(prisma: PrismaClient) {
       pointsAwarded: number;
       metadata?: Record<string, unknown>;
     }): Promise<{ id: string }> {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: input.campaignId },
+        select: { organizationId: true },
+      });
+      const organizationId = requireOrganizationId(campaign, `Campaign "${input.campaignId}"`);
       return await prisma.campaignApplication.create({
-        data: { ...input, metadata: asJson(input.metadata) },
+        data: { ...input, organizationId, metadata: asJson(input.metadata) },
         select: { id: true },
       });
     },

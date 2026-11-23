@@ -1,6 +1,6 @@
 import { BadgesService, TiersService } from "@loyaltyos/badges";
 import { CampaignsService } from "@loyaltyos/campaigns";
-import { PointsService } from "@loyaltyos/core";
+import { deriveOrganizationId, PointsService } from "@loyaltyos/core";
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -91,9 +91,11 @@ export function eventsRoutes(app: FastifyInstance, _opts: unknown, done: () => v
         }
       }
 
+      const organizationId = await deriveOrganizationId(prisma, programId);
       const event = await prisma.event.create({
         data: {
           programId,
+          organizationId,
           type: body.type,
           memberId: body.memberId,
           payload: body.payload as Prisma.InputJsonValue,

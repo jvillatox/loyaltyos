@@ -43,7 +43,7 @@ beforeAll(async () => {
   prisma = (await import("../db.js")).prisma;
 
   await prisma.program.create({
-    data: { id: programId, name: `Member Authz ${suffix}` },
+    data: { id: programId, name: `Member Authz ${suffix}`, organizationId: "org_default" },
   });
 
   const member = await prisma.member.create({

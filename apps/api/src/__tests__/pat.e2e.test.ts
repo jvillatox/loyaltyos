@@ -56,8 +56,12 @@ beforeAll(async () => {
   await app.ready();
   prisma = (await import("../db.js")).prisma;
 
-  await prisma.program.create({ data: { id: programId, name: `PAT ${suffix}` } });
-  await prisma.program.create({ data: { id: otherProgramId, name: `PAT Other ${suffix}` } });
+  await prisma.program.create({
+    data: { id: programId, name: `PAT ${suffix}`, organizationId: "org_default" },
+  });
+  await prisma.program.create({
+    data: { id: otherProgramId, name: `PAT Other ${suffix}`, organizationId: "org_default" },
+  });
 
   const password = `pw-${suffix}`;
   const superAdmin = await prisma.adminUser.create({

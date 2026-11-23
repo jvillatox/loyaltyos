@@ -282,7 +282,9 @@ beforeAll(async () => {
   await app.ready();
   prisma = (await import("../db.js")).prisma;
 
-  await prisma.program.create({ data: { id: programId, name: `M0P ${suffix}` } });
+  await prisma.program.create({
+    data: { id: programId, name: `M0P ${suffix}`, organizationId: "org_default" },
+  });
 
   await prisma.apiKey.create({ data: { programId, key: serverKey, scope: "SERVER" } });
   await prisma.apiKey.create({ data: { programId, key: clientKey, scope: "CLIENT" } });

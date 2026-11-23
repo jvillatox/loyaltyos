@@ -1,3 +1,4 @@
+import { deriveOrganizationId, requireOrganizationId } from "@loyaltyos/core";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import type {
@@ -18,7 +19,8 @@ export function createRepository(prisma: PrismaClient) {
   return {
     // Template CRUD
     async createTemplate(data: TemplateCreateInput): Promise<TemplateRow> {
-      return prisma.notificationTemplate.create({ data });
+      const organizationId = await deriveOrganizationId(prisma, data.programId);
+      return prisma.notificationTemplate.create({ data: { ...data, organizationId } });
     },
 
     async updateTemplate(id: string, data: TemplateUpdateInput): Promise<TemplateRow> {
@@ -90,10 +92,16 @@ export function createRepository(prisma: PrismaClient) {
 
     // Notification
     async createNotification(data: NotificationCreateInput): Promise<NotificationRow> {
+      const member = await prisma.member.findUnique({
+        where: { id: data.memberId },
+        select: { organizationId: true },
+      });
+      const organizationId = requireOrganizationId(member, `Member "${data.memberId}"`);
       return prisma.notification.create({
         data: {
           templateId: data.templateId,
           memberId: data.memberId,
+          organizationId,
           channel: data.channel,
           subject: data.subject,
           body: data.body,
@@ -150,7 +158,8 @@ export function createRepository(prisma: PrismaClient) {
       events: string[];
       secret: string;
     }) {
-      return prisma.webhookSubscription.create({ data });
+      const organizationId = await deriveOrganizationId(prisma, data.programId);
+      return prisma.webhookSubscription.create({ data: { ...data, organizationId } });
     },
 
     async findWebhookById(id: string) {
@@ -237,9 +246,10 @@ export function createRepository(prisma: PrismaClient) {
       channel: string,
       optedIn: boolean,
     ): Promise<void> {
+      const organizationId = await deriveOrganizationId(prisma, programId);
       await prisma.memberNotificationPreferences.upsert({
         where: { memberId_programId_channel: { memberId, programId, channel: channel as never } },
-        create: { memberId, programId, channel: channel as never, optedIn },
+        create: { memberId, programId, organizationId, channel: channel as never, optedIn },
         update: { optedIn, updatedAt: new Date() },
       });
     },

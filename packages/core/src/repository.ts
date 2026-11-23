@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
+import { deriveOrganizationId } from "./tenancy.js";
 import type { PaginatedResult, PaginationParams } from "./types.js";
 
 export function createRepository(prisma: PrismaClient) {
@@ -40,8 +41,9 @@ export function createRepository(prisma: PrismaClient) {
     },
 
     async createAccount(memberId: string, programId: string) {
+      const organizationId = await deriveOrganizationId(prisma, programId);
       return prisma.pointAccount.create({
-        data: { memberId, programId },
+        data: { memberId, programId, organizationId },
       });
     },
 
@@ -50,8 +52,9 @@ export function createRepository(prisma: PrismaClient) {
         where: { memberId, programId },
       });
       if (existing) return existing;
+      const organizationId = await deriveOrganizationId(prisma, programId);
       return prisma.pointAccount.create({
-        data: { memberId, programId },
+        data: { memberId, programId, organizationId },
       });
     },
 
@@ -67,7 +70,7 @@ export function createRepository(prisma: PrismaClient) {
       });
     },
 
-    createTx(input: {
+    async createTx(input: {
       accountId: string;
       programId: string;
       type: Prisma.PointTransactionCreateInput["type"];
@@ -78,7 +81,8 @@ export function createRepository(prisma: PrismaClient) {
       description?: string;
       metadata?: Prisma.InputJsonValue;
     }) {
-      return prisma.pointTransaction.create({ data: input });
+      const organizationId = await deriveOrganizationId(prisma, input.programId);
+      return prisma.pointTransaction.create({ data: { ...input, organizationId } });
     },
 
     updateBalance(accountId: string, balance: number, pendingBalance?: number) {

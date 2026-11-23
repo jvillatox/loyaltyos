@@ -67,7 +67,9 @@ beforeAll(async () => {
   await app.ready();
   prisma = (await import("../db.js")).prisma;
 
-  await prisma.program.create({ data: { id: programId, name: `MCP E2E ${suffix}` } });
+  await prisma.program.create({
+    data: { id: programId, name: `MCP E2E ${suffix}`, organizationId: "org_default" },
+  });
 
   const password = `pw-${suffix}`;
   const admins: Record<AdminRole, string> = {} as Record<AdminRole, string>;

@@ -1,3 +1,4 @@
+import { deriveOrganizationId } from "@loyaltyos/core";
 import type { AuditAction, AuditActorType } from "@prisma/client";
 
 import { prisma } from "../db.js";
@@ -19,9 +20,11 @@ export async function audit(
   metadata: Record<string, unknown> = {},
 ): Promise<void> {
   const metadataWithPat = actor.patId ? { patId: actor.patId, ...metadata } : metadata;
+  const organizationId = await deriveOrganizationId(prisma, programId);
   await prisma.auditLog.create({
     data: {
       programId,
+      organizationId,
       actorType: actor.type,
       actorId: actor.id,
       adminUserId: actor.type === "ADMIN_USER" ? actor.id : null,
