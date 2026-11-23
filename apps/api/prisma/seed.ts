@@ -3,6 +3,8 @@
 import { hashPassword } from "@loyaltyos/core";
 import { PrismaClient } from "@prisma/client";
 
+import { syncAdminUserToTenancy } from "../src/lib/tenancy-users.js";
+
 const prisma = new PrismaClient({
   log: ["warn", "error"],
 });
@@ -25,6 +27,9 @@ async function main(): Promise<void> {
   await prisma.memberSessionToken.deleteMany();
   await prisma.member.deleteMany();
   await prisma.adminUser.deleteMany();
+  await prisma.organizationMembership.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.organization.deleteMany();
   await prisma.campaignVariant.deleteMany();
   await prisma.campaign.deleteMany();
   await prisma.coupon.deleteMany();
@@ -75,6 +80,7 @@ async function main(): Promise<void> {
       programId: program.id,
     },
   });
+  await syncAdminUserToTenancy(prisma, admin);
   console.log(`Created admin user: ${admin.email}`);
 
   // Demo users for the other two roles (RBAC).
@@ -87,6 +93,7 @@ async function main(): Promise<void> {
       programId: program.id,
     },
   });
+  await syncAdminUserToTenancy(prisma, operator);
   const analyst = await prisma.adminUser.create({
     data: {
       email: "analyst@loyaltyos.dev",
@@ -96,6 +103,7 @@ async function main(): Promise<void> {
       programId: program.id,
     },
   });
+  await syncAdminUserToTenancy(prisma, analyst);
   console.log(
     `Created admin users: ${admin.email} (SUPER_ADMIN), ${operator.email} (OPERATOR), ${analyst.email} (ANALYST)`,
   );

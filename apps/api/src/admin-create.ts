@@ -2,6 +2,8 @@ import { hashPassword } from "@loyaltyos/core";
 import { isAdminRole } from "@loyaltyos/permissions";
 import { PrismaClient } from "@prisma/client";
 
+import { syncAdminUserToTenancy } from "./lib/tenancy-users.js";
+
 /**
  * Create an admin user from the command line.
  *
@@ -99,6 +101,7 @@ async function main(): Promise<void> {
     console.error(`Invalid --role "${opts.role}". Expected SUPER_ADMIN, OPERATOR, or ANALYST.`);
     process.exit(1);
   }
+  const role = opts.role;
   if (!opts.programId) {
     console.error("Missing required --program");
     process.exit(1);
@@ -112,14 +115,19 @@ async function main(): Promise<void> {
 
   const prisma = new PrismaClient({ log: ["warn", "error"] });
   try {
-    const admin = await prisma.adminUser.create({
-      data: {
-        email: opts.email.toLowerCase(),
-        name: opts.name ?? opts.email,
-        role: opts.role,
-        passwordHash: await hashPassword(password),
-        programId: opts.programId,
-      },
+    const passwordHash = await hashPassword(password);
+    const admin = await prisma.$transaction(async (tx) => {
+      const created = await tx.adminUser.create({
+        data: {
+          email: opts.email.toLowerCase(),
+          name: opts.name ?? opts.email,
+          role,
+          passwordHash,
+          programId: opts.programId,
+        },
+      });
+      await syncAdminUserToTenancy(tx, created);
+      return created;
     });
     console.log(`Created admin ${admin.email} (${admin.role}) in program ${admin.programId}`);
   } catch (err) {

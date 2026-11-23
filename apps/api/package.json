@@ -16,6 +16,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "admin:create": "tsx src/admin-create.ts",
+    "tenancy:backfill-users": "tsx src/tenancy-backfill-users.ts",
     "admin:token:create": "tsx src/admin-token.ts create",
     "admin:token:list": "tsx src/admin-token.ts list",
     "admin:token:revoke": "tsx src/admin-token.ts revoke",
