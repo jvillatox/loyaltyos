@@ -7,11 +7,15 @@ const mockPrisma = {
     update: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
   },
   couponRedemption: {
     create: vi.fn(),
     count: vi.fn(),
+  },
+  program: {
+    findUnique: vi.fn(),
   },
 };
 
@@ -19,6 +23,8 @@ let CouponsService: typeof import("../service.js").CouponsService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+  mockPrisma.coupon.findUnique.mockResolvedValue({ organizationId: "org-1" });
   const mod = await import("../service.js");
   CouponsService = mod.CouponsService;
 });

@@ -56,6 +56,7 @@ beforeEach(async () => {
     expiryMode: "NONE",
     expiryMonths: 12,
     expiryChangedAt: new Date(),
+    organizationId: "org-1",
   });
   const mod = await import("../service.js");
   PointsService = mod.PointsService;

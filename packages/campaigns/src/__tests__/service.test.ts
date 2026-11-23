@@ -6,6 +6,7 @@ const mockPrisma = {
     update: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
+    findUnique: vi.fn(),
   },
   campaignApplication: {
     count: vi.fn(),
@@ -14,6 +15,9 @@ const mockPrisma = {
   },
   member: {
     count: vi.fn(),
+  },
+  program: {
+    findUnique: vi.fn(),
   },
 };
 
@@ -26,6 +30,8 @@ let CampaignsService: typeof import("../service.js").CampaignsService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+  mockPrisma.campaign.findUnique.mockResolvedValue({ organizationId: "org-1" });
   const mod = await import("../service.js");
   CampaignsService = mod.CampaignsService;
   // Reset points service mock

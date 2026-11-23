@@ -20,6 +20,9 @@ const mockPrisma = vi.hoisted(() => ({
   memberTier: {
     findMany: vi.fn(),
   },
+  program: {
+    findUnique: vi.fn(),
+  },
 }));
 
 vi.mock("@prisma/client", () => ({}));
@@ -28,6 +31,7 @@ let SegmentsService: typeof import("../service.js").SegmentsService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
   const mod = await import("../service.js");
   SegmentsService = mod.SegmentsService;
 });

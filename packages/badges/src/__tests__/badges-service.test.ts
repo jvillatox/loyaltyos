@@ -6,11 +6,15 @@ const mockPrisma = vi.hoisted(() => ({
     update: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
   },
   member: {
     findFirst: vi.fn(),
     findMany: vi.fn(),
+  },
+  program: {
+    findUnique: vi.fn(),
   },
   pointAccount: {
     findFirst: vi.fn(),
@@ -35,6 +39,8 @@ let BadgesService: typeof import("../badges-service.js").BadgesService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+  mockPrisma.badge.findUnique.mockResolvedValue({ organizationId: "org-1" });
   const mod = await import("../badges-service.js");
   BadgesService = mod.BadgesService;
 });
