@@ -10,6 +10,7 @@ datasource db {
 
 model Program {
   id          String    @id @default(cuid())
+  organizationId String?
   name        String
   description String?
   pointsUnit  String    @default("PTS")
@@ -27,6 +28,7 @@ model Program {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   members            Member[]
   pointAccounts      PointAccount[]
   pointRules         PointRule[]
@@ -50,12 +52,14 @@ model Program {
   giftCardBatches    GiftCardBatch[]
   pointAdjustmentRequests PointAdjustmentRequest[]
 
+  @@unique([id, organizationId])
   @@index([isActive])
 }
 
 model Member {
   id          String   @id @default(cuid())
   programId   String
+  organizationId String?
   externalId  String?
   email       String?
   phone       String?
@@ -89,6 +93,7 @@ model Member {
   pointAdjustmentRequests PointAdjustmentRequest[]
 
   @@unique([programId, externalId])
+  @@unique([id, organizationId])
   @@index([programId])
   @@index([email])
   @@index([deletedAt])
@@ -98,6 +103,7 @@ model PointAccount {
   id             String  @id @default(cuid())
   memberId       String  @unique
   programId      String
+  organizationId String?
   balance        Int     @default(0)
   pendingBalance Int     @default(0)
   totalEarned    Int     @default(0)
@@ -137,6 +143,7 @@ model PointTransaction {
   id              String          @id @default(cuid())
   accountId       String
   programId       String
+  organizationId  String?
   type            TransactionType
   amount          Int
   balanceAfter    Int
@@ -164,6 +171,7 @@ model PointLot {
   id             String    @id @default(cuid())
   accountId      String
   programId      String
+  organizationId String?
   sourceTxId     String?
   originalAmount Int
   remaining      Int
@@ -178,11 +186,12 @@ model PointLot {
 }
 
 model PointExpiryReminder {
-  id         String   @id @default(cuid())
-  memberId   String
-  programId  String
-  expiresOn  DateTime
-  sentAt     DateTime @default(now())
+  id             String   @id @default(cuid())
+  memberId       String
+  programId      String
+  organizationId String?
+  expiresOn      DateTime
+  sentAt         DateTime @default(now())
 
   @@unique([memberId, programId, expiresOn])
   @@index([programId, expiresOn])
@@ -206,6 +215,7 @@ enum AdjustmentReasonCategory {
 model PointAdjustmentRequest {
   id              String                   @id @default(cuid())
   programId       String
+  organizationId  String?
   memberId        String
   amount          Int
   reasonCategory  AdjustmentReasonCategory
@@ -232,9 +242,10 @@ model PointAdjustmentRequest {
 }
 
 model PointRule {
-  id          String   @id @default(cuid())
-  programId   String
-  eventType   String
+  id             String   @id @default(cuid())
+  programId      String
+  organizationId String?
+  eventType      String
   multiplier  Float    @default(1.0)
   conditions  Json?    @default("{}")
   isActive    Boolean  @default(true)
@@ -250,9 +261,10 @@ model PointRule {
 }
 
 model Tier {
-  id          String   @id @default(cuid())
-  programId   String
-  name        String
+  id             String   @id @default(cuid())
+  programId      String
+  organizationId String?
+  name           String
   rank        Int
   minPoints   Int      @default(0)
   color       String?
@@ -269,10 +281,11 @@ model Tier {
 }
 
 model MemberTier {
-  id           String   @id @default(cuid())
-  memberId     String
-  tierId       String
-  upgradedAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  memberId       String
+  organizationId String?
+  tierId         String
+  upgradedAt     DateTime @default(now())
   downgradedAt DateTime?
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
@@ -297,6 +310,7 @@ enum CampaignType {
 model Campaign {
   id              String       @id @default(cuid())
   programId       String
+  organizationId  String?
   name            String
   description     String?
   type            CampaignType
@@ -317,15 +331,17 @@ model Campaign {
   variants     CampaignVariant[]
   applications CampaignApplication[]
 
+  @@unique([id, organizationId])
   @@index([programId, type])
   @@index([isActive])
   @@index([startsAt, endsAt])
 }
 
 model CampaignVariant {
-  id          String   @id @default(cuid())
-  campaignId  String
-  name        String
+  id             String   @id @default(cuid())
+  campaignId     String
+  organizationId String?
+  name           String
   trafficPct  Float    @default(50.0)
   config      Json?    @default("{}")
   createdAt   DateTime @default(now())
@@ -335,9 +351,10 @@ model CampaignVariant {
 }
 
 model CampaignApplication {
-  id            String   @id @default(cuid())
-  campaignId    String
-  variantId     String?
+  id             String   @id @default(cuid())
+  campaignId     String
+  organizationId String?
+  variantId      String?
   memberId      String
   eventId       String?
   pointsAwarded Int      @default(0)
@@ -353,9 +370,10 @@ model CampaignApplication {
 }
 
 model Segment {
-  id          String   @id @default(cuid())
-  programId   String
-  name        String
+  id             String   @id @default(cuid())
+  programId      String
+  organizationId String?
+  name           String
   description String?
   type        String   @default("DYNAMIC") // STATIC or DYNAMIC
   rules       Json?    @default("{}")
@@ -388,6 +406,7 @@ enum CouponDiscountType {
 model Coupon {
   id              String            @id @default(cuid())
   programId       String
+  organizationId  String?
   code            String
   mode            CouponMode
   discountType    CouponDiscountType
@@ -407,6 +426,7 @@ model Coupon {
   program     Program             @relation(fields: [programId], references: [id], onDelete: Cascade)
   redemptions CouponRedemption[]
 
+  @@unique([id, organizationId])
   @@unique([programId, code])
   @@index([programId])
   @@index([code])
@@ -414,10 +434,11 @@ model Coupon {
 }
 
 model CouponRedemption {
-  id          String   @id @default(cuid())
-  couponId    String
-  memberId    String
-  redeemedAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  couponId       String
+  organizationId String?
+  memberId       String
+  redeemedAt     DateTime @default(now())
   metadata    Json?    @default("{}")
 
   coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
@@ -454,9 +475,10 @@ enum GiftCardTxType {
 }
 
 model TermsTemplate {
-  id        String   @id @default(cuid())
-  programId String
-  name      String
+  id             String   @id @default(cuid())
+  programId      String
+  organizationId String?
+  name           String
   locale    String   @default("es-MX")
   body      String   @db.Text
   version   Int      @default(1)
@@ -472,6 +494,7 @@ model TermsTemplate {
 model GiftCardBatch {
   id              String      @id @default(cuid())
   programId       String
+  organizationId  String?
   name            String
   quantity        Int
   initialAmount   Decimal     @db.Decimal(12, 2)
@@ -490,6 +513,7 @@ model GiftCardBatch {
   createdBy     AdminUser     @relation(fields: [createdById], references: [id])
   giftCards     GiftCard[]
 
+  @@unique([id, organizationId])
   @@index([programId, status])
 }
 
@@ -497,6 +521,7 @@ model GiftCard {
   id               String         @id @default(cuid())
   code             String         @unique
   batchId          String
+  organizationId   String?
   initialAmount    Decimal        @db.Decimal(12, 2)
   balance          Decimal        @db.Decimal(12, 2)
   currency         String         @db.Char(3)
@@ -524,6 +549,7 @@ model GiftCardTransaction {
   idempotencyKey          String?
   idempotencyPayloadHash  String?
   programId               String
+  organizationId          String?
   createdById             String?
   createdAt               DateTime       @default(now())
 
@@ -536,9 +562,10 @@ model GiftCardTransaction {
 }
 
 model Reward {
-  id          String   @id @default(cuid())
-  programId   String
-  name        String
+  id             String   @id @default(cuid())
+  programId      String
+  organizationId String?
+  name           String
   description String?
   pointsCost  Int
   stock       Int?
@@ -553,15 +580,17 @@ model Reward {
   program     Program             @relation(fields: [programId], references: [id], onDelete: Cascade)
   redemptions RewardRedemption[]
 
+  @@unique([id, organizationId])
   @@index([programId])
   @@index([isActive])
 }
 
 model RewardRedemption {
-  id          String   @id @default(cuid())
-  rewardId    String
-  memberId    String
-  pointsSpent Int
+  id             String   @id @default(cuid())
+  rewardId       String
+  organizationId String?
+  memberId       String
+  pointsSpent    Int
   redeemedAt  DateTime @default(now())
   metadata    Json?    @default("{}")
 
@@ -583,6 +612,7 @@ enum BadgeType {
 model Badge {
   id             String   @id @default(cuid())
   programId      String
+  organizationId String?
   name           String
   description    String?
   type           BadgeType
@@ -598,16 +628,18 @@ model Badge {
   program      Program       @relation(fields: [programId], references: [id], onDelete: Cascade)
   memberBadges MemberBadge[]
 
+  @@unique([id, organizationId])
   @@index([programId])
   @@index([type])
   @@index([seriesId])
 }
 
 model MemberBadge {
-  id          String   @id @default(cuid())
-  memberId    String
-  badgeId     String
-  progress    Float    @default(0)
+  id             String   @id @default(cuid())
+  memberId       String
+  badgeId        String
+  organizationId String?
+  progress       Float    @default(0)
   unlockedAt  DateTime?
   notifiedAt  DateTime?
   createdAt   DateTime @default(now())
@@ -639,6 +671,7 @@ enum NotificationStatus {
 model NotificationTemplate {
   id              String              @id @default(cuid())
   programId       String
+  organizationId  String?
   name            String
   locale          String              @default("es-MX")
   channel         NotificationChannel
@@ -660,10 +693,11 @@ model NotificationTemplate {
 }
 
 model Notification {
-  id          String              @id @default(cuid())
-  templateId  String?
-  memberId    String
-  channel     NotificationChannel
+  id             String              @id @default(cuid())
+  templateId     String?
+  memberId       String
+  organizationId String?
+  channel        NotificationChannel
   status      NotificationStatus  @default(PENDING)
   subject     String?
   body        String?
@@ -684,6 +718,7 @@ model Notification {
 model CoalitionConfig {
   id                   String   @id @default(cuid())
   programId            String   @unique
+  organizationId       String?
   program              Program  @relation(fields: [programId], references: [id], onDelete: Restrict)
   provider             String   @default("GENERIC")
   endpoint             String
@@ -704,6 +739,7 @@ model CoalitionAccount {
   id              String   @id @default(cuid())
   memberId        String
   programId       String
+  organizationId  String?
   provider        String   @default("APPRECIO")
   externalId      String
   externalBalance Int      @default(0)
@@ -724,6 +760,7 @@ model CoalitionTransaction {
   id               String   @id @default(cuid())
   accountId        String
   programId        String
+  organizationId   String?
   type             TransactionType
   amount           Int
   localTxRef       String
@@ -743,9 +780,10 @@ model CoalitionTransaction {
 }
 
 model WebhookSubscription {
-  id          String   @id @default(cuid())
-  programId   String
-  url         String
+  id             String   @id @default(cuid())
+  programId      String
+  organizationId String?
+  url            String
   events      String[] @default([])
   secret      String
   isActive    Boolean  @default(true)
@@ -816,6 +854,7 @@ model Organization {
   updatedAt   DateTime  @updatedAt
 
   memberships OrganizationMembership[]
+  programs    Program[]
 }
 
 model User {
@@ -965,9 +1004,10 @@ enum AuditActorType {
 }
 
 model AuditLog {
-  id          String          @id @default(cuid())
-  programId   String
-  adminUserId String?
+  id             String          @id @default(cuid())
+  programId      String
+  organizationId String?
+  adminUserId    String?
   actorType   AuditActorType @default(API_KEY)
   actorId     String          @default("legacy-unknown")
   action      AuditAction
@@ -996,10 +1036,11 @@ enum DevicePlatform {
 }
 
 model MemberDevice {
-  id        String         @id @default(cuid())
-  memberId  String
-  programId String
-  token     String         @unique
+  id             String         @id @default(cuid())
+  memberId       String
+  programId      String
+  organizationId String?
+  token          String         @unique
   platform  DevicePlatform
   lastSeenAt DateTime      @default(now())
   createdAt DateTime       @default(now())
@@ -1012,10 +1053,11 @@ model MemberDevice {
 }
 
 model MemberNotificationPreferences {
-  id        String              @id @default(cuid())
-  memberId  String
-  programId String
-  channel   NotificationChannel
+  id             String              @id @default(cuid())
+  memberId       String
+  programId      String
+  organizationId String?
+  channel        NotificationChannel
   optedIn   Boolean             @default(true)
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
@@ -1029,6 +1071,7 @@ model MemberNotificationPreferences {
 model Event {
   id              String   @id @default(cuid())
   programId       String
+  organizationId  String?
   memberId        String?
   type            String
   payload         Json?    @default("{}")

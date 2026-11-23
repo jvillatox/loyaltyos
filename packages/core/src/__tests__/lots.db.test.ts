@@ -20,9 +20,23 @@ describe.skipIf(!databaseUrl)("PointLot behaviour (PostgreSQL)", () => {
     await prisma.$disconnect();
   });
 
+  async function ensureOrg(): Promise<string> {
+    await prisma.organization.upsert({
+      where: { id: "org_default" },
+      update: {},
+      create: { id: "org_default", name: "Default" },
+    });
+    return "org_default";
+  }
+
   async function newMember(holdDays = 0) {
+    const organizationId = await ensureOrg();
     const program = await prisma.program.create({
-      data: { name: `lots-${String(Date.now())}-${String(Math.random())}`, holdDays },
+      data: {
+        name: `lots-${String(Date.now())}-${String(Math.random())}`,
+        holdDays,
+        organizationId,
+      },
     });
     const member = await prisma.member.create({ data: { programId: program.id } });
     return { programId: program.id, memberId: member.id };

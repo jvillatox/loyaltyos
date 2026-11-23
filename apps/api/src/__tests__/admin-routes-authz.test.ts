@@ -155,7 +155,7 @@ beforeAll(async () => {
 
   // Second program (tenant B)
   const programB = await prisma.program.create({
-    data: { id: `prog_b_${suffix}`, name: `Authz Prog B ${suffix}` },
+    data: { id: `prog_b_${suffix}`, name: `Authz Prog B ${suffix}`, organizationId: "org_default" },
   });
   programBId = programB.id;
 

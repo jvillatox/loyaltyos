@@ -1,3 +1,4 @@
+import { deriveOrganizationId, requireOrganizationId } from "@loyaltyos/core";
 import type { Coupon, PrismaClient } from "@prisma/client";
 
 import type { CouponCreateInput, CouponUpdateInput, CouponWithRedemptions } from "./types.js";
@@ -5,11 +6,24 @@ import type { CouponCreateInput, CouponUpdateInput, CouponWithRedemptions } from
 export function createRepository(prisma: PrismaClient) {
   return {
     async create(input: CouponCreateInput): Promise<Coupon> {
-      return prisma.coupon.create({ data: input });
+      const organizationId = await deriveOrganizationId(prisma, input.programId);
+      return prisma.coupon.create({ data: { ...input, organizationId } });
     },
 
     async createMany(inputs: CouponCreateInput[]): Promise<number> {
-      const result = await prisma.coupon.createMany({ data: inputs });
+      const programIds = [...new Set(inputs.map((i) => i.programId))];
+      const orgByProgram = new Map<string, string>();
+      await Promise.all(
+        programIds.map(async (programId) => {
+          orgByProgram.set(programId, await deriveOrganizationId(prisma, programId));
+        }),
+      );
+      const result = await prisma.coupon.createMany({
+        data: inputs.map((input) => ({
+          ...input,
+          organizationId: orgByProgram.get(input.programId)!,
+        })),
+      });
       return result.count;
     },
 
@@ -84,8 +98,13 @@ export function createRepository(prisma: PrismaClient) {
     },
 
     async recordRedemption(couponId: string, memberId: string): Promise<string> {
+      const coupon = await prisma.coupon.findUnique({
+        where: { id: couponId },
+        select: { organizationId: true },
+      });
+      const organizationId = requireOrganizationId(coupon, `Coupon "${couponId}"`);
       const redemption = await prisma.couponRedemption.create({
-        data: { couponId, memberId },
+        data: { couponId, memberId, organizationId },
       });
       return redemption.id;
     },

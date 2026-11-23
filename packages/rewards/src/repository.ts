@@ -1,3 +1,4 @@
+import { deriveOrganizationId, requireOrganizationId } from "@loyaltyos/core";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import type { RewardCreateInput, RewardUpdateInput, RewardWithRedemptions } from "./types.js";
@@ -5,7 +6,8 @@ import type { RewardCreateInput, RewardUpdateInput, RewardWithRedemptions } from
 export function createRepository(prisma: PrismaClient) {
   return {
     async create(input: RewardCreateInput) {
-      return prisma.reward.create({ data: input });
+      const organizationId = await deriveOrganizationId(prisma, input.programId);
+      return prisma.reward.create({ data: { ...input, organizationId } });
     },
 
     async update(id: string, input: RewardUpdateInput) {
@@ -118,8 +120,13 @@ export function createRepository(prisma: PrismaClient) {
       pointsSpent: number,
       metadata?: Prisma.InputJsonValue,
     ) {
+      const reward = await prisma.reward.findUnique({
+        where: { id: rewardId },
+        select: { organizationId: true },
+      });
+      const organizationId = requireOrganizationId(reward, `Reward "${rewardId}"`);
       return prisma.rewardRedemption.create({
-        data: { rewardId, memberId, pointsSpent, metadata },
+        data: { rewardId, memberId, pointsSpent, metadata, organizationId },
       });
     },
 

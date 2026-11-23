@@ -31,8 +31,12 @@ beforeAll(async () => {
   await app.ready();
   prisma = (await import("../db.js")).prisma;
 
-  await prisma.program.create({ data: { id: programAId, name: `AI Authz ${suffix}` } });
-  await prisma.program.create({ data: { id: programBId, name: `AI Authz B ${suffix}` } });
+  await prisma.program.create({
+    data: { id: programAId, name: `AI Authz ${suffix}`, organizationId: "org_default" },
+  });
+  await prisma.program.create({
+    data: { id: programBId, name: `AI Authz B ${suffix}`, organizationId: "org_default" },
+  });
 
   // A SERVER-scope internal key, mimicking LOYALTYOS_API_KEY. The guard rejects
   // it on /admin routes regardless of scope.

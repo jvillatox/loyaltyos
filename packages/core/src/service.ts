@@ -4,6 +4,7 @@ import { addMonths, lotExpiresAt } from "./expiry.js";
 import { applyTxToBalance } from "./ledger.js";
 import { createRepository } from "./repository.js";
 import { calculateEffectiveAmount, evaluateRules } from "./rules.js";
+import { deriveOrganizationId } from "./tenancy.js";
 import type {
   AdjustInput,
   AdjustResult,
@@ -92,6 +93,7 @@ export class PointsService {
     const now = new Date();
     const availableAt = held ? new Date(now.getTime() + holdDays * DAY_MS) : null;
     const program = await this.programExpiry(input.programId);
+    const organizationId = await deriveOrganizationId(this.prisma, input.programId);
 
     const account = await this.ensureAccount(input.memberId, input.programId);
     try {
@@ -127,6 +129,7 @@ export class PointsService {
           data: {
             accountId: account.id,
             programId: input.programId,
+            organizationId,
             type: "EARN",
             amount: effective.total,
             balanceAfter: updated.balance,
@@ -143,6 +146,7 @@ export class PointsService {
             data: {
               accountId: account.id,
               programId: input.programId,
+              organizationId,
               sourceTxId: created.id,
               originalAmount: lotAmount,
               remaining: lotAmount,
@@ -175,6 +179,7 @@ export class PointsService {
     const existing = await this.repo.findTxByIdempotencyKey(input.programId, input.idempotencyKey);
     if (existing) return this.idempotentResult(existing);
 
+    const organizationId = await deriveOrganizationId(this.prisma, input.programId);
     try {
       const { tx, balanceAfter } = await this.prisma.$transaction(async (db) => {
         const account = await db.pointAccount.findFirst({
@@ -202,6 +207,7 @@ export class PointsService {
           data: {
             accountId: account.id,
             programId: input.programId,
+            organizationId,
             type: "REDEEM",
             amount: input.amount,
             balanceAfter: updated.balance,
@@ -241,6 +247,7 @@ export class PointsService {
 
     const account = await this.ensureAccount(input.memberId, input.programId);
     const program = await this.programExpiry(input.programId);
+    const organizationId = await deriveOrganizationId(this.prisma, input.programId);
     try {
       const { tx, balanceAfter } = await this.prisma.$transaction(async (db) => {
         const locked = await this.lockAccount(db, account.id);
@@ -268,6 +275,7 @@ export class PointsService {
           data: {
             accountId: account.id,
             programId: input.programId,
+            organizationId,
             type: "ADJUST",
             amount: input.amount,
             balanceAfter: updated.balance,
@@ -283,6 +291,7 @@ export class PointsService {
             data: {
               accountId: account.id,
               programId: input.programId,
+              organizationId,
               sourceTxId: created.id,
               originalAmount: lotAmount,
               remaining: lotAmount,
@@ -342,6 +351,7 @@ export class PointsService {
 
     const effect = applyTxToBalance(original.type, original.amount);
     const program = await this.programExpiry(programId);
+    const organizationId = await deriveOrganizationId(this.prisma, programId);
 
     const { reversal } = await this.prisma.$transaction(async (db) => {
       // Claim the original first; a concurrent reversal blocks on this row and
@@ -393,6 +403,7 @@ export class PointsService {
         await db.auditLog.create({
           data: {
             programId,
+            organizationId,
             actorType: "ADMIN_USER",
             actorId: adminUserId,
             adminUserId,
@@ -409,6 +420,7 @@ export class PointsService {
         data: {
           accountId: original.accountId,
           programId,
+          organizationId,
           type: "REVERSE",
           amount: effect,
           balanceAfter: updated.balance,
@@ -426,6 +438,7 @@ export class PointsService {
           data: {
             accountId: original.accountId,
             programId,
+            organizationId,
             sourceTxId: created.id,
             originalAmount: surplusLot,
             remaining: surplusLot,
@@ -459,6 +472,7 @@ export class PointsService {
     });
 
     const program = await this.programExpiry(programId);
+    const organizationId = await deriveOrganizationId(this.prisma, programId);
     let settled = 0;
     for (const tx of due) {
       const moved = await this.prisma.$transaction(async (db) => {
@@ -484,6 +498,7 @@ export class PointsService {
             data: {
               accountId: tx.accountId,
               programId: tx.programId,
+              organizationId,
               sourceTxId: tx.id,
               originalAmount: lotAmount,
               remaining: lotAmount,
@@ -540,6 +555,7 @@ export class PointsService {
 
   private async expireLots(programId: string, now: Date): Promise<number> {
     const lots = await this.repo.findExpiredLots(programId, now);
+    const organizationId = await deriveOrganizationId(this.prisma, programId);
     let expired = 0;
     for (const lot of lots) {
       try {
@@ -565,6 +581,7 @@ export class PointsService {
             data: {
               accountId: lot.accountId,
               programId,
+              organizationId,
               type: "EXPIRE",
               amount,
               balanceAfter: updated.balance,
@@ -594,6 +611,7 @@ export class PointsService {
   ): Promise<number> {
     if (!program.changedAt) return 0;
     const accounts = await this.repo.findActiveAccounts(programId);
+    const organizationId = await deriveOrganizationId(this.prisma, programId);
     let expired = 0;
     for (const account of accounts) {
       try {
@@ -620,6 +638,7 @@ export class PointsService {
             data: {
               accountId: account.id,
               programId,
+              organizationId,
               type: "EXPIRE",
               amount,
               balanceAfter: updated.balance,
@@ -733,6 +752,7 @@ export class PointsService {
     horizonDays = 30,
   ): Promise<number> {
     const deadlines = await this.upcomingExpiries(programId, now, horizonDays);
+    const organizationId = await deriveOrganizationId(this.prisma, programId);
     let sent = 0;
     for (const deadline of deadlines) {
       try {
@@ -740,6 +760,7 @@ export class PointsService {
           data: {
             memberId: deadline.memberId,
             programId,
+            organizationId,
             expiresOn: deadline.expiresOn,
           },
         });
@@ -888,8 +909,11 @@ export class PointsService {
   private async ensureAccount(memberId: string, programId: string) {
     const existing = await this.repo.findAccount(memberId, programId);
     if (existing) return existing;
+    const organizationId = await deriveOrganizationId(this.prisma, programId);
     try {
-      return await this.prisma.pointAccount.create({ data: { memberId, programId } });
+      return await this.prisma.pointAccount.create({
+        data: { memberId, programId, organizationId },
+      });
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
       const winner = await this.repo.findAccount(memberId, programId);

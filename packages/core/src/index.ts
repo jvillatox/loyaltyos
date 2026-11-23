@@ -6,6 +6,8 @@ export { createRepository } from "./repository.js";
 export { calculateEffectiveAmount, evaluateRules } from "./rules.js";
 export type { PointsServiceMetrics, PointsServiceOptions } from "./service.js";
 export { PointsService } from "./service.js";
+export type { ProgramOrgReader } from "./tenancy.js";
+export { deriveOrganizationId, requireOrganizationId } from "./tenancy.js";
 export type {
   AdjustInput,
   AdjustResult,

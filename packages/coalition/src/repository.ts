@@ -1,3 +1,4 @@
+import { deriveOrganizationId } from "@loyaltyos/core";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 import type { CoalitionAccountRow, CoalitionConfigRow, CoalitionTransactionRow } from "./types.js";
@@ -26,10 +27,12 @@ export function createRepository(prisma: PrismaClient) {
     conversionEnabled?: boolean;
     minConversionPoints?: number;
   }): Promise<CoalitionConfigRow> {
+    const organizationId = await deriveOrganizationId(prisma, input.programId);
     return prisma.coalitionConfig.upsert({
       where: { programId: input.programId },
       create: {
         programId: input.programId,
+        organizationId,
         provider: input.provider ?? "GENERIC",
         endpoint: input.endpoint,
         country: input.country ?? null,
@@ -123,10 +126,12 @@ export function createRepository(prisma: PrismaClient) {
     externalId: string;
     externalBalance?: number;
   }): Promise<CoalitionAccountRow> {
+    const organizationId = await deriveOrganizationId(prisma, input.programId);
     return prisma.coalitionAccount.create({
       data: {
         memberId: input.memberId,
         programId: input.programId,
+        organizationId,
         provider: input.provider,
         externalId: input.externalId,
         externalBalance: input.externalBalance ?? 0,
@@ -153,10 +158,12 @@ export function createRepository(prisma: PrismaClient) {
     idempotencyKey: string;
     metadata?: Record<string, unknown>;
   }): Promise<CoalitionTransactionRow> {
+    const organizationId = await deriveOrganizationId(prisma, input.programId);
     return prisma.coalitionTransaction.create({
       data: {
         accountId: input.accountId,
         programId: input.programId,
+        organizationId,
         type: input.type,
         amount: input.amount,
         localTxRef: input.localTxRef,

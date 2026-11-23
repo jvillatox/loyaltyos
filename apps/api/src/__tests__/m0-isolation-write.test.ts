@@ -48,8 +48,12 @@ beforeAll(async () => {
   await app.ready();
   prisma = (await import("../db.js")).prisma;
 
-  await prisma.program.create({ data: { id: progA, name: `M0W A ${suffix}` } });
-  await prisma.program.create({ data: { id: progB, name: `M0W B ${suffix}` } });
+  await prisma.program.create({
+    data: { id: progA, name: `M0W A ${suffix}`, organizationId: "org_default" },
+  });
+  await prisma.program.create({
+    data: { id: progB, name: `M0W B ${suffix}`, organizationId: "org_default" },
+  });
 
   await prisma.apiKey.create({ data: { programId: progA, key: aServerKey, scope: "SERVER" } });
 

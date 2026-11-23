@@ -79,9 +79,12 @@ beforeAll(async () => {
       adjustOperatorPerTxLimit: 100,
       adjustOperatorDailyLimit: 300,
       adjustServerPerTxLimit: 1000,
+      organizationId: "org_default",
     },
   });
-  await prisma.program.create({ data: { id: otherProgramId, name: `Adj2 ${suffix}` } });
+  await prisma.program.create({
+    data: { id: otherProgramId, name: `Adj2 ${suffix}`, organizationId: "org_default" },
+  });
 
   await prisma.apiKey.create({ data: { programId, key: serverKey, scope: "SERVER" } });
   await prisma.apiKey.create({ data: { programId, key: clientKey, scope: "CLIENT" } });

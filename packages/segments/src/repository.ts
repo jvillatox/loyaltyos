@@ -1,3 +1,4 @@
+import { deriveOrganizationId } from "@loyaltyos/core";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import type {
@@ -16,9 +17,11 @@ interface PaginationParams {
 export function createRepository(prisma: PrismaClient) {
   return {
     async createSegment(data: SegmentCreateInput): Promise<SegmentRow> {
+      const organizationId = await deriveOrganizationId(prisma, data.programId);
       return prisma.segment.create({
         data: {
           programId: data.programId,
+          organizationId,
           name: data.name,
           description: data.description,
           type: data.type,

@@ -27,7 +27,9 @@ beforeAll(async () => {
   await app.ready();
   prisma = (await import("../db.js")).prisma;
 
-  await prisma.program.create({ data: { id: programId, name: `M0C ${suffix}` } });
+  await prisma.program.create({
+    data: { id: programId, name: `M0C ${suffix}`, organizationId: "org_default" },
+  });
 
   const member = await prisma.member.create({
     data: { email: `m0c-member-${suffix}@loyaltyos.dev`, programId },

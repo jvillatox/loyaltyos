@@ -1,3 +1,4 @@
+import { deriveOrganizationId, requireOrganizationId } from "@loyaltyos/core";
 import type { BadgeType, Prisma, PrismaClient } from "@prisma/client";
 
 import type {
@@ -17,9 +18,11 @@ export function createRepository(prisma: PrismaClient) {
     // ═══════════════════════════════════════════════════════════════════
 
     async createBadge(data: BadgeCreateInput): Promise<BadgeRow> {
+      const organizationId = await deriveOrganizationId(prisma, data.programId);
       return prisma.badge.create({
         data: {
           programId: data.programId,
+          organizationId,
           name: data.name,
           description: data.description,
           type: data.type as BadgeType,
@@ -97,9 +100,11 @@ export function createRepository(prisma: PrismaClient) {
     // ═══════════════════════════════════════════════════════════════════
 
     async createTier(data: TierCreateInput): Promise<TierRow> {
+      const organizationId = await deriveOrganizationId(prisma, data.programId);
       return prisma.tier.create({
         data: {
           programId: data.programId,
+          organizationId,
           name: data.name,
           rank: data.rank,
           minPoints: data.minPoints,
@@ -221,11 +226,17 @@ export function createRepository(prisma: PrismaClient) {
       badgeId: string,
       data: { progress?: number; unlockedAt?: Date | null; notifiedAt?: Date | null },
     ) {
+      const badge = await prisma.badge.findUnique({
+        where: { id: badgeId },
+        select: { organizationId: true },
+      });
+      const organizationId = requireOrganizationId(badge, `Badge "${badgeId}"`);
       return prisma.memberBadge.upsert({
         where: { memberId_badgeId: { memberId, badgeId } },
         create: {
           memberId,
           badgeId,
+          organizationId,
           progress: data.progress ?? 0,
           unlockedAt: data.unlockedAt,
           notifiedAt: data.notifiedAt,
@@ -267,8 +278,13 @@ export function createRepository(prisma: PrismaClient) {
     },
 
     async createMemberTier(memberId: string, tierId: string) {
+      const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        select: { organizationId: true },
+      });
+      const organizationId = requireOrganizationId(member, `Member "${memberId}"`);
       return prisma.memberTier.create({
-        data: { memberId, tierId },
+        data: { memberId, tierId, organizationId },
         include: { tier: true },
       });
     },

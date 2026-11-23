@@ -19,11 +19,22 @@ describe.skipIf(!databaseUrl)("PointsService hold days (PostgreSQL)", () => {
     await prisma.$disconnect();
   });
 
+  async function ensureOrg(): Promise<string> {
+    await prisma.organization.upsert({
+      where: { id: "org_default" },
+      update: {},
+      create: { id: "org_default", name: "Default" },
+    });
+    return "org_default";
+  }
+
   async function newProgram(holdDays: number) {
+    const organizationId = await ensureOrg();
     return prisma.program.create({
       data: {
         name: `hold-${String(Date.now())}-${String(Math.random())}`,
         holdDays,
+        organizationId,
       },
     });
   }

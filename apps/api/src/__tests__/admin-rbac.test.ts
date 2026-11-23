@@ -67,7 +67,9 @@ beforeAll(async () => {
   await app.ready();
   prisma = (await import("../db.js")).prisma;
 
-  await prisma.program.create({ data: { id: programId, name: `RBAC ${suffix}` } });
+  await prisma.program.create({
+    data: { id: programId, name: `RBAC ${suffix}`, organizationId: "org_default" },
+  });
   for (const role of ADMIN_ROLES) {
     cookies[role] = await loginAs(role);
   }

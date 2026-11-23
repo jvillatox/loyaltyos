@@ -3,7 +3,8 @@
 import { hashPassword } from "@loyaltyos/core";
 import { PrismaClient } from "@prisma/client";
 
-import { syncAdminUserToTenancy } from "../src/lib/tenancy-users.js";
+import { backfillOrganizationColumns } from "../src/lib/tenancy-org.js";
+import { ensureDefaultOrganization, syncAdminUserToTenancy } from "../src/lib/tenancy-users.js";
 
 const prisma = new PrismaClient({
   log: ["warn", "error"],
@@ -29,7 +30,6 @@ async function main(): Promise<void> {
   await prisma.adminUser.deleteMany();
   await prisma.organizationMembership.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.organization.deleteMany();
   await prisma.campaignVariant.deleteMany();
   await prisma.campaign.deleteMany();
   await prisma.coupon.deleteMany();
@@ -43,7 +43,12 @@ async function main(): Promise<void> {
   await prisma.tier.deleteMany();
   await prisma.event.deleteMany();
   await prisma.program.deleteMany();
+  // Program now references Organization (RESTRICT), so the org must be deleted
+  // after the programs that point at it.
+  await prisma.organization.deleteMany();
   console.log("Cleaned existing data.\n");
+
+  const org = await ensureDefaultOrganization(prisma);
 
   // === Program ===
   const program = await prisma.program.create({
@@ -52,6 +57,7 @@ async function main(): Promise<void> {
       name: "LoyaltyOS Demo",
       description: "Demo program for development and testing",
       pointsUnit: "Stars",
+      organizationId: org.id,
     },
   });
   console.log(`Created program: ${program.name} (${program.id})`);
@@ -693,6 +699,11 @@ async function main(): Promise<void> {
   console.log(
     "Created additional notification templates (both locales): Welcome, Points Redeemed, Coupon Issued, Tier Changed, Expiration Warning, Expiry Reminder",
   );
+
+  // Fill organizationId on every §3.1 row from the default Organization. The seed
+  // writes children directly (no per-row organizationId), so the idempotent batch
+  // backfill sets them all in one pass — the same path the migration CLI uses.
+  await backfillOrganizationColumns(prisma);
 
   // === Summary ===
   const counts = {
