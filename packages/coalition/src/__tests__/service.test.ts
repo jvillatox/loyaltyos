@@ -54,6 +54,7 @@ vi.mock("@loyaltyos/core", () => ({
     redeem: mockRedeem,
     balance: vi.fn().mockResolvedValue({ total: 5000, confirmed: 5000, pending: 0 }),
   })),
+  deriveOrganizationId: vi.fn().mockResolvedValue("org-1"),
 }));
 
 // ── Dynamically import after mocks ─────────────────────────────

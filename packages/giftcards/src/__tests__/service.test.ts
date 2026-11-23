@@ -49,6 +49,9 @@ const mockPrisma: any = {
     findMany: vi.fn(),
     update: vi.fn(),
   },
+  program: {
+    findUnique: vi.fn(),
+  },
 };
 
 let GiftCardService: typeof import("../service.js").GiftCardService;
@@ -57,6 +60,7 @@ beforeEach(async () => {
   vi.resetAllMocks();
   // Re-apply $transaction implementation lost after resetAllMocks
   mockPrisma.$transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(mockPrisma));
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
   mockValidateChecksum.mockReturnValue(true);
   mockGenerateCode.mockReturnValue("ABCDEFGHJKLMNPQR");
   const mod = await import("../service.js");

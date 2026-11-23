@@ -11,6 +11,10 @@ const mockPrisma = vi.hoisted(() => ({
   member: {
     findFirst: vi.fn(),
     findMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
+  program: {
+    findUnique: vi.fn(),
   },
   pointAccount: {
     findFirst: vi.fn(),
@@ -32,6 +36,8 @@ let TiersService: typeof import("../tiers-service.js").TiersService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+  mockPrisma.member.findUnique.mockResolvedValue({ organizationId: "org-1" });
   const mod = await import("../tiers-service.js");
   TiersService = mod.TiersService;
 });

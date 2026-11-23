@@ -6,7 +6,11 @@ const mockPrisma = vi.hoisted(() => ({
     update: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
+  },
+  program: {
+    findUnique: vi.fn(),
   },
   rewardRedemption: {
     create: vi.fn(),
@@ -42,6 +46,8 @@ let RewardsService: typeof import("../service.js").RewardsService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+  mockPrisma.reward.findUnique.mockResolvedValue({ organizationId: "org-1" });
   // PointsService runs its ledger writes in an interactive transaction.
   mockPrisma.$transaction.mockImplementation((fn: (db: typeof mockPrisma) => unknown) =>
     fn(mockPrisma),

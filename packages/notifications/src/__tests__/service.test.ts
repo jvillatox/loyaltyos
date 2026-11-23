@@ -27,6 +27,9 @@ const mockPrisma = vi.hoisted(() => ({
   member: {
     findUnique: vi.fn(),
   },
+  program: {
+    findUnique: vi.fn(),
+  },
 }));
 
 vi.mock("@prisma/client", () => ({}));
@@ -35,6 +38,11 @@ let NotificationsService: typeof import("../service.js").NotificationsService;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+  mockPrisma.member.findUnique.mockResolvedValue({
+    organizationId: "org-1",
+    program: { defaultLocale: "es-MX" },
+  });
   const mod = await import("../service.js");
   NotificationsService = mod.NotificationsService;
 });
@@ -190,6 +198,7 @@ describe("NotificationsService.createNotification", () => {
 describe("NotificationsService.sendTrigger", () => {
   it("finds matching templates and creates notifications", async () => {
     mockPrisma.member.findUnique.mockResolvedValue({
+      organizationId: "org-1",
       locale: "es-MX",
       program: { defaultLocale: "es-MX" },
     });
@@ -216,6 +225,7 @@ describe("NotificationsService.sendTrigger", () => {
 
   it("renders template with Handlebars variables", async () => {
     mockPrisma.member.findUnique.mockResolvedValue({
+      organizationId: "org-1",
       locale: null,
       program: { defaultLocale: "es-MX" },
     });
@@ -251,6 +261,7 @@ describe("NotificationsService.sendTrigger", () => {
 
   it("returns empty when no templates match", async () => {
     mockPrisma.member.findUnique.mockResolvedValue({
+      organizationId: "org-1",
       locale: "es-MX",
       program: { defaultLocale: "es-MX" },
     });
@@ -265,6 +276,7 @@ describe("NotificationsService.sendTrigger", () => {
   it("falls back to program.defaultLocale before es-MX", async () => {
     // Member has an unsupported locale; program default is en-US
     mockPrisma.member.findUnique.mockResolvedValue({
+      organizationId: "org-1",
       locale: "fr-FR",
       program: { defaultLocale: "en-US" },
     });
