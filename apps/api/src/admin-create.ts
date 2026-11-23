@@ -1,7 +1,12 @@
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { hashPassword } from "@loyaltyos/core";
 import { isAdminRole } from "@loyaltyos/permissions";
+import type { AdminRole, AdminUser } from "@prisma/client";
 import { PrismaClient } from "@prisma/client";
 
+import type { AdminUserMirror, TenantDb } from "./lib/tenancy-users.js";
 import { syncAdminUserToTenancy } from "./lib/tenancy-users.js";
 
 /**
@@ -19,6 +24,35 @@ interface Options {
   role: string;
   programId: string;
   name?: string;
+}
+
+export interface CreateAdminInput {
+  email: string;
+  name: string;
+  role: AdminRole;
+  programId: string;
+  passwordHash: string;
+}
+
+// Creates an AdminUser and mirrors it into User + OrganizationMembership in the
+// same transaction (docs/design/tenancy.md §4). Exported for the CLI test; the
+// sync step is injectable so tests can force a failure and assert the rollback.
+export async function createAdminUser(
+  db: TenantDb,
+  input: CreateAdminInput,
+  sync: (db: TenantDb, admin: AdminUserMirror) => Promise<void> = syncAdminUserToTenancy,
+): Promise<AdminUser> {
+  const created = await db.adminUser.create({
+    data: {
+      email: input.email.toLowerCase(),
+      name: input.name,
+      role: input.role,
+      passwordHash: input.passwordHash,
+      programId: input.programId,
+    },
+  });
+  await sync(db, created);
+  return created;
 }
 
 function parseArgs(argv: string[]): Options {
@@ -116,19 +150,15 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient({ log: ["warn", "error"] });
   try {
     const passwordHash = await hashPassword(password);
-    const admin = await prisma.$transaction(async (tx) => {
-      const created = await tx.adminUser.create({
-        data: {
-          email: opts.email.toLowerCase(),
-          name: opts.name ?? opts.email,
-          role,
-          passwordHash,
-          programId: opts.programId,
-        },
-      });
-      await syncAdminUserToTenancy(tx, created);
-      return created;
-    });
+    const admin = await prisma.$transaction((tx) =>
+      createAdminUser(tx, {
+        email: opts.email,
+        name: opts.name ?? opts.email,
+        role,
+        programId: opts.programId,
+        passwordHash,
+      }),
+    );
     console.log(`Created admin ${admin.email} (${admin.role}) in program ${admin.programId}`);
   } catch (err) {
     const message = (err as Error).message;
@@ -143,4 +173,6 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  void main();
+}
