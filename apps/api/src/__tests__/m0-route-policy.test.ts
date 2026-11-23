@@ -301,7 +301,7 @@ beforeAll(async () => {
   memberCookie = await memberSessionCookie(memberId);
 
   const reward = await prisma.reward.create({
-    data: { programId, name: `Reward ${suffix}`, pointsCost: 50 },
+    data: { programId, organizationId: "org_default", name: `Reward ${suffix}`, pointsCost: 50 },
   });
   rewardId = reward.id;
 

@@ -7,6 +7,7 @@ const mockPrisma = vi.hoisted(() => ({
     update: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
   },
   couponRedemption: {
@@ -19,6 +20,9 @@ const mockPrisma = vi.hoisted(() => ({
   },
   pointRule: {
     findMany: vi.fn(),
+  },
+  program: {
+    findUnique: vi.fn(),
   },
   $transaction: vi.fn(),
 }));
@@ -42,6 +46,8 @@ mockPrisma.apiKey.findUnique.mockResolvedValue({
 });
 mockPrisma.apiKey.update.mockResolvedValue({});
 mockPrisma.pointRule.findMany.mockResolvedValue([]);
+mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+mockPrisma.coupon.findUnique.mockResolvedValue({ organizationId: "org-1" });
 mockPrisma.$transaction.mockImplementation((fn: never) => fn(mockPrisma));
 
 import type { FastifyInstance } from "fastify";
@@ -71,6 +77,8 @@ beforeEach(async () => {
   });
   mockPrisma.apiKey.update.mockResolvedValue({});
   mockPrisma.pointRule.findMany.mockResolvedValue([]);
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
+  mockPrisma.coupon.findUnique.mockResolvedValue({ organizationId: "org-1" });
   mockPrisma.$transaction.mockImplementation((fn: never) => fn(mockPrisma));
   app = await buildApp({ logger: false });
 

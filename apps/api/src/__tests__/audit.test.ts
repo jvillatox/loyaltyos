@@ -4,6 +4,9 @@ const mockPrisma = vi.hoisted(() => ({
   auditLog: {
     create: vi.fn(),
   },
+  program: {
+    findUnique: vi.fn(),
+  },
 }));
 
 vi.mock("../db.js", () => ({
@@ -14,6 +17,7 @@ import { audit } from "../lib/audit.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPrisma.program.findUnique.mockResolvedValue({ organizationId: "org-1" });
 });
 
 describe("audit()", () => {
