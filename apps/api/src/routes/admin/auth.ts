@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "../../db.js";
 import { adminLucia } from "../../lib/auth/admin-lucia.js";
 import { LoyaltyError } from "../../lib/errors.js";
+import { syncAdminUserToTenancy } from "../../lib/tenancy-users.js";
 
 const loginSchema = z.object({
   email: z.string().email().toLowerCase(),
@@ -32,9 +33,13 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
         throw new LoyaltyError("INVALID_CREDENTIALS", 401);
       }
 
-      await prisma.adminUser.update({
-        where: { id: admin.id },
-        data: { lastLoginAt: new Date() },
+      const lastLoginAt = new Date();
+      await prisma.$transaction(async (tx) => {
+        await tx.adminUser.update({
+          where: { id: admin.id },
+          data: { lastLoginAt },
+        });
+        await syncAdminUserToTenancy(tx, { ...admin, lastLoginAt });
       });
 
       const session = await adminLucia.createSession(admin.id, {});
@@ -114,20 +119,25 @@ export function adminAuthRoutes(app: FastifyInstance, _opts: unknown, done: () =
 
     const body = updateAdminMeSchema.parse(request.body);
 
-    const admin = await prisma.adminUser.update({
-      where: { id: adminId },
-      data: body,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        locale: true,
-        programId: true,
-      },
+    const admin = await prisma.$transaction(async (tx) => {
+      const updated = await tx.adminUser.update({
+        where: { id: adminId },
+        data: body,
+      });
+      await syncAdminUserToTenancy(tx, updated);
+      return updated;
     });
 
-    return reply.send({ data: admin });
+    return reply.send({
+      data: {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+        locale: admin.locale,
+        programId: admin.programId,
+      },
+    });
   });
 
   done();

@@ -26,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   if `DATABASE_URL` connects as a superuser or `BYPASSRLS` role; with `off` it only
   logs an informational warning.
 
+- **Tenancy identity models (Organization, User, OrganizationMembership).** An
+  additive migration introduces the tenancy tables alongside the existing
+  `AdminUser`. Auth still reads `AdminUser` (no visible change); a compatibility
+  layer mirrors every `AdminUser` write to `User` + `OrganizationMembership` in the
+  same transaction, and an idempotent `pnpm --filter @loyaltyos/api
+tenancy:backfill-users` script backfills the `default` organization and one
+  `User` + membership per `AdminUser`. This is groundwork for the RLS-based
+  multi-tenant switch (see `docs/design/tenancy.md`).
+
 ### Upgrade notes
 
 1. **No action required yet.** `TENANCY_RLS` defaults to `off`, and the provision

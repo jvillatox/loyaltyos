@@ -786,6 +786,70 @@ model AdminUser {
   @@index([email])
 }
 
+// Tenancy identity root (docs/design/tenancy.md §1). Additive: AdminUser and its
+// sessions/PATs keep working unchanged; auth does not read these tables until a
+// later PR. `Organization` is the tenant boundary, `User` the cross-org identity,
+// and `OrganizationMembership` binds a user to an org with a role and scope.
+
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+model Organization {
+  id          String    @id @default(cuid())
+  name        String
+  status      OrgStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  memberships OrganizationMembership[]
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String?
+  name         String
+  status       UserStatus @default(ACTIVE)
+  locale       String     @default("es-MX")
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  memberships OrganizationMembership[]
+}
+
+model OrganizationMembership {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  role           AdminRole        @default(OPERATOR)
+  programIds     String[]         @default([])
+  status         MembershipStatus @default(ACTIVE)
+  invitedById    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+}
+
 model PersonalAccessToken {
   id          String    @id @default(cuid())
   adminUserId String
