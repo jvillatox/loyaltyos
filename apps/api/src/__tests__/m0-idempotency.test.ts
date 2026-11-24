@@ -39,11 +39,19 @@ beforeAll(async () => {
   await prisma.apiKey.create({ data: { programId: progB, key: bKey, scope: "SERVER" } });
 
   const ma = await prisma.member.create({
-    data: { email: `m0id-a-${suffix}@loyaltyos.dev`, programId: progA },
+    data: {
+      email: `m0id-a-${suffix}@loyaltyos.dev`,
+      programId: progA,
+      organizationId: "org_default",
+    },
   });
   aMemberId = ma.id;
   const mb = await prisma.member.create({
-    data: { email: `m0id-b-${suffix}@loyaltyos.dev`, programId: progB },
+    data: {
+      email: `m0id-b-${suffix}@loyaltyos.dev`,
+      programId: progB,
+      organizationId: "org_default",
+    },
   });
   bMemberId = mb.id;
 
@@ -52,6 +60,7 @@ beforeAll(async () => {
   await prisma.coalitionConfig.create({
     data: {
       programId: progA,
+      organizationId: "org_default",
       provider: "GENERIC",
       endpoint: "https://example.com",
       encryptedCredentials: "x",
@@ -61,6 +70,7 @@ beforeAll(async () => {
   await prisma.coalitionConfig.create({
     data: {
       programId: progB,
+      organizationId: "org_default",
       provider: "GENERIC",
       endpoint: "https://example.com",
       encryptedCredentials: "x",

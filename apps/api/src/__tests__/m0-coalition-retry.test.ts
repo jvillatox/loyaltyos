@@ -32,7 +32,7 @@ beforeAll(async () => {
   });
 
   const member = await prisma.member.create({
-    data: { email: `m0c-member-${suffix}@loyaltyos.dev`, programId },
+    data: { email: `m0c-member-${suffix}@loyaltyos.dev`, programId, organizationId: "org_default" },
   });
   memberId = member.id;
 
@@ -57,6 +57,7 @@ beforeAll(async () => {
   await prisma.coalitionConfig.create({
     data: {
       programId,
+      organizationId: "org_default",
       provider: "TIMEOUT_PROVIDER",
       endpoint: "https://example.invalid",
       encryptedCredentials: "x",
