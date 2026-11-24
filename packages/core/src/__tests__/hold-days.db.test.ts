@@ -41,7 +41,9 @@ describe.skipIf(!databaseUrl)("PointsService hold days (PostgreSQL)", () => {
 
   async function newMember(holdDays: number) {
     const program = await newProgram(holdDays);
-    const member = await prisma.member.create({ data: { programId: program.id } });
+    const member = await prisma.member.create({
+      data: { programId: program.id, organizationId: program.organizationId },
+    });
     return { programId: program.id, memberId: member.id };
   }
 

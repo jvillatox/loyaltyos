@@ -51,8 +51,12 @@ describe.skipIf(!databaseUrl)("points expiry migration (v1.7.0 -> lots)", () => 
     const tmp = mkdtempSync(join(tmpdir(), "loyaltyos-mig-"));
     cpSync(schemaPath, join(tmp, "schema.prisma"));
     const tmpMigrations = join(tmp, "migrations");
+    const isMigrationDir = (entry: string): boolean => /^\d{14}_/.test(entry);
     for (const entry of readdirSync(migrationsDir)) {
-      if (entry === NEW_MIGRATION) continue;
+      // v1.7.0 = every migration before the lots migration. Later migrations
+      // (tenancy, composite refs) reference PointLot, which only add_point_lots
+      // creates, so they must be excluded from the pre-image too.
+      if (isMigrationDir(entry) && entry >= NEW_MIGRATION) continue;
       cpSync(join(migrationsDir, entry), join(tmpMigrations, entry), { recursive: true });
     }
 

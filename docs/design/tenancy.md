@@ -416,6 +416,33 @@ from its `Program.organizationId`. The `@@unique([id, organizationId])` on
 `Program` is required by Postgres as the FK target (technically redundant with
 the primary key, but harmless).
 
+The same pattern extends to **business-table references** — a child row may only
+reference a parent in the same organization. Every reference between §3.1 tables
+(`PointTransaction.accountId → PointAccount`, `MemberTier.tierId → Tier`,
+`CampaignApplication.variantId → CampaignVariant`, `CouponRedemption.memberId →
+Member`, `RewardRedemption.memberId → Member`, `CoalitionAccount.memberId →
+Member`, `CoalitionTransaction.accountId → CoalitionAccount`,
+`GiftCardBatch.termsTemplateId → TermsTemplate`, `GiftCardTransaction.giftCardId →
+GiftCard`, `PointAccount.memberId → Member`, `PointAdjustmentRequest.memberId →
+Member`, `PointLot.accountId → PointAccount`, and the four SetNull edges below)
+gets a composite FK `(X_id, organizationId) → X(id, organizationId)`; each
+referenced table carries `@@unique([id, organizationId])` as the target.
+
+**SetNull references** are the exception. `Event.memberId`, `GiftCardTransaction
+.memberId`, `CampaignApplication.variantId` and `Notification.templateId` are
+optional and declared `onDelete: SetNull`. A composite FK with `ON DELETE SET
+NULL` would also null `organizationId`, and PostgreSQL 14 has no
+`SET NULL (columns)` (that lands in 15). Instead each SetNull edge uses:
+
+1. a composite FK `(X_id, organizationId) → X(id, organizationId)` with
+   `ON DELETE NO ACTION … DEFERRABLE INITIALLY DEFERRED` for the cross-org
+   guarantee, and
+2. a `BEFORE DELETE` trigger on the parent that sets only the FK column to
+   `NULL`, leaving `organizationId` intact.
+
+The trigger runs before the deferred `NO ACTION` check, so deleting a parent with
+children neither nulls their org nor trips the constraint.
+
 ---
 
 ## 3. Table classification
