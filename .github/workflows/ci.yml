@@ -125,7 +125,11 @@ jobs:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
       - name: Check Prisma schema drift
-        run: pnpm --filter @loyaltyos/api exec prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_shadow" --exit-code
+        env:
+          PGPASSWORD: loyaltyos
+        run: |
+          psql -h localhost -U loyaltyos -d loyaltyos_test -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS loyaltyos_shadow;" -c "CREATE DATABASE loyaltyos_shadow;"
+          pnpm --filter @loyaltyos/api exec prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_shadow" --exit-code
 
       - name: Seed database
         run: pnpm --filter @loyaltyos/api exec tsx prisma/seed.ts
