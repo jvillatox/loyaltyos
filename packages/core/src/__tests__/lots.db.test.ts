@@ -38,7 +38,9 @@ describe.skipIf(!databaseUrl)("PointLot behaviour (PostgreSQL)", () => {
         organizationId,
       },
     });
-    const member = await prisma.member.create({ data: { programId: program.id } });
+    const member = await prisma.member.create({
+      data: { programId: program.id, organizationId },
+    });
     return { programId: program.id, memberId: member.id };
   }
 

@@ -41,8 +41,8 @@ describe.skipIf(!databaseUrl)("PointsService expiry modes (PostgreSQL)", () => {
         organizationId,
       },
     });
-    const member = await prisma.member.create({ data: { programId: program.id } });
-    return { programId: program.id, memberId: member.id };
+    const member = await prisma.member.create({ data: { programId: program.id, organizationId } });
+    return { programId: program.id, memberId: member.id, organizationId };
   }
 
   const earn = (
@@ -198,7 +198,9 @@ describe.skipIf(!databaseUrl)("PointsService expiry modes (PostgreSQL)", () => {
 
   it("INACTIVITY: a failing account does not block the others from expiring", async () => {
     const ids = await newMember({ expiryMode: "INACTIVITY", expiryMonths: 12 });
-    const other = await prisma.member.create({ data: { programId: ids.programId } });
+    const other = await prisma.member.create({
+      data: { programId: ids.programId, organizationId: ids.organizationId },
+    });
     const otherIds = { memberId: other.id, programId: ids.programId };
     const svc = new PointsService(prisma);
     await earn(svc, ids, 100, `seed-a-${ids.memberId}`);

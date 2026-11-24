@@ -41,7 +41,9 @@ describe.skipIf(!databaseUrl)("PointsService expiry reminders (PostgreSQL)", () 
         organizationId,
       },
     });
-    const member = await prisma.member.create({ data: { programId: program.id } });
+    const member = await prisma.member.create({
+      data: { programId: program.id, organizationId },
+    });
     return { programId: program.id, memberId: member.id };
   }
 

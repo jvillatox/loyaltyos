@@ -134,4 +134,129 @@ describe.skipIf(!databaseUrl)("tenancy organizationId columns (PostgreSQL)", () 
       (await prisma.memberTier.findFirstOrThrow({ where: { memberId: member.id } })).organizationId,
     ).toBe(orgB);
   });
+
+  it("rejects cross-org member/account/coupon/reward references", async () => {
+    const orgA = `org_xref_a_${suffix}`;
+    const orgB = `org_xref_b_${suffix}`;
+    await createOrg(orgA);
+    await createOrg(orgB);
+
+    const progA = await prisma.program.create({
+      data: { id: `prog_xref_a_${suffix}`, name: `XRef A ${suffix}`, organizationId: orgA },
+    });
+    const progB = await prisma.program.create({
+      data: { id: `prog_xref_b_${suffix}`, name: `XRef B ${suffix}`, organizationId: orgB },
+    });
+
+    const memberB = await prisma.member.create({
+      data: { programId: progB.id, organizationId: orgB },
+    });
+    const accountMemberB = await prisma.member.create({
+      data: { programId: progB.id, organizationId: orgB },
+    });
+    const accountB = await prisma.pointAccount.create({
+      data: { memberId: accountMemberB.id, programId: progB.id, balance: 0, organizationId: orgB },
+    });
+    const couponA = await prisma.coupon.create({
+      data: {
+        programId: progA.id,
+        organizationId: orgA,
+        code: `XREF_${suffix}`,
+        mode: "SHARED",
+        discountType: "PERCENTAGE",
+      },
+    });
+    const rewardA = await prisma.reward.create({
+      data: { programId: progA.id, organizationId: orgA, name: `Reward ${suffix}`, pointsCost: 50 },
+    });
+
+    // memberId → Member
+    await expect(
+      prisma.pointAccount.create({
+        data: { memberId: memberB.id, programId: progA.id, balance: 0, organizationId: orgA },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
+
+    // accountId → PointAccount
+    await expect(
+      prisma.pointTransaction.create({
+        data: {
+          accountId: accountB.id,
+          programId: progA.id,
+          type: "EARN",
+          amount: 10,
+          balanceAfter: 10,
+          source: "test",
+          idempotencyKey: `xref_tx_${suffix}`,
+          organizationId: orgA,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
+
+    // CouponRedemption.memberId → Member (coupon in org A, member in org B)
+    await expect(
+      prisma.couponRedemption.create({
+        data: { couponId: couponA.id, memberId: memberB.id, organizationId: orgA },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
+
+    // RewardRedemption.memberId → Member (reward in org A, member in org B)
+    await expect(
+      prisma.rewardRedemption.create({
+        data: { rewardId: rewardA.id, memberId: memberB.id, pointsSpent: 50, organizationId: orgA },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
+  });
+
+  it("deleting a member with events nulls memberId but keeps organizationId", async () => {
+    const orgA = `org_sn_member_${suffix}`;
+    await createOrg(orgA);
+    const programId = `prog_sn_member_${suffix}`;
+    await prisma.program.create({
+      data: { id: programId, name: `SN Member ${suffix}`, organizationId: orgA },
+    });
+    const member = await prisma.member.create({ data: { programId, organizationId: orgA } });
+    const event = await prisma.event.create({
+      data: {
+        programId,
+        organizationId: orgA,
+        memberId: member.id,
+        type: "purchase",
+        idempotencyKey: `evt_sn_${suffix}`,
+      },
+    });
+
+    await prisma.member.delete({ where: { id: member.id } });
+
+    const after = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(after.memberId).toBeNull();
+    expect(after.organizationId).toBe(orgA);
+  });
+
+  it("deleting a template nulls notification.templateId but keeps organizationId", async () => {
+    const orgA = `org_sn_tpl_${suffix}`;
+    await createOrg(orgA);
+    const programId = `prog_sn_tpl_${suffix}`;
+    await prisma.program.create({
+      data: { id: programId, name: `SN Tpl ${suffix}`, organizationId: orgA },
+    });
+    const member = await prisma.member.create({ data: { programId, organizationId: orgA } });
+    const template = await prisma.notificationTemplate.create({
+      data: { programId, organizationId: orgA, name: `Tpl ${suffix}`, channel: "EMAIL" },
+    });
+    const notification = await prisma.notification.create({
+      data: {
+        templateId: template.id,
+        memberId: member.id,
+        organizationId: orgA,
+        channel: "EMAIL",
+      },
+    });
+
+    await prisma.notificationTemplate.delete({ where: { id: template.id } });
+
+    const after = await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } });
+    expect(after.templateId).toBeNull();
+    expect(after.organizationId).toBe(orgA);
+  });
 });
