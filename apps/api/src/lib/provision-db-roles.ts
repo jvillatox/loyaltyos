@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 export const APP_ROLE = "loyaltyos_app";
 export const LIST_ORGS_FUNCTION = "app_list_organization_ids";
+export const ORG_FOR_PROGRAM_FUNCTION = "app_org_for_program";
 
 export type ProvisionDb = Pick<PrismaClient, "$queryRawUnsafe" | "$executeRawUnsafe">;
 
@@ -123,6 +124,27 @@ $fn$;`,
   await execRaw(
     db,
     `GRANT EXECUTE ON FUNCTION public.${LIST_ORGS_FUNCTION}() TO ${APP_ROLE};`,
+    secrets,
+  );
+
+  // Resolves the owning organization for a program id. SECURITY DEFINER runs as
+  // its owner (which owns the tables), so the app role can map program → org
+  // without SELECT on "Program" or any BYPASSRLS runtime role. sql keeps the body
+  // from being validated against "Program" until the table exists (a later PR).
+  await execRaw(
+    db,
+    `CREATE OR REPLACE FUNCTION public.${ORG_FOR_PROGRAM_FUNCTION}(p_program_id text)
+RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+  SELECT "organizationId" FROM public."Program" WHERE "id" = p_program_id
+$fn$;`,
+    secrets,
+  );
+  await execRaw(
+    db,
+    `GRANT EXECUTE ON FUNCTION public.${ORG_FOR_PROGRAM_FUNCTION}(text) TO ${APP_ROLE};`,
     secrets,
   );
 }
