@@ -14,55 +14,94 @@ export type TenantDb = PrismaClient | Prisma.TransactionClient;
 
 export const BACKFILL_BATCH_SIZE = 10_000;
 
-// §3.1 tables that carry `programId`. `organizationId` is derived by joining to
-// Program and is locked to it by the composite FK `(programId, organizationId) →
-// Program(id, organizationId)`. Listed in the migration's cascade/restrict order.
-export const PROGRAM_TABLES = [
-  "PointRule",
-  "Tier",
-  "Campaign",
-  "Segment",
-  "Coupon",
-  "Reward",
-  "Badge",
-  "NotificationTemplate",
-  "WebhookSubscription",
-  "MemberDevice",
-  "MemberNotificationPreferences",
-  "TermsTemplate",
-  "Event",
-  "Member",
-  "PointAccount",
-  "PointTransaction",
-  "PointLot",
-  "PointExpiryReminder",
-  "PointAdjustmentRequest",
-  "GiftCardBatch",
-  "GiftCardTransaction",
-  "CoalitionConfig",
-  "CoalitionAccount",
-  "CoalitionTransaction",
-  "AuditLog",
-] as const;
-
-// §3.1 child tables that lack `programId`. Each derives `organizationId` from its
-// parent (which is itself a `programId` table) and is kept consistent by a composite
-// FK against that parent. CampaignVariant is included even though §3.1's prose omits
-// it — the composite FK in the migration covers it.
-export const PARENT_CHILD_TABLES = [
-  { table: "MemberTier", parentColumn: "memberId", parentTable: "Member" },
-  { table: "CampaignVariant", parentColumn: "campaignId", parentTable: "Campaign" },
-  { table: "CampaignApplication", parentColumn: "campaignId", parentTable: "Campaign" },
-  { table: "Notification", parentColumn: "memberId", parentTable: "Member" },
-  { table: "CouponRedemption", parentColumn: "couponId", parentTable: "Coupon" },
-  { table: "GiftCard", parentColumn: "batchId", parentTable: "GiftCardBatch" },
-  { table: "MemberBadge", parentColumn: "badgeId", parentTable: "Badge" },
-  { table: "RewardRedemption", parentColumn: "rewardId", parentTable: "Reward" },
-] as const;
-
 // Interpolate a hardcoded identifier as raw SQL. Every name passed here comes from
-// the constants above, never from user input, so this is not an injection vector.
+// the constants below, never from user input, so this is not an injection vector.
 const ident = (name: string): Prisma.Sql => Prisma.raw(`"${name}"`);
+
+// Every §3.1 table and how it derives `organizationId`. A `program` table carries
+// `programId` and derives it from Program; a `parent` table lacks `programId` and
+// derives it from its parent row. The array is in topological order: a table must
+// be backfilled only after every table its composite FK references. Unlike
+// tenancy:move-program (which rewrites everything in one transaction and relies on
+// the DEFERRABLE INITIALLY DEFERRED checks firing at a single COMMIT), the backfill
+// commits per table to stay resumable on large tables — so a child whose parent is
+// still NULL fails immediately, and the order here is what keeps it valid.
+type BackfillEntry =
+  | { table: string; source: "program" }
+  | { table: string; source: "parent"; parentTable: string; parentColumn: string };
+
+const BACKFILL_ORDER: readonly BackfillEntry[] = [
+  // Level 1 — reference only Program (programId → Program).
+  { table: "PointRule", source: "program" },
+  { table: "Tier", source: "program" },
+  { table: "Campaign", source: "program" },
+  { table: "Segment", source: "program" },
+  { table: "Coupon", source: "program" },
+  { table: "Reward", source: "program" },
+  { table: "Badge", source: "program" },
+  { table: "NotificationTemplate", source: "program" },
+  { table: "WebhookSubscription", source: "program" },
+  { table: "TermsTemplate", source: "program" },
+  { table: "CoalitionConfig", source: "program" },
+  { table: "Member", source: "program" },
+  { table: "AuditLog", source: "program" },
+  { table: "PointExpiryReminder", source: "program" },
+
+  // Level 2 — reference Member (and, for the parent tables, another level-1 table).
+  { table: "MemberDevice", source: "program" },
+  { table: "MemberNotificationPreferences", source: "program" },
+  { table: "Event", source: "program" },
+  { table: "PointAccount", source: "program" },
+  { table: "PointAdjustmentRequest", source: "program" },
+  { table: "CoalitionAccount", source: "program" },
+  { table: "GiftCardBatch", source: "program" }, // → TermsTemplate (level 1)
+  { table: "MemberTier", source: "parent", parentTable: "Member", parentColumn: "memberId" },
+  {
+    table: "CampaignVariant",
+    source: "parent",
+    parentTable: "Campaign",
+    parentColumn: "campaignId",
+  },
+  { table: "Notification", source: "parent", parentTable: "Member", parentColumn: "memberId" },
+  { table: "CouponRedemption", source: "parent", parentTable: "Coupon", parentColumn: "couponId" },
+  { table: "MemberBadge", source: "parent", parentTable: "Badge", parentColumn: "badgeId" },
+  { table: "RewardRedemption", source: "parent", parentTable: "Reward", parentColumn: "rewardId" },
+
+  // Level 3 — reference a level-2 table.
+  { table: "PointTransaction", source: "program" }, // → PointAccount
+  { table: "PointLot", source: "program" }, // → PointAccount
+  { table: "CoalitionTransaction", source: "program" }, // → CoalitionAccount
+  {
+    table: "CampaignApplication",
+    source: "parent",
+    parentTable: "Campaign",
+    parentColumn: "campaignId",
+  }, // → CampaignVariant
+  { table: "GiftCard", source: "parent", parentTable: "GiftCardBatch", parentColumn: "batchId" },
+
+  // Level 4 — references GiftCard (level 3) and Member (level 1).
+  { table: "GiftCardTransaction", source: "program" },
+];
+
+// Two projections used by tenancy:move-program, which rewrites every table in one
+// transaction and therefore does not depend on ordering.
+export const PROGRAM_TABLES: readonly string[] = BACKFILL_ORDER.filter(
+  (entry) => entry.source === "program",
+).map((entry) => entry.table);
+
+const isParentEntry = (
+  entry: BackfillEntry,
+): entry is Extract<BackfillEntry, { source: "parent" }> => entry.source === "parent";
+
+export const PARENT_CHILD_TABLES: readonly {
+  table: string;
+  parentColumn: string;
+  parentTable: string;
+}[] = BACKFILL_ORDER.filter(isParentEntry).map((entry) => ({
+  table: entry.table,
+  parentColumn: entry.parentColumn,
+  parentTable: entry.parentTable,
+}));
 
 export interface BackfillOrganizationResult {
   organizationId: string;
@@ -128,10 +167,7 @@ export async function backfillOrganizationColumns(
   if (options.dryRun) {
     const programCount = await countNulls(db, "Program");
     const tableCounts: Record<string, number> = { Program: programCount };
-    for (const table of PROGRAM_TABLES) {
-      tableCounts[table] = await countNulls(db, table);
-    }
-    for (const { table } of PARENT_CHILD_TABLES) {
+    for (const { table } of BACKFILL_ORDER) {
       tableCounts[table] = await countNulls(db, table);
     }
     return { organizationId, programCount, tableCounts };
@@ -142,15 +178,12 @@ export async function backfillOrganizationColumns(
   `;
 
   const tableCounts: Record<string, number> = {};
-  for (const table of PROGRAM_TABLES) {
-    tableCounts[table] = await backfillTableFromSource(db, table, programSource);
-  }
-  for (const { table, parentColumn, parentTable } of PARENT_CHILD_TABLES) {
-    tableCounts[table] = await backfillTableFromSource(
-      db,
-      table,
-      parentSource(parentTable, parentColumn),
-    );
+  for (const entry of BACKFILL_ORDER) {
+    const sourceJoin =
+      entry.source === "program"
+        ? programSource
+        : parentSource(entry.parentTable, entry.parentColumn);
+    tableCounts[entry.table] = await backfillTableFromSource(db, entry.table, sourceJoin);
   }
 
   return { organizationId, programCount, tableCounts };
