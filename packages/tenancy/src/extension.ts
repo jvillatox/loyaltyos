@@ -64,6 +64,66 @@ export function createTenantPrismaClient<T extends PrismaClient>(
     if (mode === "audit") options.onMissingContext?.(model, operation);
   }
 
+  // Guard a single model operation against missing context, exempting the global
+  // tables (docs/design/tenancy.md §3.2). Shared by the loose-query path and the
+  // transaction-client proxy so the two can't drift apart.
+  function guardModel(model: string, operation: string): void {
+    if (GLOBAL_MODELS.has(model)) return;
+    guardMissingContext(model, operation);
+  }
+
+  // Raw query methods on a transaction client are tenant-scoped (§2.2 point 3),
+  // with no global exemption — mirroring the `$queryRaw`/`$executeRaw` handlers.
+  const RAW_TX_METHODS = new Set([
+    "$queryRaw",
+    "$queryRawUnsafe",
+    "$executeRaw",
+    "$executeRawUnsafe",
+  ]);
+
+  // Wraps the transaction client handed to an interactive `$transaction` callback
+  // so the fail-visible guard still applies when there is no tenant context. The
+  // base client's transaction client is un-extended, so its queries would bypass
+  // `$allOperations`; the proxy restores the guard per model:
+  //   * a tenant-scoped model throws (`enforce`) or logs (`audit`);
+  //   * a global model (§3.2) passes through.
+  // Model delegate names are camelCase while GLOBAL_MODELS holds PascalCase model
+  // names, so capitalize the property to look it up.
+  function guardTransactionClient<Tx extends PrismaTx>(tx: Tx): Tx {
+    return new Proxy(tx, {
+      get(target, prop, receiver) {
+        const value: unknown = Reflect.get(target, prop, receiver);
+        if (value === null || value === undefined) return value;
+
+        if (typeof prop === "string" && RAW_TX_METHODS.has(prop)) {
+          const method = value as (...a: unknown[]) => unknown;
+          return (...args: unknown[]) => {
+            guardMissingContext(prop, prop);
+            return method.apply(target, args);
+          };
+        }
+
+        // Model delegates are plain objects exposing the query methods.
+        if (typeof value === "object") {
+          const modelName =
+            typeof prop === "string" ? prop.charAt(0).toUpperCase() + prop.slice(1) : "";
+          return new Proxy(value, {
+            get(mTarget, mProp, mReceiver) {
+              const method: unknown = Reflect.get(mTarget, mProp, mReceiver);
+              if (typeof method !== "function") return method;
+              return (...args: unknown[]) => {
+                guardModel(modelName, String(mProp));
+                return (method as (...a: unknown[]) => unknown).apply(mTarget, args);
+              };
+            },
+          });
+        }
+
+        return value;
+      },
+    });
+  }
+
   function wrapWithContext(queryPromise: Prisma.PrismaPromise<unknown>) {
     const ctx = getTenant();
     // `ctx` is known non-undefined at every call site below, but keep the guard
@@ -85,8 +145,7 @@ export function createTenantPrismaClient<T extends PrismaClient>(
           if (!isActive()) return query(args);
           const modelName = String(model);
           if (!getTenant()) {
-            if (GLOBAL_MODELS.has(modelName)) return query(args);
-            guardMissingContext(modelName, String(operation));
+            guardModel(modelName, String(operation));
             return query(args);
           }
           return wrapWithContext(query(args));
@@ -131,7 +190,14 @@ export function createTenantPrismaClient<T extends PrismaClient>(
 
         // Interactive form: `$transaction(async (tx) => ...)`.
         const fn = first as (tx: PrismaTx) => Promise<unknown>;
-        if (!ctx) return run(fn, second);
+        if (!ctx) {
+          // No tenant context: the guard must still reach the queries inside the
+          // transaction. Run the callback with a guarded `tx` so a tenant-scoped
+          // query fails loudly (`enforce`) or logs (`audit`), while global tables
+          // (§3.2) pass through — e.g. the admin-login transaction, which touches
+          // only identity/tenant-root tables without context.
+          return run(async (tx: PrismaTx) => fn(guardTransactionClient(tx)), second);
+        }
         return run(async (tx: PrismaTx) => {
           await tx.$executeRaw(setContext(ctx.organizationId));
           return fn(tx);

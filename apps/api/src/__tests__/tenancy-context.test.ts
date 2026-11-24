@@ -241,6 +241,38 @@ describe.skipIf(!ownerUrl)("tenancy context extension (PostgreSQL)", () => {
       expect(count).toBeGreaterThanOrEqual(0);
       expect(onMissing).toHaveBeenCalledWith("Member", "count");
     });
+
+    it("throws TenantContextMissing under enforce for an interactive transaction on a tenant model", async () => {
+      // A worker (no request context) that opens a transaction over a tenant table
+      // must fail loudly instead of silently reading zero rows under RLS.
+      await expect(
+        enforceOwner.$transaction(async (tx) => {
+          await tx.member.findMany();
+        }),
+      ).rejects.toBeInstanceOf(TenantContextMissing);
+    });
+
+    it("allows an interactive transaction over global models without context under enforce", async () => {
+      // e.g. the admin-login transaction, which touches only identity/tenant-root
+      // tables before any tenant context exists.
+      await expect(
+        enforceOwner.$transaction(async (tx) => {
+          await tx.adminUser.findMany();
+          return tx.organization.count();
+        }),
+      ).resolves.toBeGreaterThanOrEqual(0);
+    });
+
+    it("invokes onMissingContext under audit for an interactive transaction on a tenant model", async () => {
+      const onMissing = vi.fn();
+      const audit = createTenantPrismaClient(owner, {
+        mode: "audit",
+        onMissingContext: onMissing,
+      });
+      const count = await audit.$transaction(async (tx) => tx.member.count());
+      expect(count).toBeGreaterThanOrEqual(0);
+      expect(onMissing).toHaveBeenCalledWith("Member", "count");
+    });
   });
 
   describe("SECURITY DEFINER + concurrency (category 6)", () => {
