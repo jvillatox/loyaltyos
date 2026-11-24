@@ -89,17 +89,29 @@ describe.skipIf(!databaseUrl)("points expiry migration (v1.7.0 -> lots)", () => 
     // 3. Apply the new migration on top of the v1.7.0 data.
     execSync(`"${prismaBin}" migrate deploy --schema "${schemaPath}"`, { env, stdio: "pipe" });
 
-    // 4. Verify the backfill produced a valid state.
+    // 4. Verify the backfill produced a valid state. Lots are read directly rather
+    // than through the PointAccount.lots relation: that relation is now a composite
+    // one on (accountId, organizationId), and organizationId is still NULL here (this
+    // test upgrades a v1.7.0 database but does not run the tenancy backfill), so an
+    // `include: { lots: true }` join on organizationId would silently miss every lot.
     const verify = new PrismaClient({ datasources: { db: { url: scratchUrl() } } });
     try {
       const accounts = await verify.pointAccount.findMany({
         where: { programId: "prog_mig" },
-        include: { lots: true },
       });
       expect(accounts).toHaveLength(3);
 
+      const lots = await verify.pointLot.findMany({ where: { programId: "prog_mig" } });
+      const lotsByAccount = new Map<string, typeof lots>();
+      for (const lot of lots) {
+        const list = lotsByAccount.get(lot.accountId) ?? [];
+        list.push(lot);
+        lotsByAccount.set(lot.accountId, list);
+      }
+
       for (const account of accounts) {
-        const totalRemaining = account.lots.reduce((sum, lot) => sum + lot.remaining, 0);
+        const accountLots = lotsByAccount.get(account.id) ?? [];
+        const totalRemaining = accountLots.reduce((sum, lot) => sum + lot.remaining, 0);
         expect(account.balance).toBe(totalRemaining - account.debt);
         if (account.debt > 0) expect(totalRemaining).toBe(0);
       }
@@ -107,21 +119,24 @@ describe.skipIf(!databaseUrl)("points expiry migration (v1.7.0 -> lots)", () => 
       const positive = accounts.find((a) => a.id === "acc_pos");
       const zero = accounts.find((a) => a.id === "acc_zero");
       const negative = accounts.find((a) => a.id === "acc_neg");
+      const positiveLots = lotsByAccount.get("acc_pos") ?? [];
+      const zeroLots = lotsByAccount.get("acc_zero") ?? [];
+      const negativeLots = lotsByAccount.get("acc_neg") ?? [];
 
       expect(positive!.balance).toBe(100);
-      expect(positive!.lots).toHaveLength(1);
-      expect(positive!.lots[0]!.remaining).toBe(100);
-      expect(positive!.lots[0]!.sourceTxId).toBeNull();
-      expect(positive!.lots[0]!.expiresAt).toBeNull();
+      expect(positiveLots).toHaveLength(1);
+      expect(positiveLots[0]!.remaining).toBe(100);
+      expect(positiveLots[0]!.sourceTxId).toBeNull();
+      expect(positiveLots[0]!.expiresAt).toBeNull();
       expect(positive!.lastActivityAt).not.toBeNull();
 
       expect(zero!.balance).toBe(0);
-      expect(zero!.lots).toHaveLength(0);
+      expect(zeroLots).toHaveLength(0);
       expect(zero!.debt).toBe(0);
 
       expect(negative!.balance).toBe(-40);
       expect(negative!.debt).toBe(40);
-      expect(negative!.lots).toHaveLength(0);
+      expect(negativeLots).toHaveLength(0);
 
       const program = await verify.program.findUniqueOrThrow({ where: { id: "prog_mig" } });
       expect(program.expiryMode).toBe("NONE");
