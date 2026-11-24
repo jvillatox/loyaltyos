@@ -341,7 +341,7 @@ export function createRepository(prisma: PrismaClient) {
 
       const map = new Map<string, number>();
       for (const row of rows) {
-        const key = `${row.batch.programId}|${row.currency}`;
+        const key = `${row.batch?.programId ?? ""}|${row.currency}`;
         map.set(key, (map.get(key) ?? 0) + Number(row.balance));
       }
 

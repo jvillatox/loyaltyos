@@ -701,7 +701,7 @@ export class PointsService {
       const lots = await this.repo.findUpcomingExpiringLots(programId, now, horizon);
       const grouped = new Map<string, UpcomingExpiry>();
       for (const lot of lots) {
-        if (!lot.expiresAt) continue;
+        if (!lot.expiresAt || !lot.account) continue;
         const key = `${lot.account.memberId}|${String(lot.expiresAt.getTime())}`;
         const existing = grouped.get(key);
         if (existing) {

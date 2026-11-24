@@ -124,19 +124,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
 
+      - name: Check Prisma schema drift
+        run: pnpm --filter @loyaltyos/api exec prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_shadow" --exit-code
+
       - name: Seed database
         run: pnpm --filter @loyaltyos/api exec tsx prisma/seed.ts
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
-
-      - name: Write .env for vitest
-        run: |
-          echo "DATABASE_URL=$DATABASE_URL" > apps/api/.env
-          echo "TEST_DATABASE_URL=$TEST_DATABASE_URL" >> apps/api/.env
-          echo "MIGRATION_DATABASE_URL=$MIGRATION_DATABASE_URL" >> apps/api/.env
-          echo "LOYALTYOS_APP_DB_PASSWORD=$LOYALTYOS_APP_DB_PASSWORD" >> apps/api/.env
-          echo "REDIS_URL=$REDIS_URL" >> apps/api/.env
-          echo "--- apps/api/.env written ($(wc -c < apps/api/.env) bytes) ---"
 
       - run: pnpm test -- -- --coverage
 

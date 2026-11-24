@@ -30,7 +30,7 @@ async function triggerNotification(
         memberTiers: { include: { tier: true } },
       },
     });
-    const currentTier = member?.memberTiers.find((mt) => !mt.downgradedAt)?.tier.name;
+    const currentTier = member?.memberTiers.find((mt) => !mt.downgradedAt)?.tier?.name;
     const context: Record<string, unknown> = {
       ...baseContext,
       member: {

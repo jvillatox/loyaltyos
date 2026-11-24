@@ -1,6 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalPassThroughEnv": [
+    "CI",
+    "DATABASE_URL",
+    "TEST_DATABASE_URL",
+    "MIGRATION_DATABASE_URL",
+    "LOYALTYOS_APP_DB_PASSWORD",
+    "REDIS_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

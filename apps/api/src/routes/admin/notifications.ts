@@ -240,7 +240,7 @@ export function adminNotificationsRoutes(
       }
 
       targetMemberId = member.id;
-      const currentTier = member.memberTiers.find((mt) => !mt.downgradedAt)?.tier.name;
+      const currentTier = member.memberTiers.find((mt) => !mt.downgradedAt)?.tier?.name;
 
       context = {
         member: {

@@ -43,7 +43,7 @@ async function triggerMagicLinkEmail(
       },
     });
 
-    const currentTier = member?.memberTiers.find((mt) => !mt.downgradedAt)?.tier.name;
+    const currentTier = member?.memberTiers.find((mt) => !mt.downgradedAt)?.tier?.name;
 
     await notificationsService.sendTrigger(programId, "auth.magic_link", memberId, {
       magicLinkUrl,
@@ -76,12 +76,12 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
       });
 
       if (member) {
-        const programLocales = member.program.supportedLocales;
+        const programLocales = member.program?.supportedLocales ?? [];
 
         // Single validated locale resolution
         const requestedLocale =
           requestLocale && programLocales.includes(requestLocale) ? requestLocale : undefined;
-        const effectiveLocale = requestedLocale ?? member.locale ?? member.program.defaultLocale;
+        const effectiveLocale = requestedLocale ?? member.locale ?? member.program?.defaultLocale;
 
         // Persist locale on first contact
         if (requestedLocale && !member.locale) {

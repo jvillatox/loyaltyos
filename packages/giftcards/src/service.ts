@@ -271,7 +271,7 @@ export class GiftCardService {
     if (!card) throw new GiftCardNotFoundError(parsed.code);
 
     // Cross-tenant guard (A.3)
-    if (card.batch.programId !== parsed.requestProgramId) {
+    if (!card.batch || card.batch.programId !== parsed.requestProgramId) {
       throw new GiftCardNotFoundError(parsed.code);
     }
     const programId = card.batch.programId;
@@ -369,8 +369,8 @@ export class GiftCardService {
         return { updated, txn };
       });
 
-      this.metrics?.recordRedeem(card.batch.programId, locked.currency);
-      this.metrics?.recordRedeemedAmount(card.batch.programId, locked.currency, parsed.amount);
+      this.metrics?.recordRedeem(programId, locked.currency);
+      this.metrics?.recordRedeemedAmount(programId, locked.currency, parsed.amount);
 
       return {
         transactionId: result.txn.id,
@@ -395,7 +395,7 @@ export class GiftCardService {
     if (!card) throw new GiftCardNotFoundError(parsed.code);
 
     // Cross-tenant guard (A.3)
-    if (card.batch.programId !== parsed.requestProgramId) {
+    if (!card.batch || card.batch.programId !== parsed.requestProgramId) {
       throw new GiftCardNotFoundError(parsed.code);
     }
     const programId = card.batch.programId;
@@ -499,7 +499,7 @@ export class GiftCardService {
     if (!card) throw new GiftCardNotFoundError(input.code);
 
     // Cross-tenant guard (A.3)
-    if (card.batch.programId !== input.requestProgramId) {
+    if (!card.batch || card.batch.programId !== input.requestProgramId) {
       throw new GiftCardNotFoundError(input.code);
     }
     const programId = card.batch.programId;
@@ -565,6 +565,8 @@ export class GiftCardService {
       const cards = await this.repo.findActiveExpired(now, 1000, cursor);
 
       for (const card of cards) {
+        if (!card.batch) continue;
+        const programId = card.batch.programId;
         // Wrap each card's state change in its own $transaction
         await this.prisma.$transaction(async (tx) => {
           await this.repo.updateCardStatus(card.id, "expired", undefined, tx);
@@ -574,7 +576,7 @@ export class GiftCardService {
               type: "expire",
               amount: Number(card.balance),
               balanceAfter: 0,
-              programId: card.batch.programId,
+              programId,
             },
             tx,
           );

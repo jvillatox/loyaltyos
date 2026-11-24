@@ -31,6 +31,9 @@ model Program {
   organization                  Organization?                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   members                       Member[]
   pointAccounts                 PointAccount[]
+  pointTransactions             PointTransaction[]
+  pointLots                     PointLot[]
+  pointExpiryReminders          PointExpiryReminder[]
   pointRules                    PointRule[]
   tiers                         Tier[]
   campaigns                     Campaign[]
@@ -42,6 +45,7 @@ model Program {
   memberDevices                 MemberDevice[]
   memberNotificationPreferences MemberNotificationPreferences[]
   coalitionAccounts             CoalitionAccount[]
+  coalitionTransactions         CoalitionTransaction[]
   coalitionConfig               CoalitionConfig?
   adminUsers                    AdminUser[]
   events                        Event[]
@@ -50,6 +54,7 @@ model Program {
   auditLogs                     AuditLog[]
   termsTemplates                TermsTemplate[]
   giftCardBatches               GiftCardBatch[]
+  giftCardTransactions          GiftCardTransaction[]
   pointAdjustmentRequests       PointAdjustmentRequest[]
 
   @@unique([id, organizationId])
@@ -74,7 +79,7 @@ model Member {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  program                       Program                         @relation(fields: [programId], references: [id], onDelete: Restrict)
+  program                       Program?                        @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
   pointAccount                  PointAccount?
   memberTiers                   MemberTier[]
   couponRedemptions             CouponRedemption[]
@@ -111,8 +116,8 @@ model PointAccount {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  member       Member             @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  program      Program            @relation(fields: [programId], references: [id], onDelete: Restrict)
+  member       Member?            @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  program      Program?           @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
   transactions PointTransaction[]
   lots         PointLot[]
 
@@ -120,6 +125,7 @@ model PointAccount {
   lastActivityAt DateTime?
 
   @@unique([id, organizationId])
+  @@unique([memberId, organizationId])
   @@index([memberId, programId])
   @@index([programId])
 }
@@ -158,7 +164,8 @@ model PointTransaction {
   reversedById   String?
   createdAt      DateTime        @default(now())
 
-  account PointAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  account PointAccount? @relation(fields: [accountId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  program Program?      @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([programId, idempotencyKey])
   @@index([accountId])
@@ -179,7 +186,8 @@ model PointLot {
   expiresAt      DateTime?
   createdAt      DateTime  @default(now())
 
-  account PointAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account PointAccount? @relation(fields: [accountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  program Program?      @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@index([accountId, expiresAt])
   @@index([accountId, createdAt])
@@ -193,6 +201,8 @@ model PointExpiryReminder {
   organizationId String?
   expiresOn      DateTime
   sentAt         DateTime @default(now())
+
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([memberId, programId, expiresOn])
   @@index([programId, expiresOn])
@@ -232,8 +242,8 @@ model PointAdjustmentRequest {
   expiresAt       DateTime
   createdAt       DateTime                 @default(now())
 
-  program Program @relation(fields: [programId], references: [id], onDelete: Restrict)
-  member  Member  @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  member  Member?  @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([programId, idempotencyKey])
   @@index([programId, status])
@@ -255,7 +265,7 @@ model PointRule {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([programId, eventType])
   @@index([isActive])
@@ -274,7 +284,7 @@ model Tier {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  program     Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program     Program?     @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
   memberTiers MemberTier[]
 
   @@unique([id, organizationId])
@@ -290,8 +300,8 @@ model MemberTier {
   upgradedAt     DateTime  @default(now())
   downgradedAt   DateTime?
 
-  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  tier   Tier   @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  member Member? @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  tier   Tier?   @relation(fields: [tierId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@index([memberId])
   @@index([tierId])
@@ -329,7 +339,7 @@ model Campaign {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  program      Program               @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program      Program?              @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
   variants     CampaignVariant[]
   applications CampaignApplication[]
 
@@ -348,7 +358,7 @@ model CampaignVariant {
   config         Json?    @default("{}")
   createdAt      DateTime @default(now())
 
-  campaign     Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign     Campaign?             @relation(fields: [campaignId, organizationId], references: [id, organizationId], onDelete: Cascade)
   applications CampaignApplication[]
 
   @@unique([id, organizationId])
@@ -365,8 +375,8 @@ model CampaignApplication {
   metadata       Json?
   createdAt      DateTime @default(now())
 
-  campaign Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  variant  CampaignVariant? @relation(fields: [variantId], references: [id])
+  campaign Campaign?        @relation(fields: [campaignId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  variant  CampaignVariant? @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: NoAction)
 
   @@index([campaignId])
   @@index([memberId])
@@ -386,7 +396,7 @@ model Segment {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([programId])
   @@index([type])
@@ -427,7 +437,7 @@ model Coupon {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
-  program     Program            @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program     Program?           @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
   redemptions CouponRedemption[]
 
   @@unique([id, organizationId])
@@ -445,8 +455,8 @@ model CouponRedemption {
   redeemedAt     DateTime @default(now())
   metadata       Json?    @default("{}")
 
-  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
-  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  coupon Coupon? @relation(fields: [couponId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  member Member? @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@index([couponId])
   @@index([memberId])
@@ -489,7 +499,7 @@ model TermsTemplate {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
 
-  program Program         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program Program?        @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
   batches GiftCardBatch[]
 
   @@unique([id, organizationId])
@@ -513,9 +523,9 @@ model GiftCardBatch {
   createdById     String
   createdAt       DateTime    @default(now())
 
-  program       Program       @relation(fields: [programId], references: [id], onDelete: Restrict)
-  termsTemplate TermsTemplate @relation(fields: [termsTemplateId], references: [id])
-  createdBy     AdminUser     @relation(fields: [createdById], references: [id])
+  program       Program?       @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  termsTemplate TermsTemplate? @relation(fields: [termsTemplateId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy     AdminUser      @relation(fields: [createdById], references: [id])
   giftCards     GiftCard[]
 
   @@unique([id, organizationId])
@@ -536,7 +546,7 @@ model GiftCard {
   lastRedemptionAt DateTime?
   metadata         Json?
 
-  batch        GiftCardBatch         @relation(fields: [batchId], references: [id])
+  batch        GiftCardBatch?        @relation(fields: [batchId, organizationId], references: [id, organizationId], onDelete: Restrict)
   transactions GiftCardTransaction[]
 
   @@unique([id, organizationId])
@@ -559,8 +569,9 @@ model GiftCardTransaction {
   createdById            String?
   createdAt              DateTime       @default(now())
 
-  giftCard GiftCard @relation(fields: [giftCardId], references: [id])
-  member   Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  giftCard GiftCard? @relation(fields: [giftCardId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  member   Member?   @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  program  Program?  @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([programId, idempotencyKey])
   @@index([giftCardId, createdAt])
@@ -583,7 +594,7 @@ model Reward {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  program     Program            @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program     Program?           @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
   redemptions RewardRedemption[]
 
   @@unique([id, organizationId])
@@ -600,8 +611,8 @@ model RewardRedemption {
   redeemedAt     DateTime @default(now())
   metadata       Json?    @default("{}")
 
-  reward Reward @relation(fields: [rewardId], references: [id], onDelete: Restrict)
-  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  reward Reward? @relation(fields: [rewardId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  member Member? @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@index([rewardId])
   @@index([memberId])
@@ -631,7 +642,7 @@ model Badge {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  program      Program       @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program      Program?      @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
   memberBadges MemberBadge[]
 
   @@unique([id, organizationId])
@@ -650,8 +661,8 @@ model MemberBadge {
   notifiedAt     DateTime?
   createdAt      DateTime  @default(now())
 
-  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  badge  Badge  @relation(fields: [badgeId], references: [id], onDelete: Restrict)
+  member Member? @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  badge  Badge?  @relation(fields: [badgeId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([memberId, badgeId])
   @@index([memberId])
@@ -690,7 +701,7 @@ model NotificationTemplate {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
-  program       Program        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program       Program?       @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
   notifications Notification[]
 
   @@unique([id, organizationId])
@@ -714,8 +725,8 @@ model Notification {
   metadata       Json?               @default("{}")
   createdAt      DateTime            @default(now())
 
-  template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  member   Member                @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  template NotificationTemplate? @relation(fields: [templateId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  member   Member?               @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([memberId])
   @@index([status])
@@ -726,7 +737,7 @@ model CoalitionConfig {
   id                   String   @id @default(cuid())
   programId            String   @unique
   organizationId       String?
-  program              Program  @relation(fields: [programId], references: [id], onDelete: Restrict)
+  program              Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
   provider             String   @default("GENERIC")
   endpoint             String
   country              String?
@@ -740,6 +751,8 @@ model CoalitionConfig {
   circuitState         Json?    @default("{}")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+
+  @@unique([programId, organizationId])
 }
 
 model CoalitionAccount {
@@ -755,8 +768,8 @@ model CoalitionAccount {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  member       Member                 @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  program      Program                @relation(fields: [programId], references: [id], onDelete: Restrict)
+  member       Member?                @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  program      Program?               @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
   transactions CoalitionTransaction[]
 
   @@unique([id, organizationId])
@@ -780,7 +793,8 @@ model CoalitionTransaction {
   idempotencyKey String
   createdAt      DateTime        @default(now())
 
-  account CoalitionAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  account CoalitionAccount? @relation(fields: [accountId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  program Program?          @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([programId, idempotencyKey])
   @@index([accountId])
@@ -798,7 +812,7 @@ model WebhookSubscription {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([programId])
 }
@@ -1027,7 +1041,7 @@ model AuditLog {
   ipAddress      String?
   createdAt      DateTime       @default(now())
 
-  program   Program    @relation(fields: [programId], references: [id], onDelete: Restrict)
+  program   Program?   @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Restrict)
   adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
 
   @@index([programId])
@@ -1054,8 +1068,8 @@ model MemberDevice {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  member  Member?  @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([memberId, programId])
 }
@@ -1070,8 +1084,8 @@ model MemberNotificationPreferences {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  member  Member?  @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@unique([memberId, programId, channel])
 }
@@ -1089,8 +1103,8 @@ model Event {
   error          String?
   createdAt      DateTime  @default(now())
 
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
-  member  Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  program Program? @relation(fields: [programId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  member  Member?  @relation(fields: [memberId, organizationId], references: [id, organizationId], onDelete: NoAction)
 
   @@unique([programId, idempotencyKey])
   @@index([programId, type])

@@ -147,7 +147,7 @@ export function adminGiftCardsRoutes(app: FastifyInstance, _opts: unknown, done:
       if (!batch || batch.programId !== request.programId) {
         throw new GiftCardBatchNotFoundError(id);
       }
-      const termsVersion = String(batch.termsTemplate.version);
+      const termsVersion = batch.termsTemplate ? String(batch.termsTemplate.version) : "";
 
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const columns = [
