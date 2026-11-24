@@ -201,9 +201,9 @@ export function createRepository(prisma: PrismaClient) {
         totalEarned,
         totalRedeemed,
         currentBalance: member.pointAccount?.balance ?? 0,
-        currentTier: currentTier?.tier.name ?? null,
+        currentTier: currentTier?.tier?.name ?? null,
         currentTierId: currentTier?.tierId ?? null,
-        currentTierRank: currentTier?.tier.rank ?? null,
+        currentTierRank: currentTier?.tier?.rank ?? null,
         eventCounts,
         totalSpent: totalEarned, // totalSpent = totalEarned for tier qualification
         lastEventAt,

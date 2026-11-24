@@ -79,7 +79,7 @@ export function createRepository(prisma: PrismaClient) {
         select: { locale: true, program: { select: { defaultLocale: true } } },
       });
       if (!member) return null;
-      return member.locale ?? member.program.defaultLocale;
+      return member.locale ?? member.program?.defaultLocale ?? null;
     },
 
     async findProgramDefaultLocale(memberId: string): Promise<string | null> {
@@ -87,7 +87,7 @@ export function createRepository(prisma: PrismaClient) {
         where: { id: memberId },
         select: { program: { select: { defaultLocale: true } } },
       });
-      return member?.program.defaultLocale ?? null;
+      return member?.program?.defaultLocale ?? null;
     },
 
     // Notification

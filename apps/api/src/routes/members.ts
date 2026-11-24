@@ -202,7 +202,7 @@ export function membersRoutes(app: FastifyInstance, _opts: unknown, done: () => 
         throw new LoyaltyError("NOT_FOUND", 404);
       }
 
-      const programLocales = member.program.supportedLocales;
+      const programLocales = member.program?.supportedLocales ?? [];
       if (!programLocales.includes(body.locale)) {
         throw new LoyaltyError("INVALID_INPUT", 400);
       }

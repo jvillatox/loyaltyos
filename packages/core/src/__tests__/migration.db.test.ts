@@ -14,6 +14,9 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+if (process.env.CI === "true" && !databaseUrl) {
+  throw new Error("TEST_DATABASE_URL is required in CI (database tests must not be skipped)");
+}
 const NEW_MIGRATION = "20261117092350_add_point_lots";
 const SCRATCH_DB = "loyaltyos_test_mig";
 

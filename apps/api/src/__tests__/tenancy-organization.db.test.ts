@@ -18,6 +18,9 @@ import { moveProgram } from "../lib/tenancy-move-program.js";
 import { DEFAULT_ORG_ID } from "../lib/tenancy-users.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+if (process.env.CI === "true" && !databaseUrl) {
+  throw new Error("TEST_DATABASE_URL is required in CI (database tests must not be skipped)");
+}
 
 describe.skipIf(!databaseUrl)("tenancy organizationId columns (PostgreSQL)", () => {
   let prisma: PrismaClient;
@@ -204,6 +207,64 @@ describe.skipIf(!databaseUrl)("tenancy organizationId columns (PostgreSQL)", () 
     await expect(
       prisma.rewardRedemption.create({
         data: { rewardId: rewardA.id, memberId: memberB.id, pointsSpent: 50, organizationId: orgA },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
+  });
+
+  it("rejects cross-org MemberBadge/MemberDevice/MemberNotificationPreferences member references", async () => {
+    const orgA = `org_medge_a_${suffix}`;
+    const orgB = `org_medge_b_${suffix}`;
+    await createOrg(orgA);
+    await createOrg(orgB);
+
+    const progA = await prisma.program.create({
+      data: { id: `prog_medge_a_${suffix}`, name: `MEdge A ${suffix}`, organizationId: orgA },
+    });
+    const progB = await prisma.program.create({
+      data: { id: `prog_medge_b_${suffix}`, name: `MEdge B ${suffix}`, organizationId: orgB },
+    });
+
+    const memberB = await prisma.member.create({
+      data: { programId: progB.id, organizationId: orgB },
+    });
+    const badgeA = await prisma.badge.create({
+      data: {
+        programId: progA.id,
+        organizationId: orgA,
+        name: `Badge ${suffix}`,
+        type: "ACHIEVEMENT",
+      },
+    });
+
+    // MemberBadge.memberId → Member (badge in org A, member in org B)
+    await expect(
+      prisma.memberBadge.create({
+        data: { memberId: memberB.id, badgeId: badgeA.id, organizationId: orgA },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
+
+    // MemberDevice.memberId → Member (program in org A, member in org B)
+    await expect(
+      prisma.memberDevice.create({
+        data: {
+          memberId: memberB.id,
+          programId: progA.id,
+          organizationId: orgA,
+          token: `medge_dev_${suffix}`,
+          platform: "IOS",
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
+
+    // MemberNotificationPreferences.memberId → Member (program in org A, member in org B)
+    await expect(
+      prisma.memberNotificationPreferences.create({
+        data: {
+          memberId: memberB.id,
+          programId: progA.id,
+          organizationId: orgA,
+          channel: "EMAIL",
+        },
       }),
     ).rejects.toMatchObject({ code: "P2003" });
   });

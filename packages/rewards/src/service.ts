@@ -112,8 +112,8 @@ export class RewardsService {
         throw new Error(`Tier "${reward.tierRequired}" not found in program`);
       }
 
-      if (!memberTier || memberTier.tier.rank < requiredTier.rank) {
-        const currentName = memberTier?.tier.name ?? "none";
+      if (!memberTier?.tier || memberTier.tier.rank < requiredTier.rank) {
+        const currentName = memberTier?.tier?.name ?? "none";
         throw new RewardTierInsufficientError(reward.tierRequired, currentName);
       }
     }
@@ -185,8 +185,11 @@ export class RewardsService {
         throw new Error(`Tier "${reward.tierRequired}" not found in program`);
       }
 
-      if (!memberTier || memberTier.tier.rank < requiredTier.rank) {
-        throw new RewardTierInsufficientError(reward.tierRequired, memberTier?.tier.name ?? "none");
+      if (!memberTier?.tier || memberTier.tier.rank < requiredTier.rank) {
+        throw new RewardTierInsufficientError(
+          reward.tierRequired,
+          memberTier?.tier?.name ?? "none",
+        );
       }
     }
 

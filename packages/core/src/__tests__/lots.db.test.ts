@@ -7,6 +7,9 @@ import { verifyConsistency } from "../ledger.js";
 import { PointsService } from "../service.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+if (process.env.CI === "true" && !databaseUrl) {
+  throw new Error("TEST_DATABASE_URL is required in CI (database tests must not be skipped)");
+}
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe.skipIf(!databaseUrl)("PointLot behaviour (PostgreSQL)", () => {
