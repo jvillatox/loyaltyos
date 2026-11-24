@@ -80,12 +80,19 @@ beforeAll(async () => {
   }
 
   await prisma.termsTemplate.create({
-    data: { id: termsTemplateId, programId, name: `Terms ${suffix}`, body: "terms" },
+    data: {
+      id: termsTemplateId,
+      programId,
+      organizationId: "org_default",
+      name: `Terms ${suffix}`,
+      body: "terms",
+    },
   });
   await prisma.giftCardBatch.create({
     data: {
       id: giftCardBatchId,
       programId,
+      organizationId: "org_default",
       name: `Batch ${suffix}`,
       quantity: 1,
       initialAmount: 100,
@@ -101,6 +108,7 @@ beforeAll(async () => {
       id: giftCardId,
       code: giftCardCode,
       batchId: giftCardBatchId,
+      organizationId: "org_default",
       initialAmount: 100,
       balance: 50,
       currency: "USD",
@@ -111,6 +119,7 @@ beforeAll(async () => {
   await prisma.coalitionConfig.create({
     data: {
       programId,
+      organizationId: "org_default",
       provider: "GENERIC",
       endpoint: "https://example.com",
       encryptedCredentials: "encrypted-secret-blob",
@@ -120,6 +129,7 @@ beforeAll(async () => {
     data: {
       id: couponId,
       programId,
+      organizationId: "org_default",
       code: couponCode,
       mode: "SHARED",
       discountType: "PERCENTAGE",

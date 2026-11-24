@@ -90,16 +90,16 @@ beforeAll(async () => {
   await prisma.apiKey.create({ data: { programId, key: clientKey, scope: "CLIENT" } });
 
   const member = await prisma.member.create({
-    data: { email: `adj-member-${suffix}@loyaltyos.dev`, programId },
+    data: { email: `adj-member-${suffix}@loyaltyos.dev`, programId, organizationId: "org_default" },
   });
   memberId = member.id;
 
   const neg = await prisma.member.create({
-    data: { email: `adj-neg-${suffix}@loyaltyos.dev`, programId },
+    data: { email: `adj-neg-${suffix}@loyaltyos.dev`, programId, organizationId: "org_default" },
   });
   negativeMemberId = neg.id;
   await prisma.pointAccount.create({
-    data: { memberId: negativeMemberId, programId, balance: 10 },
+    data: { memberId: negativeMemberId, programId, organizationId: "org_default", balance: 10 },
   });
 
   for (const role of ["SUPER_ADMIN", "OPERATOR", "ANALYST"] as AdminRole[]) {
@@ -415,6 +415,7 @@ describe("point adjustments — approval flow", () => {
       data: {
         programId,
         memberId,
+        organizationId: "org_default",
         amount: 150,
         reasonCategory: "OTHER",
         comment: "self-approve probe",
@@ -576,6 +577,7 @@ describe("point adjustments — expiry, negatives, idempotency", () => {
       data: {
         accountId: account.id,
         programId,
+        organizationId: "org_default",
         type: "EARN",
         amount: 999,
         balanceAfter: before + 999,

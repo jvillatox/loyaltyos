@@ -89,6 +89,7 @@ beforeAll(async () => {
   const member = await prisma.member.create({
     data: {
       programId,
+      organizationId: "org_default",
       email: `mcp-member-${suffix}@example.com`,
       firstName: "Mcp",
       lastName: "Member",
@@ -97,13 +98,20 @@ beforeAll(async () => {
   memberId = member.id;
 
   const campaign = await prisma.campaign.create({
-    data: { programId, name: `MCP Campaign ${suffix}`, type: "BONUS_POINTS", isActive: false },
+    data: {
+      programId,
+      organizationId: "org_default",
+      name: `MCP Campaign ${suffix}`,
+      type: "BONUS_POINTS",
+      isActive: false,
+    },
   });
   campaignId = campaign.id;
 
   const termsTemplate = await prisma.termsTemplate.create({
     data: {
       programId,
+      organizationId: "org_default",
       name: `MCP Terms ${suffix}`,
       locale: "es-MX",
       body: "Términos de prueba",
@@ -114,6 +122,7 @@ beforeAll(async () => {
   const batch = await prisma.giftCardBatch.create({
     data: {
       programId,
+      organizationId: "org_default",
       name: `MCP Batch ${suffix}`,
       quantity: 1,
       initialAmount: 100,
@@ -132,6 +141,7 @@ beforeAll(async () => {
     data: {
       code: giftCardCode,
       batchId: batch.id,
+      organizationId: "org_default",
       initialAmount: 100,
       balance: 100,
       currency: "MXN",
@@ -143,6 +153,7 @@ beforeAll(async () => {
   const coupon = await prisma.coupon.create({
     data: {
       programId,
+      organizationId: "org_default",
       code: `MCPCOUPON${suffix}`,
       mode: "SHARED",
       discountType: "FIXED",

@@ -52,7 +52,7 @@ beforeAll(async () => {
   adminCookie = `${c?.name}=${c?.value}`;
 
   const member = await prisma.member.create({
-    data: { email: `m0a-member-${suffix}@loyaltyos.dev`, programId },
+    data: { email: `m0a-member-${suffix}@loyaltyos.dev`, programId, organizationId: "org_default" },
   });
   memberId = member.id;
 });

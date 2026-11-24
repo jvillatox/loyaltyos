@@ -290,11 +290,11 @@ beforeAll(async () => {
   await prisma.apiKey.create({ data: { programId, key: clientKey, scope: "CLIENT" } });
 
   const member = await prisma.member.create({
-    data: { email: `m0p-main-${suffix}@loyaltyos.dev`, programId },
+    data: { email: `m0p-main-${suffix}@loyaltyos.dev`, programId, organizationId: "org_default" },
   });
   memberId = member.id;
   const other = await prisma.member.create({
-    data: { email: `m0p-other-${suffix}@loyaltyos.dev`, programId },
+    data: { email: `m0p-other-${suffix}@loyaltyos.dev`, programId, organizationId: "org_default" },
   });
   otherMemberId = other.id;
 
@@ -308,11 +308,23 @@ beforeAll(async () => {
   // Ample balance so the matrix's redeem cases (and the foreign-memberId test)
   // can exercise the deduction path without draining the account to zero.
   await prisma.pointAccount.create({
-    data: { memberId, programId, balance: 10000, totalEarned: 10000 },
+    data: {
+      memberId,
+      programId,
+      organizationId: "org_default",
+      balance: 10000,
+      totalEarned: 10000,
+    },
   });
   // The foreign member has a known balance so "saldo ajeno intacto" is provable.
   await prisma.pointAccount.create({
-    data: { memberId: otherMemberId, programId, balance: 70, totalEarned: 70 },
+    data: {
+      memberId: otherMemberId,
+      programId,
+      organizationId: "org_default",
+      balance: 70,
+      totalEarned: 70,
+    },
   });
 
   for (const role of ADMIN_ROLES) {
@@ -337,6 +349,7 @@ beforeAll(async () => {
   await prisma.coalitionConfig.create({
     data: {
       programId,
+      organizationId: "org_default",
       provider: "M0RP_ATTACK",
       endpoint: "https://example.invalid",
       encryptedCredentials: "x",
@@ -485,7 +498,13 @@ async function injectCase(c: MatrixCase) {
   if (url.includes(":deviceId")) {
     const targetId = c.idScope === "other" ? otherMemberId : memberId;
     const dev = await prisma.memberDevice.create({
-      data: { memberId: targetId, programId, token: `dev-${c.id}`, platform: "WEB" },
+      data: {
+        memberId: targetId,
+        programId,
+        organizationId: "org_default",
+        token: `dev-${c.id}`,
+        platform: "WEB",
+      },
     });
     url = url.replace(":deviceId", dev.id);
   }
