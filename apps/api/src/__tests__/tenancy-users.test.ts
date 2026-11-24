@@ -151,11 +151,11 @@ describe("backfillTenancyUsers", () => {
     });
 
     try {
-      const first = await backfillTenancyUsers(prisma);
-      const second = await backfillTenancyUsers(prisma);
-
-      expect(second.userCount).toBe(first.userCount);
-      expect(second.membershipCount).toBe(first.membershipCount);
+      // Run the backfill twice. Idempotency is asserted on this user's mirror
+      // (below), not on global User/membership counts — those change as other
+      // test files create Users in parallel workers.
+      await backfillTenancyUsers(prisma);
+      await backfillTenancyUsers(prisma);
 
       const user = await prisma.user.findUnique({ where: { email } });
       expect(user).not.toBeNull();
