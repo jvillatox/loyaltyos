@@ -1,4 +1,6 @@
 import { MIN_MASTER_KEY_LENGTH } from "@loyaltyos/coalition";
+import type { TenantRlsMode } from "@loyaltyos/tenancy";
+import { resolveTenantRlsMode } from "@loyaltyos/tenancy";
 import type { PrismaClient } from "@prisma/client";
 
 import { prisma } from "../db.js";
@@ -47,12 +49,8 @@ export async function assertNoDefaultApiKey(
   }
 }
 
-export type TenantRlsMode = "off" | "audit" | "enforce";
-
-export function resolveTenantRlsMode(): TenantRlsMode {
-  const raw = process.env.TENANCY_RLS?.trim().toLowerCase();
-  return raw === "audit" || raw === "enforce" ? raw : "off";
-}
+export type { TenantRlsMode };
+export { resolveTenantRlsMode };
 
 export interface DbRoleInfo {
   isSuperuser: boolean;

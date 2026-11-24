@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import type { AdminRole } from "@loyaltyos/permissions";
 import { isAdminRole, minAdminRole } from "@loyaltyos/permissions";
+import { resolveOrganizationId, resolveTenantRlsMode, runWithTenant } from "@loyaltyos/tenancy";
 import type { AuditActorType } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
@@ -236,6 +237,39 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
     request.programId = key.programId;
     request.apiKeyScope = key.scope;
     request.actor = { type: "API_KEY", id: key.id };
+  });
+
+  // Establish the tenant context for the rest of the request lifecycle. This runs
+  // as a second `preHandler` hook (after the auth hook above has resolved
+  // `request.programId`) so the AsyncLocalStorage context surrounds the route
+  // handler. The callback form wraps `done()` in `runWithTenant`, which propagates
+  // the context synchronously into the handler and any awaits inside it.
+  //
+  // Skipped entirely when TENANCY_RLS=off (the default) so there is no per-request
+  // query overhead, and for routes without a resolved program (health, auth, …).
+  app.addHook("preHandler", (request, _reply, done) => {
+    if (resolveTenantRlsMode() === "off") {
+      done();
+      return;
+    }
+
+    const programId = request.programId;
+    if (!programId) {
+      done();
+      return;
+    }
+
+    // `app_org_for_program` (SECURITY DEFINER) is tried first, so no tenant context
+    // is needed to resolve the org; the direct read is only a fallback under `off`.
+    resolveOrganizationId(prisma, programId)
+      .then((organizationId) => {
+        void runWithTenant({ organizationId, programId }, () => {
+          done();
+        });
+      })
+      .catch((error: unknown) => {
+        done(error as Error);
+      });
   });
 }
 

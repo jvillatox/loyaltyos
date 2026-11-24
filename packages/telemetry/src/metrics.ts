@@ -93,6 +93,8 @@ export interface BusinessMetrics {
   giftCardsRedeemedTotal: Counter;
   giftCardsRedeemedAmount: Counter;
   giftCardsOutstandingBalance: Gauge;
+  // Tenancy
+  tenantMissingContextTotal: Counter;
 }
 
 export function createBusinessMetrics(registry: Registry): BusinessMetrics {
@@ -216,6 +218,13 @@ export function createBusinessMetrics(registry: Registry): BusinessMetrics {
     registers: [registry],
   });
 
+  const tenantMissingContextTotal = new Counter({
+    name: "loyaltyos_tenant_missing_context_total",
+    help: "Number of tenant-scoped queries that ran without a tenant context (TENANCY_RLS=audit)",
+    labelNames: ["model"] as unknown as string[],
+    registers: [registry],
+  });
+
   return {
     pointsEarnedTotal,
     pointsRedeemedTotal,
@@ -234,6 +243,7 @@ export function createBusinessMetrics(registry: Registry): BusinessMetrics {
     giftCardsRedeemedTotal,
     giftCardsRedeemedAmount,
     giftCardsOutstandingBalance,
+    tenantMissingContextTotal,
   };
 }
 

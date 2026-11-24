@@ -44,6 +44,7 @@
     "@loyaltyos/rewards": "workspace:*",
     "@loyaltyos/segments": "workspace:*",
     "@loyaltyos/telemetry": "workspace:*",
+    "@loyaltyos/tenancy": "workspace:*",
     "@lucia-auth/adapter-prisma": "^4.0.1",
     "@prisma/client": "^5.15.0",
     "argon2": "^0.44.0",
