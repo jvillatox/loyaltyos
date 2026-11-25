@@ -6,4 +6,9 @@ export { createTenantPrismaClient, GLOBAL_MODELS } from "./extension.js";
 export type { TenantRlsMode } from "./mode.js";
 export { resolveTenantRlsMode } from "./mode.js";
 export type { ProgramOrgResolver } from "./resolver.js";
-export { resolveOrganizationId } from "./resolver.js";
+export {
+  invalidateOrganizationCache,
+  ORG_CACHE_TTL_MS,
+  resolveOrganizationId,
+  resolveOrganizationIdCached,
+} from "./resolver.js";

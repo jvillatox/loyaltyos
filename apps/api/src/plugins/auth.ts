@@ -2,7 +2,11 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import type { AdminRole } from "@loyaltyos/permissions";
 import { isAdminRole, minAdminRole } from "@loyaltyos/permissions";
-import { resolveOrganizationId, resolveTenantRlsMode, runWithTenant } from "@loyaltyos/tenancy";
+import {
+  resolveOrganizationIdCached,
+  resolveTenantRlsMode,
+  runWithTenant,
+} from "@loyaltyos/tenancy";
 import type { AuditActorType } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
@@ -261,7 +265,9 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
 
     // `app_org_for_program` (SECURITY DEFINER) is tried first, so no tenant context
     // is needed to resolve the org; the direct read is only a fallback under `off`.
-    resolveOrganizationId(prisma, programId)
+    // The short in-memory cache (invalidated by tenancy:move-program) absorbs the
+    // round-trip on hot paths.
+    resolveOrganizationIdCached(prisma, programId)
       .then((organizationId) => {
         void runWithTenant({ organizationId, programId }, () => {
           done();

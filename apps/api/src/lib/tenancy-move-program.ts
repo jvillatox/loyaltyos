@@ -1,3 +1,4 @@
+import { invalidateOrganizationCache } from "@loyaltyos/tenancy";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 import { PARENT_CHILD_TABLES, PROGRAM_TABLES } from "./tenancy-org.js";
@@ -21,7 +22,7 @@ export async function moveProgram(
   programId: string,
   targetOrganizationId: string,
 ): Promise<MoveProgramResult> {
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const [program, target] = await Promise.all([
       tx.program.findUnique({
         where: { id: programId },
@@ -66,4 +67,11 @@ export async function moveProgram(
 
     return { programId, organizationId: targetOrganizationId, counts };
   });
+
+  // The program → org mapping changed, so evict the in-memory resolver cache
+  // (packages/tenancy). The CLI runs in its own process, so this clears only the
+  // in-process cache; the short TTL bounds the API process's staleness.
+  invalidateOrganizationCache(programId);
+
+  return result;
 }
