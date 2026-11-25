@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import { resolveTenantRlsMode } from "@loyaltyos/tenancy";
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
@@ -64,6 +66,70 @@ async function triggerMagicLinkEmail(
   }
 }
 
+const memberInclude = {
+  program: { select: { defaultLocale: true, supportedLocales: true } },
+};
+
+type MagicLinkMember = Prisma.MemberGetPayload<{ include: typeof memberInclude }>;
+
+// Resolves the member a magic-link request should target, without ever revealing
+// to the caller whether (or where) an email exists. See the route handler for the
+// two-tenancy-mode behavior. Returns `ambiguous` when the email matches more than
+// one program (off mode only) so the handler can refuse to send a link.
+async function resolveMagicLinkMember(
+  email: string,
+  requestedProgramId: string | null,
+): Promise<{ member: MagicLinkMember | null; ambiguous: boolean }> {
+  const rlsMode = resolveTenantRlsMode();
+
+  if (rlsMode !== "off") {
+    // audit/enforce: a programId is mandatory and must exist; otherwise the
+    // request is answered with the same generic response as an unknown email.
+    if (!requestedProgramId) return { member: null, ambiguous: false };
+    try {
+      const member = await withProgramContext(requestedProgramId, () =>
+        prisma.member.findFirst({
+          where: { email, programId: requestedProgramId, deletedAt: null },
+          include: memberInclude,
+        }),
+      );
+      return { member, ambiguous: false };
+    } catch {
+      // Program not found / org not resolvable — same generic outcome.
+      return { member: null, ambiguous: false };
+    }
+  }
+
+  // off: a valid programId scopes the search to that program. A programId that
+  // does not exist falls through to the all-programs search (compatibility with
+  // installs whose portal sends a stale/invented program id).
+  if (requestedProgramId) {
+    const program = await prisma.program.findUnique({
+      where: { id: requestedProgramId },
+      select: { id: true },
+    });
+    if (program) {
+      const member = await prisma.member.findFirst({
+        where: { email, programId: requestedProgramId, deletedAt: null },
+        include: memberInclude,
+      });
+      return { member, ambiguous: false };
+    }
+  }
+
+  const members = await prisma.member.findMany({
+    where: { email, deletedAt: null },
+    include: memberInclude,
+  });
+  if (members.length === 1) {
+    return { member: members[0] ?? null, ambiguous: false };
+  }
+  if (members.length > 1) {
+    return { member: null, ambiguous: true };
+  }
+  return { member: null, ambiguous: false };
+}
+
 export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   /** POST /auth/magic-link — request a sign-in link (always 200 OK) */
   app.post(
@@ -77,52 +143,54 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
       } = magicLinkSchema.parse(request.body);
 
       const headerProgramId = request.headers["x-program-id"];
-      const programId =
-        bodyProgramId ?? (typeof headerProgramId === "string" ? headerProgramId : "");
+      const requestedProgramId =
+        bodyProgramId ?? (typeof headerProgramId === "string" ? headerProgramId : null);
 
-      await withProgramContext(programId, async () => {
-        const member = await prisma.member.findFirst({
-          where: programId ? { email, programId, deletedAt: null } : { email, deletedAt: null },
-          include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
+      const { member, ambiguous } = await resolveMagicLinkMember(email, requestedProgramId);
+
+      if (member) {
+        const programLocales = member.program?.supportedLocales ?? [];
+
+        // Single validated locale resolution
+        const requestedLocale =
+          requestLocale && programLocales.includes(requestLocale) ? requestLocale : undefined;
+        const effectiveLocale = requestedLocale ?? member.locale ?? member.program?.defaultLocale;
+
+        // Persist locale on first contact
+        if (requestedLocale && !member.locale) {
+          await prisma.member.update({
+            where: { id: member.id },
+            data: { locale: requestedLocale },
+          });
+        }
+
+        const rawToken = generateToken();
+        const tokenHash = hashToken(rawToken);
+
+        await prisma.magicLinkToken.create({
+          data: {
+            memberId: member.id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + TOKEN_MINUTES * 60_000),
+          },
         });
 
-        if (member) {
-          const programLocales = member.program?.supportedLocales ?? [];
+        const baseUrl = resolvePortalUrl(member.programId);
+        const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
 
-          // Single validated locale resolution
-          const requestedLocale =
-            requestLocale && programLocales.includes(requestLocale) ? requestLocale : undefined;
-          const effectiveLocale = requestedLocale ?? member.locale ?? member.program?.defaultLocale;
-
-          // Persist locale on first contact
-          if (requestedLocale && !member.locale) {
-            await prisma.member.update({
-              where: { id: member.id },
-              data: { locale: requestedLocale },
-            });
-          }
-
-          const rawToken = generateToken();
-          const tokenHash = hashToken(rawToken);
-
-          await prisma.magicLinkToken.create({
-            data: {
-              memberId: member.id,
-              tokenHash,
-              expiresAt: new Date(Date.now() + TOKEN_MINUTES * 60_000),
-            },
-          });
-
-          const baseUrl = resolvePortalUrl(member.programId);
-          const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
-
-          // Fire and forget with locale in context
-          void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, effectiveLocale);
-        } else {
-          // No-op for non-existent emails: prevent enumeration
-          request.log.info({ email }, "Magic link requested for unknown email");
-        }
-      });
+        // Fire and forget with locale in context
+        void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, effectiveLocale);
+      } else if (ambiguous) {
+        // Same generic response as an unknown email — never reveal that the email
+        // is shared across programs, and never send a link to a guessed program.
+        request.log.warn(
+          { email },
+          "Magic link email matches multiple programs; not sending a link",
+        );
+      } else {
+        // No-op for non-existent emails: prevent enumeration
+        request.log.info({ email }, "Magic link requested for unknown email");
+      }
 
       return reply.status(200).send({ ok: true });
     },
