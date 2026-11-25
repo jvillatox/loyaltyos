@@ -1,3 +1,4 @@
+import { resolveTenantRlsMode } from "@loyaltyos/tenancy";
 import { PrismaClient } from "@prisma/client";
 
 import {
@@ -6,6 +7,7 @@ import {
   provisionRoles,
   redactSecrets,
 } from "./lib/provision-db-roles.js";
+import { provisionRlsPolicies } from "./lib/provision-rls-policies.js";
 
 // Idempotent tenancy role provisioning (docs/design/tenancy.md §2.3).
 //
@@ -40,6 +42,13 @@ async function main(): Promise<void> {
     console.log(
       `Tenancy roles provisioned: ${APP_ROLE} (NOSUPERUSER NOBYPASSRLS) + ${LIST_ORGS_FUNCTION}().`,
     );
+
+    // Row-level security policies (docs/design/tenancy.md §4 step 3): installed
+    // under audit/enforce, dropped under off so the default deployment stays
+    // behaviorally identical to an un-extended client.
+    const mode = resolveTenantRlsMode();
+    await provisionRlsPolicies(db, mode);
+    console.log(`Tenancy RLS policies ${mode === "off" ? "disabled" : `enabled (${mode})`}.`);
   } finally {
     await db.$disconnect();
   }
