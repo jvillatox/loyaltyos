@@ -78,13 +78,13 @@ jobs:
 
       - run: pnpm --filter @loyaltyos/api exec prisma generate
 
-      - name: Provision tenancy roles
-        run: pnpm --filter @loyaltyos/api exec tsx src/tenancy-provision.ts
-
       - name: Run migrations
         run: pnpm --filter @loyaltyos/api exec prisma migrate deploy
         env:
           DATABASE_URL: postgresql://loyaltyos:loyaltyos@localhost:5432/loyaltyos_test
+
+      - name: Provision tenancy roles
+        run: pnpm --filter @loyaltyos/api exec tsx src/tenancy-provision.ts
 
       - name: Seed database
         run: pnpm --filter @loyaltyos/api exec tsx prisma/seed.ts
