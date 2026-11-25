@@ -8,6 +8,7 @@ import { lucia } from "../lib/auth/lucia.js";
 import { LoyaltyError } from "../lib/errors.js";
 import { notificationsService } from "../lib/notifications-setup.js";
 import { resolvePortalUrl } from "../lib/portal-url.js";
+import { withProgramContext } from "../lib/tenancy-context.js";
 
 const TOKEN_MINUTES = 15;
 
@@ -22,6 +23,7 @@ function generateToken(): string {
 const magicLinkSchema = z.object({
   email: z.string().email().toLowerCase(),
   locale: z.string().optional(),
+  programId: z.string().optional(),
 });
 
 const verifySchema = z.object({
@@ -68,49 +70,59 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
     "/auth/magic-link",
     { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { email, locale: requestLocale } = magicLinkSchema.parse(request.body);
+      const {
+        email,
+        locale: requestLocale,
+        programId: bodyProgramId,
+      } = magicLinkSchema.parse(request.body);
 
-      const member = await prisma.member.findFirst({
-        where: { email, deletedAt: null },
-        include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
-      });
+      const headerProgramId = request.headers["x-program-id"];
+      const programId =
+        bodyProgramId ?? (typeof headerProgramId === "string" ? headerProgramId : "");
 
-      if (member) {
-        const programLocales = member.program?.supportedLocales ?? [];
-
-        // Single validated locale resolution
-        const requestedLocale =
-          requestLocale && programLocales.includes(requestLocale) ? requestLocale : undefined;
-        const effectiveLocale = requestedLocale ?? member.locale ?? member.program?.defaultLocale;
-
-        // Persist locale on first contact
-        if (requestedLocale && !member.locale) {
-          await prisma.member.update({
-            where: { id: member.id },
-            data: { locale: requestedLocale },
-          });
-        }
-
-        const rawToken = generateToken();
-        const tokenHash = hashToken(rawToken);
-
-        await prisma.magicLinkToken.create({
-          data: {
-            memberId: member.id,
-            tokenHash,
-            expiresAt: new Date(Date.now() + TOKEN_MINUTES * 60_000),
-          },
+      await withProgramContext(programId, async () => {
+        const member = await prisma.member.findFirst({
+          where: programId ? { email, programId, deletedAt: null } : { email, deletedAt: null },
+          include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
         });
 
-        const baseUrl = resolvePortalUrl(member.programId);
-        const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
+        if (member) {
+          const programLocales = member.program?.supportedLocales ?? [];
 
-        // Fire and forget with locale in context
-        void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, effectiveLocale);
-      } else {
-        // No-op for non-existent emails: prevent enumeration
-        request.log.info({ email }, "Magic link requested for unknown email");
-      }
+          // Single validated locale resolution
+          const requestedLocale =
+            requestLocale && programLocales.includes(requestLocale) ? requestLocale : undefined;
+          const effectiveLocale = requestedLocale ?? member.locale ?? member.program?.defaultLocale;
+
+          // Persist locale on first contact
+          if (requestedLocale && !member.locale) {
+            await prisma.member.update({
+              where: { id: member.id },
+              data: { locale: requestedLocale },
+            });
+          }
+
+          const rawToken = generateToken();
+          const tokenHash = hashToken(rawToken);
+
+          await prisma.magicLinkToken.create({
+            data: {
+              memberId: member.id,
+              tokenHash,
+              expiresAt: new Date(Date.now() + TOKEN_MINUTES * 60_000),
+            },
+          });
+
+          const baseUrl = resolvePortalUrl(member.programId);
+          const magicLinkUrl = `${baseUrl}/verify?token=${rawToken}`;
+
+          // Fire and forget with locale in context
+          void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, effectiveLocale);
+        } else {
+          // No-op for non-existent emails: prevent enumeration
+          request.log.info({ email }, "Magic link requested for unknown email");
+        }
+      });
 
       return reply.status(200).send({ ok: true });
     },
@@ -203,10 +215,12 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
       void reply.header("Set-Cookie", freshCookie.serialize());
     }
 
-    const member = await prisma.member.findUnique({
-      where: { id: user.id },
-      include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
-    });
+    const member = await withProgramContext(user.programId, () =>
+      prisma.member.findUnique({
+        where: { id: user.id },
+        include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
+      }),
+    );
 
     return reply.send({
       data: {
