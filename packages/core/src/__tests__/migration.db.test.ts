@@ -36,18 +36,21 @@ function scratchUrl(): string {
 describe.skipIf(!databaseUrl)("points expiry migration (v1.7.0 -> lots)", () => {
   let adminPrisma: PrismaClient;
 
+  // The scratch DB plus two full `migrate deploy` runs (v1.7.0, then the full
+  // schema) are far slower than Vitest's 5s default, so give the hooks and test a
+  // generous ceiling.
   beforeAll(async () => {
     adminPrisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
     await adminPrisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${SCRATCH_DB}"`);
     await adminPrisma.$executeRawUnsafe(`CREATE DATABASE "${SCRATCH_DB}"`);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await adminPrisma.$disconnect();
     const cleanup = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
     await cleanup.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${SCRATCH_DB}"`);
     await cleanup.$disconnect();
-  });
+  }, 30_000);
 
   it("leaves the invariant valid on every account and preserves NONE expiry", async () => {
     // 1. A temp migrations folder holding every migration up to v1.7.0.
@@ -144,5 +147,5 @@ describe.skipIf(!databaseUrl)("points expiry migration (v1.7.0 -> lots)", () => 
       await verify.$disconnect();
       rmSync(tmp, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
