@@ -21,6 +21,8 @@ const SYNC_RE = /\b(?:syncAdminUserToTenancy|createAdminUser)\s*\(/;
 const EXEMPT_WRITES: Record<string, string> = {
   "apps/api/prisma/seed.ts :: deleteMany":
     "pre-seed reset that also deletes the User/OrganizationMembership mirror rows",
+  "packages/tenancy/src/extension.ts :: rawSql":
+    '"AdminUser" is a model name in GLOBAL_MODELS (tenant/global classification), not a raw SQL write',
 };
 
 const EXTENSIONS = new Set([".ts", ".tsx"]);
