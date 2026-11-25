@@ -227,6 +227,14 @@ const ownerUrl = env("MIGRATION_DATABASE_URL") || env("TEST_DATABASE_URL");
 const appUrl = env("DATABASE_URL");
 const appPassword = env("LOYALTYOS_APP_DB_PASSWORD");
 
+// In CI these integration tests must run, not skip silently: fail the suite when
+// any of the three URLs/password is missing (mirrors tenancy-context.test.ts).
+if (process.env.CI === "true" && (!ownerUrl || !appUrl || !appPassword)) {
+  throw new Error(
+    "DATABASE_URL, MIGRATION_DATABASE_URL/TEST_DATABASE_URL and LOYALTYOS_APP_DB_PASSWORD are required in CI (tenancy DB-role tests must not be skipped)",
+  );
+}
+
 describe.skipIf(!ownerUrl || !appUrl || !appPassword)("tenancy DB roles (integration)", () => {
   it("provisions loyaltyos_app as neither superuser nor BYPASSRLS", async () => {
     const owner = new PrismaClient({ datasources: { db: { url: ownerUrl! } } });
