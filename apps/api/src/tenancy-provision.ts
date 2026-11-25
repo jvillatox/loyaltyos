@@ -7,7 +7,11 @@ import {
   provisionRoles,
   redactSecrets,
 } from "./lib/provision-db-roles.js";
-import { provisionRlsPolicies } from "./lib/provision-rls-policies.js";
+import {
+  assertEnforceReady,
+  provisionRlsPolicies,
+  WORKER_SWEEPS_ORG_SCOPED,
+} from "./lib/provision-rls-policies.js";
 
 // Idempotent tenancy role provisioning (docs/design/tenancy.md §2.3).
 //
@@ -44,11 +48,18 @@ async function main(): Promise<void> {
     );
 
     // Row-level security policies (docs/design/tenancy.md §4 step 3): installed
-    // under audit/enforce, dropped under off so the default deployment stays
-    // behaviorally identical to an un-extended client.
+    // only under `enforce`, dropped under `off`/`audit` so the default deployment
+    // (and audit mode) stays behaviorally identical to an un-extended client.
     const mode = resolveTenantRlsMode();
+    if (mode === "enforce") {
+      assertEnforceReady(WORKER_SWEEPS_ORG_SCOPED);
+    }
     await provisionRlsPolicies(db, mode);
-    console.log(`Tenancy RLS policies ${mode === "off" ? "disabled" : `enabled (${mode})`}.`);
+    console.log(
+      mode === "enforce"
+        ? "Tenancy RLS policies enabled (enforce)."
+        : `Tenancy RLS policies not installed at the DB (${mode}).`,
+    );
   } finally {
     await db.$disconnect();
   }
