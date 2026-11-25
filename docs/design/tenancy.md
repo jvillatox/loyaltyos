@@ -558,22 +558,88 @@ always scoped to the one org.
 
 ## 6. Risks and performance
 
-**RLS overhead.** Every query gains `organization_id = $n`, and `set_config` runs
-once per transaction (not per query). The benchmark (k6, M1) measures
-`POST /events` p50/p95 with and without RLS on a seeded database.
-**Thresholds: p95 regression ≤ +15 % AND absolute p95 < 150 ms** on the reference
-benchmark.
+**Measured overhead (mechanism only — RLS predicates land in PR 5).** These
+numbers isolate the cost of establishing tenant context on `POST /api/v1/events`
+(earn with lots). Valid benchmark conditions: compiled `dist` bundle
+(`NODE_ENV=production`, `LOG_LEVEL=warn`, no tsx/watch), Prisma pool with an
+explicit `connection_limit=20`, and a **non-saturating baseline** — concurrency 10
+is where `off` keeps p95 < 60 ms (58.93 ms local); concurrency 20 is 2× that.
+A keep-alive generator holds 10 (resp. 20) requests in flight across 50
+round-robin members, 3000 requests per run; the table shows p95, with full
+p50/p95/p99 in the benchmark logs (throughput ≈ concurrency / mean latency, since
+the generator is closed-loop). Two environments: local and 1 ms one-way latency
+toward Postgres (TCP proxy).
 
-**Plan B if either threshold is exceeded, in order:**
+| Mechanism                                | Local p95 (C10 / C20) | 1 ms p95 (C10 / C20) | Overhead vs off (local) | Overhead vs off (1 ms) |
+| ---------------------------------------- | --------------------- | -------------------- | ----------------------- | ---------------------- |
+| off (baseline)                           | 58.93 / 135.69 ms     | 118.52 / 222.73 ms   | —                       | —                      |
+| batch-per-query (shipped, `enforce`)     | 113.97 / 236.19 ms    | 258.11 / 507.73 ms   | +93 % / +74 %           | +118 % / +128 %        |
+| A — transaction-per-request + savepoints | INFEASIBLE            | INFEASIBLE           | —                       | —                      |
+| C — app-layer filter (no `set_config`)   | 83.43 / 169.73 ms     | 132.97 / 262.40 ms   | +42 % / +25 %           | +12 % / +18 %          |
+| C + RLS on sensitive tables              | 100.80 / 190.38 ms    | 153.75 / 253.92 ms   | +71 % / +40 %           | +30 % / +14 %          |
 
-1. Composite indexes leading with `organization_id` (so the RLS predicate is an
-   index probe, not a filter-after-scan) — likely enough on its own.
-2. Move `set_config` out of the transaction to a `SET LOCAL` issued once on
-   connection checkout with a request-scoped pool, dropping the extra statement
-   per transaction.
-3. As a last resort, disable RLS on the hottest tables and rely on the existing
-   application-level `programId` filtering — documented and gated behind
-   `TENANCY_RLS`, with an explicit, named acceptance of the weakened guarantee.
+**Why batch-per-query is expensive.** Each loose query is wrapped in
+`$transaction([set_config, query])` — a `BEGIN` + `set_config` + query + `COMMIT`
+cycle, ~3 extra round trips per query. `POST /events` fans out across ~15–20
+loose queries (idempotency lookup, member/account resolution, metric writes), so
+the overhead compounds with latency. The interactive earn transaction already
+sets `set_config` once, so the ledger itself is not the problem.
+
+**A (transaction-per-request) needs nested savepoints — unavailable until
+Prisma 7.5.** The corrected design runs every request inside one ambient
+transaction, `set_config('app.organization_id', …)` once, and lets the ledger's
+interactive `$transaction` nest inside it via `SAVEPOINT`/`RELEASE`/`ROLLBACK TO
+SAVEPOINT` — so the P2002 idempotency catches keep working, and the `FOR UPDATE`
+lock stays on the same connection. Prisma 5.22 cannot express this: the
+interactive transaction client is `Omit<PrismaClient, ITXClientDenyList>` where
+`$transaction` is on the deny-list, so `tx.$transaction` is `undefined`. Nested
+interactive transactions ship in Prisma 7.5.0. Until then this cannot be
+measured; it is the durable answer because it removes the per-query wrapper
+entirely without sacrificing RLS.
+
+**C (app-layer filter) — cheap but forfeits the database backstop.** A Prisma
+extension injects `organizationId` into the `where` of every read/update/delete
+and the `data` of every create on the §3.1 tables, with no `set_config`. It is
+the cheapest mechanism (+42 % / +12 % p95), but enforcement lives only in the
+application layer:
+
+- **Raw queries pass through unfiltered.** `$queryRaw`/`$executeRaw` are not
+  rewritten, so the ledger's `SELECT … FOR UPDATE` (`lockAccount`, `consumeLots`)
+  and the `app_org_for_program` resolver read across tenants unless manually
+  scoped — a permanent manual-review surface every future raw query must opt
+  into.
+- **No database-level backstop.** Any code path that bypasses the extended
+  client (a new raw query, a query against the base client) silently leaks. RLS
+  is the only guarantee that survives a missed call site; C has none.
+- **Behavior change.** `findUnique` is rewritten to `findFirst` (compound-unique
+  selectors are flattened), which returns `null` on not-found instead of
+  throwing `P2025`.
+
+**C + RLS on sensitive tables — defense in depth, partial coverage.** Run C's
+app-filter on all §3.1 tables and additionally enforce RLS on the seven that
+hold customer data and the ledger (Member, PointAccount, PointTransaction,
+PointLot, CoalitionConfig, CoalitionTransaction, AuditLog). Cost is +71 % /
++30 % p95. The DB backstop now covers the most sensitive rows, but the remaining
+28 tenant tables still depend on the app filter alone.
+
+**Decision.** Batch-per-query stays **available but not approved for `enforce`
+in production**. The mechanism is implemented and gated behind `TENANCY_RLS`
+(default `off`, a no-op); it is the only one that enforces isolation at the
+database layer across all 35 tenant tables (including the raw `FOR UPDATE`
+reads, which respect RLS), but its +74–128 % p95 overhead fails the budget.
+Flipping `enforce` in production is therefore blocked on two conditions:
+
+1. the **Prisma upgrade** (§7 PR 13) landing nested `tx.$transaction` savepoints
+   (v7.5.0) — the mechanism that removes the per-query wrapper without
+   sacrificing RLS (prototype A) — or confirming the Rust-free query compiler
+   preserves `AsyncLocalStorage` through the driver adapter (reopening
+   prototype B); and
+2. the **RLS benchmark** (§7 PR 14) passing — **+15 % p95 AND absolute
+   p95 < 150 ms at 1 ms latency**.
+
+Until both hold, the only shipped mode is `off`. C and C+RLS are benchmark-only
+and are not candidates for shipping: C forfeits the database backstop entirely,
+and C+RLS covers only 7 of 35 tables.
 
 **Other risks.** Backfill on large tables (`PointTransaction`) must be batched
 and resumable. The composite FK adds a constraint check on writes — measured in
@@ -585,25 +651,48 @@ test asserts this, and the boot guard enforces it at runtime.
 ## 7. Rollout as small PRs (tests per PR)
 
 Each PR is independently mergeable and leaves the suite green. The plan grew from
-10 to **13** PRs to absorb the role provisioning, the composite FK, the
-`SECURITY DEFINER` function + fail-visible context, and the org-scoped worker
-sweeps.
+10 to **14** PRs to absorb the role provisioning, the composite FK, the
+`SECURITY DEFINER` function + fail-visible context, the org-scoped worker
+sweeps, and the Prisma upgrade that unblocks the enforcement mechanism.
 
-| #   | PR                                                                                                                                                                                                                                                  | Tests / acceptance criteria                                                                                                                      |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **DB role provisioning + two URLs + boot guard** — migration/script creates `loyaltyos_app` (`NOSUPERUSER NOBYPASSRLS`) + grants; `DATABASE_URL` vs `MIGRATION_DATABASE_URL`; docker-compose, Helm, `.env.example`                                  | app role lacks `BYPASSRLS`; boot refuses under superuser/BYPASSRLS with `audit\|enforce`; suite green under the new role                         |
-| 2   | **`Organization` + `User` + `OrganizationMembership` (additive)** — schema, migration, seed `default` org; `AdminUser` compatibility path                                                                                                           | migration idempotent; seed creates `default` org; existing admin tests green                                                                     |
-| 3   | **`organizationId` on all tables + composite FK + backfill + `move-program`** — nullable column; `Program.@@unique([id, organizationId])`; composite FK `(programId, organizationId)→Program`; batched backfill                                     | backfill idempotent/resumable; composite FK rejects divergent rows; `move-program` tests                                                         |
-| 4   | **`packages/tenancy` core** — `TenantContext`, `AsyncLocalStorage`, transaction-aware Prisma `$extends` (wrap `$transaction`, batch form, raw), `SECURITY DEFINER app_org_for_program`, fail-visible `TenantContextMissing`, global-model exemption | `set_config` once per transaction; loose query batch; raw covered; raw `FOR UPDATE` respects RLS; no-context throws (`enforce`) / logs (`audit`) |
-| 5   | **RLS policies + `TENANCY_RLS=audit→enforce`** — generated policies, audit mode logs denials                                                                                                                                                        | two-org DB test: cross-org read/write denied, same-org allowed                                                                                   |
-| 6   | **Pre-context entry points** — member login, magic link, widget `X-Program-Id`, `/auth/*` resolve org via `app_org_for_program`/cache                                                                                                               | each entry point resolves org without reading `Program` under the app role; ledger 20-run concurrency suite green under `enforce`                |
-| 7   | **`User`/membership auth flow + org selector (backend)** — login resolves membership; org switch; `AdminUser` compat for 2 releases                                                                                                                 | login; role resolution; two-org user switches and sees only the active org; `admin:create` still works                                           |
-| 8   | **PAT + member-token + API-key rebind** — PAT→membership, effective-role rule, org on credentials                                                                                                                                                   | PAT effective role `min(token, membership)`; cross-org PAT denied; member token inherits org                                                     |
-| 9   | **Security: hash API keys** — `ApiKey.keyHash` + `prefix`, migration hashes existing keys, auth looks up by hash, plaintext column dropped later                                                                                                    | migration hashes without collision; lookup by hash; plaintext no longer readable; seed shows key once                                            |
-| 10  | **Security: Fastify 5 + `@fastify/helmet`** — Fastify `4.28 → 5`, `@fastify/helmet` `11 → 13` (compatible), all plugins bumped                                                                                                                      | full suite (unit + MCP E2E + smoke) green                                                                                                        |
-| 11  | **Workers: org-scoped sweeps** — expiry, reminders, settlement, reconciliation, token cleanup list orgs via `app_list_organization_ids()` then process per-org under the app role                                                                   | the listing function returns only ids and runs `SECURITY DEFINER`; per-org processing under app role; sweep tests green under `enforce`          |
-| 12  | **Admin org selector + MCP + docs** — UI switcher, MCP scoping, `UPGRADING.md`, `.env.example`/docker-compose/Helm docs                                                                                                                             | admin UI switch; MCP scoped; docs accurate                                                                                                       |
-| 13  | **RLS benchmark + report** — k6 `POST /events`, p50/p95, `docs/cloud/benchmarks/`                                                                                                                                                                   | +15 % p95 AND absolute p95 < 150 ms verified, or plan B documented                                                                               |
+| #   | PR                                                                                                                                                                                                                                                         | Tests / acceptance criteria                                                                                                                      |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **DB role provisioning + two URLs + boot guard** — migration/script creates `loyaltyos_app` (`NOSUPERUSER NOBYPASSRLS`) + grants; `DATABASE_URL` vs `MIGRATION_DATABASE_URL`; docker-compose, Helm, `.env.example`                                         | app role lacks `BYPASSRLS`; boot refuses under superuser/BYPASSRLS with `audit\|enforce`; suite green under the new role                         |
+| 2   | **`Organization` + `User` + `OrganizationMembership` (additive)** — schema, migration, seed `default` org; `AdminUser` compatibility path                                                                                                                  | migration idempotent; seed creates `default` org; existing admin tests green                                                                     |
+| 3   | **`organizationId` on all tables + composite FK + backfill + `move-program`** — nullable column; `Program.@@unique([id, organizationId])`; composite FK `(programId, organizationId)→Program`; batched backfill                                            | backfill idempotent/resumable; composite FK rejects divergent rows; `move-program` tests                                                         |
+| 4   | **`packages/tenancy` core** — `TenantContext`, `AsyncLocalStorage`, transaction-aware Prisma `$extends` (wrap `$transaction`, batch form, raw), `SECURITY DEFINER app_org_for_program`, fail-visible `TenantContextMissing`, global-model exemption        | `set_config` once per transaction; loose query batch; raw covered; raw `FOR UPDATE` respects RLS; no-context throws (`enforce`) / logs (`audit`) |
+| 5   | **RLS policies + audit mode** — generated policies, audit mode logs denials; `enforce` exercised only in tests (not flipped in production)                                                                                                                 | two-org DB test: cross-org read/write denied, same-org allowed under `enforce` in tests; audit logs denials in non-test mode                     |
+| 6   | **Pre-context entry points** — member login, magic link, widget `X-Program-Id`, `/auth/*` resolve org via `app_org_for_program`/cache                                                                                                                      | each entry point resolves org without reading `Program` under the app role; ledger 20-run concurrency suite green under `enforce`                |
+| 7   | **`User`/membership auth flow + org selector (backend)** — login resolves membership; org switch; `AdminUser` compat for 2 releases                                                                                                                        | login; role resolution; two-org user switches and sees only the active org; `admin:create` still works                                           |
+| 8   | **PAT + member-token + API-key rebind** — PAT→membership, effective-role rule, org on credentials                                                                                                                                                          | PAT effective role `min(token, membership)`; cross-org PAT denied; member token inherits org                                                     |
+| 9   | **Security: hash API keys** — `ApiKey.keyHash` + `prefix`, migration hashes existing keys, auth looks up by hash, plaintext column dropped later                                                                                                           | migration hashes without collision; lookup by hash; plaintext no longer readable; seed shows key once                                            |
+| 10  | **Security: Fastify 5 + `@fastify/helmet`** — Fastify `4.28 → 5`, `@fastify/helmet` `11 → 13` (compatible), all plugins bumped                                                                                                                             | full suite (unit + MCP E2E + smoke) green                                                                                                        |
+| 11  | **Workers: org-scoped sweeps** — expiry, reminders, settlement, reconciliation, token cleanup list orgs via `app_list_organization_ids()` then process per-org under the app role                                                                          | the listing function returns only ids and runs `SECURITY DEFINER`; per-org processing under app role; sweep tests green under `enforce`          |
+| 12  | **Admin org selector + MCP + docs** — UI switcher, MCP scoping, `UPGRADING.md`, `.env.example`/docker-compose/Helm docs                                                                                                                                    | admin UI switch; MCP scoped; docs accurate                                                                                                       |
+| 13  | **Actualización de Prisma** — 5.22 → 7.x; nested `tx.$transaction` savepoints (≥ 7.5.0) + Rust-free query compiler/driver adapters; spike `AsyncLocalStorage` across the adapter; migration plan + breaking changes; evaluate manual-savepoint alternative | changelog verified; nested savepoints green; ALS preserved (or documented as not) across `@prisma/adapter-pg`; full suite green on 7.x           |
+| 14  | **RLS benchmark + report** — k6 `POST /events`, p50/p95, `docs/cloud/benchmarks/`                                                                                                                                                                          | +15 % p95 AND absolute p95 < 150 ms verified at 1 ms latency, or plan B documented                                                               |
+
+**Prisma upgrade analysis (PR 13).** The changelog confirms nested interactive
+transactions (savepoints) landed in **Prisma 7.5.0** ("nested transaction
+savepoints", 2026-03-11), with a follow-up fix in 7.10.1; that is the minimum
+version for prototype A (`tx.$transaction` inside the ambient request
+transaction). The Rust-free query compiler (no query-engine binary) went GA in
+6.16.0 for PostgreSQL and is the default in v7, which **requires driver
+adapters** (`@prisma/adapter-pg`) for connection management. Whether that
+compiler preserves `AsyncLocalStorage` across the adapter boundary — the bug
+that broke prototype B on 5.22 — is **not documented** in the changelog and must
+be verified by a spike before option B is reopened. Migration 5.22 → 7.x is a
+major bump: the generator switches from `prisma-client-js` to `prisma-client`,
+the Rust-engine env vars (`PRISMA_QUERY_ENGINE_*`) are removed, the client's
+connection moves to the adapter, and `build.mjs` externalization plus the
+bundle step must be re-validated. **No-upgrade alternative:** only
+`$transaction` is denied on the interactive transaction client, so the ledger's
+atomic block can run inside the ambient transaction by emitting
+`SAVEPOINT`/`RELEASE`/`ROLLBACK TO SAVEPOINT` via `tx.$executeRawUnsafe` and
+mapping the P2002 idempotency catch to `ROLLBACK TO SAVEPOINT` instead of
+relying on `prisma.$transaction`. This avoids the upgrade but is invasive: the
+points service must receive the ambient `tx` and drop its own `$transaction`
+wrapper. Choose at PR 13 based on the ALS spike and the migration cost.
 
 **Definition of Done (M1):** every business table has `organizationId NOT NULL`, a
 composite FK to `Program`, and RLS `enforce` in CI; the app role is `NOSUPERUSER
