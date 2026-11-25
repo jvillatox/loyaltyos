@@ -46,6 +46,26 @@ export const TENANT_TABLES: readonly string[] = [
 
 export const RLS_POLICY_NAME = "tenancy_org_isolation";
 
+// Gate for `TENANCY_RLS=enforce`: the worker sweeps (expiry, reminders,
+// settlement, reconciliation, token cleanup) must be org-scoped first, because
+// they query tenant tables with no context. Under RLS they would silently read
+// zero rows / fail WITH CHECK. PR 11 flips this to `true` once the sweeps list
+// orgs via `app_list_organization_ids()` and process per-org under the app role.
+export const WORKER_SWEEPS_ORG_SCOPED = false;
+
+// Refuses to provision `enforce` until the sweeps are org-scoped. Kept as a pure
+// decision (like `evaluateDbRoleGuard`) so it is unit-testable; the flag is the
+// one PR 11 changes.
+export function assertEnforceReady(sweepsOrgScoped: boolean): void {
+  if (sweepsOrgScoped) return;
+  throw new Error(
+    "Refusing to provision TENANCY_RLS=enforce: worker sweeps are not yet " +
+      "org-scoped (PR 11). Enabling RLS now would silently break them. Flip " +
+      "WORKER_SWEEPS_ORG_SCOPED in provision-rls-policies.ts once PR 11 lands, " +
+      "or use TENANCY_RLS=audit.",
+  );
+}
+
 // A row is visible/mutable only when its organizationId equals the
 // transaction-local GUC set by the tenancy extension (§2.2). When the GUC is
 // unset, current_setting(..., true) is NULL, so the predicate is NULL and the
@@ -76,12 +96,17 @@ export async function disableRlsPolicies(db: ProvisionDb): Promise<void> {
   }
 }
 
-// Reconciler used by the provisioning script: `off` drops the policies so the
-// app role reads across the tenant boundary, `audit`/`enforce` installs them.
+// Reconciler used by the provisioning script (docs/design/tenancy.md §4 step 3).
+// Postgres cannot "log-only" a denied row — a policy either filters the row or
+// lets it through — so only `enforce` installs the policies. `audit` and `off`
+// are identical at the database level (no policies): `audit` observes
+// missing-context queries at the application layer (warn + metric) while the DB
+// still returns data. That keeps the not-yet-org-scoped worker sweeps working
+// until PR 11 lands, instead of silently reading zero rows.
 export async function provisionRlsPolicies(db: ProvisionDb, mode: TenantRlsMode): Promise<void> {
-  if (mode === "off") {
-    await disableRlsPolicies(db);
-  } else {
+  if (mode === "enforce") {
     await enableRlsPolicies(db);
+  } else {
+    await disableRlsPolicies(db);
   }
 }

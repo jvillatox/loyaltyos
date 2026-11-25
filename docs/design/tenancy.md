@@ -248,7 +248,7 @@ const prisma = basePrisma.$extends({
         if (!ctx) {
           if (GLOBAL_MODELS.has(model)) return query(args);
           if (rlpMode === "enforce") throw new TenantContextMissing(model);
-          auditNoContext(model); // audit: log + metric, then RLS returns zero rows
+          auditNoContext(model); // audit: log + metric only — no DB policies, so data still flows
         }
         return withTenantContext(ctx, () => query(args));
       },
@@ -269,7 +269,8 @@ non-global model throws `TenantContextMissing` at the application layer — the 
 would silently return zero rows under RLS, so the extension turns a silent empty
 result into a loud bug. Under `audit`, the extension logs the operation and
 increments a counter so missing-context hotspots are measured before flipping to
-`enforce`. Global tables (§3.2) are exempt.
+`enforce`; `audit` installs **no** database policies (see §4 step 3), so those
+same queries still return data. Global tables (§3.2) are exempt.
 
 ### 2.3 Database roles and two connection URLs
 
@@ -494,10 +495,10 @@ read under the app role.
 ## 4. Migration from 1.9.x (expand → backfill → contract)
 
 All steps are additive and reversible until the final `NOT NULL`/RLS-`enforce`
-step. `TENANCY_RLS=off|audit|enforce` gates the behavior; new installs default to
-`enforce`, upgrades start at `off` and move through `audit` → `enforce`. Role
-provisioning and the two URLs (§2.3) ship first and are orthogonal to the schema
-migration.
+step. `TENANCY_RLS=off|audit|enforce` gates the behavior and advances
+`off` → `audit` (observe) → `enforce` (block); new installs default to `enforce`,
+upgrades start at `off` and move through `audit` → `enforce`. Role provisioning
+and the two URLs (§2.3) ship first and are orthogonal to the schema migration.
 
 1. **Expand (reversible: drop).** Create `Organization`, `User`,
    `OrganizationMembership`; add nullable `organizationId` to every business
@@ -518,11 +519,23 @@ migration.
    a new or existing organization later, updating the composite-key rows
    atomically in one transaction (with tests).
 3. **Contract (partially reversible).** Set `organizationId NOT NULL` (the
-   composite FK is now fully enforced), create composite indexes
-   `(organizationId, …)`, and enable RLS. Flip `TENANCY_RLS` to `audit` (log
-   queries that would be denied), observe, then `enforce`. Drop the `AdminUser`
-   compatibility path and the `ApiKey.key` plaintext column after the two-release
-   window.
+   composite FK is now fully enforced) and create composite indexes
+   `(organizationId, …)`. RLS then advances through three states, each idempotent
+   and reversible; **only `enforce` installs database policies**:
+   - **`off`** — the extension is a pass-through and no policies are installed
+     (the default; identical to an un-extended client).
+   - **`audit` (observe)** — the extension logs and counts every tenant-scoped
+     query that runs without context, but installs **no** database policies, so
+     those queries still return data. This is the safe observation phase while
+     the not-yet-org-scoped worker sweeps (§7 PR 11) are still running — Postgres
+     cannot "log-only" a denial, so audit must not install the policies.
+   - **`enforce` (block)** — `ENABLE`/`FORCE ROW LEVEL SECURITY` plus the
+     org-isolation policy is installed on every tenant table; a no-context query
+     throws `TenantContextMissing` at the application layer (raw `$queryRawUnsafe`
+     reads zero rows). Enabling `enforce` is gated on **PR 11** (worker sweeps
+     org-scoped) and the **RLS benchmark gate** (PR 14).
+     Drop the `AdminUser` compatibility path and the `ApiKey.key` plaintext column
+     after the two-release window.
 
 Self-hosted single-program installs: the `default` org is created once; from the
 user's point of view nothing changes — same credentials, same program, RLS
@@ -661,16 +674,23 @@ sweeps, and the Prisma upgrade that unblocks the enforcement mechanism.
 | 2   | **`Organization` + `User` + `OrganizationMembership` (additive)** — schema, migration, seed `default` org; `AdminUser` compatibility path                                                                                                                  | migration idempotent; seed creates `default` org; existing admin tests green                                                                     |
 | 3   | **`organizationId` on all tables + composite FK + backfill + `move-program`** — nullable column; `Program.@@unique([id, organizationId])`; composite FK `(programId, organizationId)→Program`; batched backfill                                            | backfill idempotent/resumable; composite FK rejects divergent rows; `move-program` tests                                                         |
 | 4   | **`packages/tenancy` core** — `TenantContext`, `AsyncLocalStorage`, transaction-aware Prisma `$extends` (wrap `$transaction`, batch form, raw), `SECURITY DEFINER app_org_for_program`, fail-visible `TenantContextMissing`, global-model exemption        | `set_config` once per transaction; loose query batch; raw covered; raw `FOR UPDATE` respects RLS; no-context throws (`enforce`) / logs (`audit`) |
-| 5   | **RLS policies + audit mode** — generated policies, audit mode logs denials; `enforce` exercised only in tests (not flipped in production)                                                                                                                 | two-org DB test: cross-org read/write denied, same-org allowed under `enforce` in tests; audit logs denials in non-test mode                     |
+| 5   | **RLS policies + audit mode** — generated policies; `audit` observes at the app layer only (no DB policies), `enforce` installs ENABLE/FORCE + policy; `enforce` exercised only in tests; enforce gate blocks premature provisioning                       | two-org DB test: cross-org read/write denied, same-org allowed under `enforce`; `audit` leaves the DB un-policied; gate throws before PR 11      |
 | 6   | **Pre-context entry points** — member login, magic link, widget `X-Program-Id`, `/auth/*` resolve org via `app_org_for_program`/cache                                                                                                                      | each entry point resolves org without reading `Program` under the app role; ledger 20-run concurrency suite green under `enforce`                |
 | 7   | **`User`/membership auth flow + org selector (backend)** — login resolves membership; org switch; `AdminUser` compat for 2 releases                                                                                                                        | login; role resolution; two-org user switches and sees only the active org; `admin:create` still works                                           |
 | 8   | **PAT + member-token + API-key rebind** — PAT→membership, effective-role rule, org on credentials                                                                                                                                                          | PAT effective role `min(token, membership)`; cross-org PAT denied; member token inherits org                                                     |
 | 9   | **Security: hash API keys** — `ApiKey.keyHash` + `prefix`, migration hashes existing keys, auth looks up by hash, plaintext column dropped later                                                                                                           | migration hashes without collision; lookup by hash; plaintext no longer readable; seed shows key once                                            |
 | 10  | **Security: Fastify 5 + `@fastify/helmet`** — Fastify `4.28 → 5`, `@fastify/helmet` `11 → 13` (compatible), all plugins bumped                                                                                                                             | full suite (unit + MCP E2E + smoke) green                                                                                                        |
-| 11  | **Workers: org-scoped sweeps** — expiry, reminders, settlement, reconciliation, token cleanup list orgs via `app_list_organization_ids()` then process per-org under the app role                                                                          | the listing function returns only ids and runs `SECURITY DEFINER`; per-org processing under app role; sweep tests green under `enforce`          |
+| 11  | **Workers: org-scoped sweeps** — expiry, reminders, settlement, reconciliation, token cleanup list orgs via `app_list_organization_ids()` then process per-org under the app role; flips `WORKER_SWEEPS_ORG_SCOPED` to unblock `enforce`                   | the listing function returns only ids and runs `SECURITY DEFINER`; per-org processing under app role; sweep tests green under `enforce`          |
 | 12  | **Admin org selector + MCP + docs** — UI switcher, MCP scoping, `UPGRADING.md`, `.env.example`/docker-compose/Helm docs                                                                                                                                    | admin UI switch; MCP scoped; docs accurate                                                                                                       |
 | 13  | **Actualización de Prisma** — 5.22 → 7.x; nested `tx.$transaction` savepoints (≥ 7.5.0) + Rust-free query compiler/driver adapters; spike `AsyncLocalStorage` across the adapter; migration plan + breaking changes; evaluate manual-savepoint alternative | changelog verified; nested savepoints green; ALS preserved (or documented as not) across `@prisma/adapter-pg`; full suite green on 7.x           |
 | 14  | **RLS benchmark + report** — k6 `POST /events`, p50/p95, `docs/cloud/benchmarks/`                                                                                                                                                                          | +15 % p95 AND absolute p95 < 150 ms verified at 1 ms latency, or plan B documented                                                               |
+
+**Enforce gate.** Provisioning with `TENANCY_RLS=enforce` refuses to run until the
+worker sweeps are org-scoped — a `WORKER_SWEEPS_ORG_SCOPED` flag flipped by PR 11
+— and until the RLS benchmark gate (PR 14) confirms the p95 overhead is
+acceptable. This prevents anyone from enabling `enforce` before the sweeps and
+the benchmark are done; `audit` remains the safe pre-`enforce` mode because it
+installs no database policies.
 
 **Prisma upgrade analysis (PR 13).** The changelog confirms nested interactive
 transactions (savepoints) landed in **Prisma 7.5.0** ("nested transaction

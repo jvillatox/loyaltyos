@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  assertEnforceReady,
   disableRlsPolicies,
   enableRlsPolicies,
   provisionRlsPolicies,
@@ -67,16 +68,25 @@ describe("disableRlsPolicies", () => {
 });
 
 describe("provisionRlsPolicies", () => {
-  it("enables policies under audit and enforce, disables under off", async () => {
-    const enableDb = { $executeRawUnsafe: vi.fn().mockResolvedValue(0) };
-    await provisionRlsPolicies(enableDb, "enforce");
-    expect(enableDb.$executeRawUnsafe).toHaveBeenCalledWith(
+  it("installs policies only under enforce; audit and off leave the DB un-policied", async () => {
+    const enforceDb = { $executeRawUnsafe: vi.fn().mockResolvedValue(0) };
+    await provisionRlsPolicies(enforceDb, "enforce");
+    expect(enforceDb.$executeRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining("ENABLE ROW LEVEL SECURITY"),
     );
+    expect(enforceDb.$executeRawUnsafe).not.toHaveBeenCalledWith(
+      expect.stringContaining("DISABLE ROW LEVEL SECURITY"),
+    );
 
+    // audit observes at the application layer only — Postgres cannot "log-only"
+    // a denial, so it must not install policies (which would silently zero out
+    // the not-yet-org-scoped worker sweeps).
     const auditDb = { $executeRawUnsafe: vi.fn().mockResolvedValue(0) };
     await provisionRlsPolicies(auditDb, "audit");
     expect(auditDb.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining("DISABLE ROW LEVEL SECURITY"),
+    );
+    expect(auditDb.$executeRawUnsafe).not.toHaveBeenCalledWith(
       expect.stringContaining("ENABLE ROW LEVEL SECURITY"),
     );
 
@@ -88,5 +98,45 @@ describe("provisionRlsPolicies", () => {
     expect(offDb.$executeRawUnsafe).not.toHaveBeenCalledWith(
       expect.stringContaining("ENABLE ROW LEVEL SECURITY"),
     );
+  });
+
+  it("reconciles audit → enforce → off idempotently", async () => {
+    // A single mock receives the whole sequence, proving each mode drives the
+    // full ENABLE/FORCE+policy set (enforce) or the DROP+DISABLE set (audit/off).
+    const db = { $executeRawUnsafe: vi.fn().mockResolvedValue(0) };
+
+    await provisionRlsPolicies(db, "audit");
+    await provisionRlsPolicies(db, "enforce");
+    await provisionRlsPolicies(db, "off");
+
+    const calls = db.$executeRawUnsafe.mock.calls.map((call) => String(call[0]));
+    // audit + off each drop the policy and disable RLS on every table; enforce
+    // enables + forces + drops + creates on every table.
+    expect(calls.filter((c) => c.includes("DISABLE ROW LEVEL SECURITY"))).toHaveLength(
+      TENANT_TABLES.length * 2,
+    );
+    expect(calls.filter((c) => c.includes("ENABLE ROW LEVEL SECURITY"))).toHaveLength(
+      TENANT_TABLES.length,
+    );
+    expect(calls.filter((c) => c.includes("FORCE ROW LEVEL SECURITY"))).toHaveLength(
+      TENANT_TABLES.length,
+    );
+    expect(
+      calls.filter((c) => c.startsWith(`DROP POLICY IF EXISTS ${RLS_POLICY_NAME}`)),
+    ).toHaveLength(TENANT_TABLES.length * 3);
+    expect(calls.filter((c) => c.startsWith(`CREATE POLICY ${RLS_POLICY_NAME}`))).toHaveLength(
+      TENANT_TABLES.length,
+    );
+  });
+});
+
+describe("assertEnforceReady", () => {
+  it("throws a clear message while worker sweeps are not org-scoped", () => {
+    expect(() => assertEnforceReady(false)).toThrow(/PR 11/);
+    expect(() => assertEnforceReady(false)).toThrow(/TENANCY_RLS=enforce/);
+  });
+
+  it("passes once worker sweeps are org-scoped", () => {
+    expect(() => assertEnforceReady(true)).not.toThrow();
   });
 });
