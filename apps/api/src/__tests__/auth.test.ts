@@ -11,6 +11,10 @@ const mockPrisma = vi.hoisted(() => ({
   member: {
     name: "Member",
     findFirst: vi.fn(),
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
+  program: {
     findUnique: vi.fn(),
   },
   magicLinkToken: {
@@ -104,7 +108,7 @@ beforeEach(async () => {
 
 describe("POST /auth/magic-link", () => {
   it("returns 200 for a known email", async () => {
-    mockPrisma.member.findFirst.mockResolvedValueOnce(memberFixture);
+    mockPrisma.member.findMany.mockResolvedValueOnce([memberFixture]);
     mockPrisma.magicLinkToken.create.mockResolvedValue({
       id: "tok-1",
       memberId: "mem-1",
@@ -125,7 +129,7 @@ describe("POST /auth/magic-link", () => {
   });
 
   it("returns 200 for an unknown email (prevents enumeration)", async () => {
-    mockPrisma.member.findFirst.mockResolvedValueOnce(null);
+    mockPrisma.member.findMany.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: "POST",
@@ -146,6 +150,71 @@ describe("POST /auth/magic-link", () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it("does not send a link when the email matches multiple programs (off mode)", async () => {
+    mockPrisma.member.findMany.mockResolvedValueOnce([
+      { ...memberFixture, programId: "prog_a" },
+      { ...memberFixture, programId: "prog_b" },
+    ]);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/magic-link",
+      payload: { email: "shared@example.com" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+    expect(mockPrisma.magicLinkToken.create).not.toHaveBeenCalled();
+  });
+
+  it("scopes the search to a valid programId (off mode)", async () => {
+    mockPrisma.program.findUnique.mockResolvedValue({ id: "prog_dev" });
+    mockPrisma.member.findFirst.mockResolvedValueOnce(memberFixture);
+    mockPrisma.magicLinkToken.create.mockResolvedValue({});
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/magic-link",
+      headers: { "x-program-id": "prog_dev" },
+      payload: { email: "carlos@example.com" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.member.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ email: "carlos@example.com", programId: "prog_dev" }),
+      }),
+    );
+    expect(mockPrisma.member.findMany).not.toHaveBeenCalled();
+  });
+
+  it("falls back to an all-programs search when the programId does not exist (off mode)", async () => {
+    mockPrisma.program.findUnique.mockResolvedValue(null);
+    mockPrisma.member.findMany.mockResolvedValueOnce([memberFixture]);
+    mockPrisma.magicLinkToken.create.mockResolvedValue({});
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/magic-link",
+      headers: { "x-program-id": "prog_nope" },
+      payload: { email: "carlos@example.com" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.member.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ email: "carlos@example.com" }),
+      }),
+    );
+    // The scoped findFirst branch must not have run (its where carries email+programId;
+    // the notification's own findFirst looks up by id only).
+    expect(mockPrisma.member.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ email: "carlos@example.com" }),
+      }),
+    );
   });
 });
 
@@ -328,7 +397,7 @@ describe("POST /auth/logout", () => {
 describe("magic-link full flow", () => {
   it("magic-link → verify → me → logout", async () => {
     // 1. Request magic link
-    mockPrisma.member.findFirst.mockResolvedValueOnce(memberFixture);
+    mockPrisma.member.findMany.mockResolvedValueOnce([memberFixture]);
     mockPrisma.magicLinkToken.create.mockResolvedValue({
       id: "tok-flow",
       memberId: "mem-1",

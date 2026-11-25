@@ -11,6 +11,7 @@ const mockPrisma = vi.hoisted(() => ({
   member: {
     name: "Member",
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn(),
   },
@@ -104,11 +105,13 @@ beforeEach(async () => {
 
 describe("POST /auth/magic-link — locale persistence", () => {
   it("persists locale on existing member when member.locale is null and locale is supported", async () => {
-    mockPrisma.member.findFirst.mockResolvedValueOnce({
-      ...memberFixture,
-      locale: null,
-      program: programFixture,
-    });
+    mockPrisma.member.findMany.mockResolvedValueOnce([
+      {
+        ...memberFixture,
+        locale: null,
+        program: programFixture,
+      },
+    ]);
     mockPrisma.member.update.mockResolvedValue({
       ...memberFixture,
       locale: "en-US",
@@ -136,11 +139,13 @@ describe("POST /auth/magic-link — locale persistence", () => {
   });
 
   it("does not overwrite locale when member already has one", async () => {
-    mockPrisma.member.findFirst.mockResolvedValueOnce({
-      ...memberFixture,
-      locale: "es-MX",
-      program: programFixture,
-    });
+    mockPrisma.member.findMany.mockResolvedValueOnce([
+      {
+        ...memberFixture,
+        locale: "es-MX",
+        program: programFixture,
+      },
+    ]);
     mockPrisma.magicLinkToken.create.mockResolvedValue({
       id: "tok-2",
       memberId: "mem-1",
@@ -161,11 +166,13 @@ describe("POST /auth/magic-link — locale persistence", () => {
   });
 
   it("does not persist locale when it is not in program.supportedLocales", async () => {
-    mockPrisma.member.findFirst.mockResolvedValueOnce({
-      ...memberFixture,
-      locale: null,
-      program: { ...programFixture, supportedLocales: ["es-MX"] },
-    });
+    mockPrisma.member.findMany.mockResolvedValueOnce([
+      {
+        ...memberFixture,
+        locale: null,
+        program: { ...programFixture, supportedLocales: ["es-MX"] },
+      },
+    ]);
     mockPrisma.magicLinkToken.create.mockResolvedValue({
       id: "tok-3",
       memberId: "mem-1",
@@ -186,11 +193,13 @@ describe("POST /auth/magic-link — locale persistence", () => {
   });
 
   it("does not persist script tag as locale and does not 500", async () => {
-    mockPrisma.member.findFirst.mockResolvedValueOnce({
-      ...memberFixture,
-      locale: null,
-      program: programFixture,
-    });
+    mockPrisma.member.findMany.mockResolvedValueOnce([
+      {
+        ...memberFixture,
+        locale: null,
+        program: programFixture,
+      },
+    ]);
     mockPrisma.magicLinkToken.create.mockResolvedValue({
       id: "tok-xss",
       memberId: "mem-1",

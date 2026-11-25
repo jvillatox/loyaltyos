@@ -214,4 +214,37 @@ describe("pre-context entry points (TENANCY_RLS=enforce)", () => {
 
     expect(mockPrisma.program.findUnique).not.toHaveBeenCalled();
   });
+
+  it("magic-link under enforce without a programId returns generic 200 and sends no link", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/magic-link",
+      payload: { email: "carlos@example.com" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+    expect(mockPrisma.magicLinkToken.create).not.toHaveBeenCalled();
+    // No program → no org resolution, no member lookup.
+    expect(mockPrisma.$queryRawUnsafe).not.toHaveBeenCalled();
+    expect(mockPrisma.member.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("magic-link under enforce with a nonexistent program returns generic 200 and sends no link", async () => {
+    // `app_org_for_program` finds nothing and the direct Program fallback fails,
+    // so the resolver throws — the route must still answer generically.
+    mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
+    mockPrisma.program.findUnique.mockResolvedValue(null);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/magic-link",
+      headers: { "x-program-id": "prog_nope" },
+      payload: { email: "carlos@example.com" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+    expect(mockPrisma.magicLinkToken.create).not.toHaveBeenCalled();
+  });
 });

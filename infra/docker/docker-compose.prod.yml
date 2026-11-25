@@ -97,6 +97,10 @@ services:
       dockerfile: apps/portal/Dockerfile
     ports:
       - "${PORT_PORTAL:-5174}:80"
+    environment:
+      # Program id the portal sends as X-Program-Id before login. Written into
+      # /config.js at boot. Leave empty to require a ?program= link.
+      PORTAL_PROGRAM_ID: ${PORTAL_PROGRAM_ID:-}
     restart: unless-stopped
 
   # ── Monitoring (start with: docker compose --profile monitoring up) ──────

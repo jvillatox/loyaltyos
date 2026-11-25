@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../App";
 import i18n from "../lib/i18n";
@@ -30,7 +30,12 @@ function login() {
 describe("Portal", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    window.__LOYALTYOS_CONFIG__ = undefined;
     void i18n.changeLanguage("en-US");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders home page with bottom navigation", () => {
@@ -54,9 +59,39 @@ describe("Portal", () => {
   });
 
   it("profile page renders login form when not authenticated", () => {
+    window.__LOYALTYOS_CONFIG__ = { programId: "prog_001" };
     renderApp("/profile");
     expect(screen.getByLabelText("Email")).toBeDefined();
     expect(screen.getByRole("button", { name: /Send Magic Link/i })).toBeDefined();
+  });
+
+  it("profile page shows an error when no program is configured", () => {
+    renderApp("/profile");
+    expect(screen.getByText(/not configured with a program/i)).toBeDefined();
+    expect(screen.queryByLabelText("Email")).toBeNull();
+  });
+
+  it("login sends the runtime-configured program id, not prog_001", async () => {
+    window.__LOYALTYOS_CONFIG__ = { programId: "prog_acme" };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => ({ data: {} }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderApp("/profile");
+    await userEvent.type(screen.getByLabelText("Email"), "carlos@example.com");
+    await userEvent.click(screen.getByRole("button", { name: /Send Magic Link/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/auth/magic-link",
+        expect.objectContaining({
+          headers: expect.objectContaining({ "X-Program-Id": "prog_acme" }),
+        }),
+      );
+    });
   });
 
   it("profile page shows sign out when authenticated", () => {

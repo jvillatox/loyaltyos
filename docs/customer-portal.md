@@ -31,9 +31,31 @@ Copy from the API `.env.example`:
 # Auth (magic-link emails via Resend)
 RESEND_API_KEY=re_your_resend_key
 
-# The portal needs the API URL
-VITE_API_URL=http://localhost:3002
+# The portal's program id (sent as X-Program-Id before login)
+PORTAL_PROGRAM_ID=prog_dev
 ```
+
+## Program configuration
+
+The portal must know which program it serves before login, since the magic-link
+email lookup is scoped to a program. The program id is resolved in this order:
+
+1. `sessionStorage["program-id"]` — set after a successful login, so the
+   authenticated session keeps the member's actual program.
+2. `?program=` URL query param — lets one portal deployment serve several
+   programs via links.
+3. `window.__LOYALTYOS_CONFIG__.programId` — written into `/config.js`.
+
+The production image writes `/config.js` at container boot from the
+`PORTAL_PROGRAM_ID` environment variable, so the program can be changed without
+rebuilding the image. In Docker Compose, set `PORTAL_PROGRAM_ID` in the
+environment; in Helm, set `portal.programId`.
+
+In `pnpm dev` (Vite), edit `apps/portal/public/config.js` directly or open the
+portal with a `?program=` link.
+
+If none of the three sources resolve a program, the portal shows a clear error on
+the sign-in screen instead of sending an invented program id.
 
 ## Auth Flow
 
@@ -43,12 +65,14 @@ VITE_API_URL=http://localhost:3002
 4. Subsequent requests use the session cookie automatically.
 
 ```typescript
-// Login request
-POST /api/v1/auth/login
-{ "email": "member@example.com", "programId": "prog_dev" }
+// Request a magic link (X-Program-Id scopes the email lookup to a program)
+POST /api/v1/auth/magic-link
+X-Program-Id: prog_dev
+{ "email": "member@example.com" }
 
-// Verify token (called by the magic-link page)
-GET /api/v1/auth/verify?token=...&programId=prog_dev
+// Verify the token (called by the magic-link page)
+POST /api/v1/auth/verify-magic-link
+{ "token": "..." }
 ```
 
 In development, magic links appear in MailHog at http://localhost:8025.

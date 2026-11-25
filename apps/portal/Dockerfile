@@ -27,6 +27,11 @@ RUN rm -rf /usr/share/nginx/html/*
 COPY --from=builder /app/apps/portal/dist /usr/share/nginx/html
 COPY apps/portal/nginx.conf /etc/nginx/conf.d/default.conf
 
+# Runtime config generator — writes /usr/share/nginx/html/config.js from
+# PORTAL_PROGRAM_ID at boot, then starts nginx.
+COPY apps/portal/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # curl needed for HEALTHCHECK
 RUN apk add --no-cache curl
 
@@ -38,6 +43,8 @@ RUN addgroup -S app && adduser -S app -G app && \
     chown -R app:app /var/run/nginx.pid
 
 USER app
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 LABEL org.opencontainers.image.source="https://github.com/jvillatox/loyaltyos"
 LABEL org.opencontainers.image.description="LoyaltyOS Customer Portal — React PWA (Vite + i18n)"

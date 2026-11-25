@@ -363,6 +363,7 @@
     "email": "Correo",
     "sendLink": "Enviar Enlace Mágico",
     "checkEmail": "Revisa tu correo para el enlace de acceso",
+    "noProgramConfigured": "Este portal no está configurado con un programa. Configura PORTAL_PROGRAM_ID o ábrelo con un enlace ?program=.",
     "noTransactions": "Sin transacciones aún",
     "noRewards": "Sin recompensas disponibles",
     "noBadges": "Sin insignias aún",
