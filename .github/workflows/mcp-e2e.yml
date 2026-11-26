@@ -3,12 +3,7 @@ name: MCP E2E
 on:
   workflow_call:
   push:
-    branches: [main]
-    paths:
-      - "apps/mcp-server/**"
-      - "packages/api-contract/**"
-      - "apps/api/src/routes/**"
-      - "apps/api/src/__tests__/mcp.e2e.test.ts"
+    branches: [main, "release/**"]
   pull_request:
     branches: [main]
     paths:
