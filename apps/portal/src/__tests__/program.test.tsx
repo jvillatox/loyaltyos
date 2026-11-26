@@ -17,15 +17,16 @@ describe("resolveProgramId", () => {
     expect(resolveProgramId()).toBeNull();
   });
 
-  it("prefers sessionStorage program-id (post-login)", () => {
+  it("prefers the ?program= URL param over the saved session program", () => {
+    sessionStorage.setItem("program-id", "prog_session");
+    window.history.replaceState({}, "", "/?program=prog_url");
+    expect(resolveProgramId()).toBe("prog_url");
+  });
+
+  it("falls back to sessionStorage program-id when there is no URL param", () => {
     sessionStorage.setItem("program-id", "prog_session");
     setConfig({ programId: "prog_config" });
     expect(resolveProgramId()).toBe("prog_session");
-  });
-
-  it("falls back to the ?program= URL param", () => {
-    window.history.replaceState({}, "", "/?program=prog_url");
-    expect(resolveProgramId()).toBe("prog_url");
   });
 
   it("falls back to the runtime config", () => {
@@ -37,5 +38,28 @@ describe("resolveProgramId", () => {
     window.history.replaceState({}, "", "/?program=prog_url");
     setConfig({ programId: "prog_config" });
     expect(resolveProgramId()).toBe("prog_url");
+  });
+
+  it("closes the previous session when ?program= differs from the saved program", () => {
+    sessionStorage.setItem("auth-token", "tok");
+    sessionStorage.setItem("member-id", "mem-1");
+    sessionStorage.setItem("program-id", "prog_old");
+    window.history.replaceState({}, "", "/?program=prog_new");
+
+    expect(resolveProgramId()).toBe("prog_new");
+    expect(sessionStorage.getItem("program-id")).toBe("prog_new");
+    expect(sessionStorage.getItem("auth-token")).toBeNull();
+    expect(sessionStorage.getItem("member-id")).toBeNull();
+  });
+
+  it("keeps the session when ?program= matches the saved program", () => {
+    sessionStorage.setItem("auth-token", "tok");
+    sessionStorage.setItem("member-id", "mem-1");
+    sessionStorage.setItem("program-id", "prog_same");
+    window.history.replaceState({}, "", "/?program=prog_same");
+
+    expect(resolveProgramId()).toBe("prog_same");
+    expect(sessionStorage.getItem("auth-token")).toBe("tok");
+    expect(sessionStorage.getItem("member-id")).toBe("mem-1");
   });
 });
