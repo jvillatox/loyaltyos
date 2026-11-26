@@ -190,6 +190,11 @@ portal:
     pullPolicy: IfNotPresent
     registry: ""
 
+  # -- Program id the portal sends as X-Program-Id before login. Written into
+  # /config.js at container boot from PORTAL_PROGRAM_ID. Leave empty to require
+  # a ?program= link.
+  programId: ""
+
   resources:
     requests:
       cpu: 50m

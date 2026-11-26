@@ -1,3 +1,5 @@
+import { resolveProgramId } from "./program";
+
 const API_BASE = "/api/v1";
 
 export class ApiError extends Error {
@@ -11,14 +13,14 @@ export class ApiError extends Error {
 }
 
 export async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const programId = sessionStorage.getItem("program-id") ?? "prog_001";
+  const programId = resolveProgramId();
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "X-Program-Id": programId,
+      ...(programId ? { "X-Program-Id": programId } : {}),
       ...(options.headers as Record<string, string> | undefined),
     },
   });

@@ -43,6 +43,9 @@ spec:
             - name: http
               containerPort: {{ .Values.portal.service.port }}
               protocol: TCP
+          env:
+            - name: PORTAL_PROGRAM_ID
+              value: {{ .Values.portal.programId | quote }}
           livenessProbe:
             httpGet:
               path: {{ .Values.portal.healthcheck.path }}

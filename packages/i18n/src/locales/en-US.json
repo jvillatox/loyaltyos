@@ -363,6 +363,7 @@
     "email": "Email",
     "sendLink": "Send Magic Link",
     "checkEmail": "Check your email for a sign-in link",
+    "noProgramConfigured": "This portal is not configured with a program. Set PORTAL_PROGRAM_ID or open it with a ?program= link.",
     "noTransactions": "No transactions yet",
     "noRewards": "No rewards available",
     "noBadges": "No badges yet",
