@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
@@ -22,6 +23,7 @@ function generateToken(): string {
 const magicLinkSchema = z.object({
   email: z.string().email().toLowerCase(),
   locale: z.string().optional(),
+  programId: z.string().optional(),
 });
 
 const verifySchema = z.object({
@@ -62,18 +64,65 @@ async function triggerMagicLinkEmail(
   }
 }
 
+const memberInclude = {
+  program: { select: { defaultLocale: true, supportedLocales: true } },
+};
+
+type MagicLinkMember = Prisma.MemberGetPayload<{ include: typeof memberInclude }>;
+
+// Resolves the member a magic-link request should target, without ever revealing
+// to the caller whether (or where) an email exists. A valid programId scopes the
+// search to that program; otherwise the search spans all programs. Returns
+// `ambiguous` when the email matches more than one program so the handler can
+// refuse to send a link.
+async function resolveMagicLinkMember(
+  email: string,
+  requestedProgramId: string | null,
+): Promise<{ member: MagicLinkMember | null; ambiguous: boolean }> {
+  if (requestedProgramId) {
+    const program = await prisma.program.findUnique({
+      where: { id: requestedProgramId },
+      select: { id: true },
+    });
+    if (program) {
+      const member = await prisma.member.findFirst({
+        where: { email, programId: requestedProgramId, deletedAt: null },
+        include: memberInclude,
+      });
+      return { member, ambiguous: false };
+    }
+  }
+
+  const members = await prisma.member.findMany({
+    where: { email, deletedAt: null },
+    include: memberInclude,
+  });
+  if (members.length === 1) {
+    return { member: members[0] ?? null, ambiguous: false };
+  }
+  if (members.length > 1) {
+    return { member: null, ambiguous: true };
+  }
+  return { member: null, ambiguous: false };
+}
+
 export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => void): void {
   /** POST /auth/magic-link — request a sign-in link (always 200 OK) */
   app.post(
     "/auth/magic-link",
     { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { email, locale: requestLocale } = magicLinkSchema.parse(request.body);
+      const {
+        email,
+        locale: requestLocale,
+        programId: bodyProgramId,
+      } = magicLinkSchema.parse(request.body);
 
-      const member = await prisma.member.findFirst({
-        where: { email, deletedAt: null },
-        include: { program: { select: { defaultLocale: true, supportedLocales: true } } },
-      });
+      const headerProgramId = request.headers["x-program-id"];
+      const requestedProgramId =
+        bodyProgramId ?? (typeof headerProgramId === "string" ? headerProgramId : null);
+
+      const { member, ambiguous } = await resolveMagicLinkMember(email, requestedProgramId);
 
       if (member) {
         const programLocales = member.program.supportedLocales;
@@ -107,6 +156,13 @@ export function authRoutes(app: FastifyInstance, _opts: unknown, done: () => voi
 
         // Fire and forget with locale in context
         void triggerMagicLinkEmail(member.id, member.programId, magicLinkUrl, effectiveLocale);
+      } else if (ambiguous) {
+        // Same generic response as an unknown email — never reveal that the email
+        // is shared across programs, and never send a link to a guessed program.
+        request.log.warn(
+          { email },
+          "Magic link email matches multiple programs; not sending a link",
+        );
       } else {
         // No-op for non-existent emails: prevent enumeration
         request.log.info({ email }, "Magic link requested for unknown email");
