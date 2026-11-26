@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.3] - 2026-11-26
+
+### Fixed
+
+- **The customer portal no longer assumes a hardcoded program.** It previously
+  fell back to a fixed `prog_001` program id when none was configured. It now
+  resolves the program in this order: the `?program=` URL query param, the
+  program stored for the current session, then the runtime configuration
+  (`/config.js`, written at container boot from `PORTAL_PROGRAM_ID`). When the
+  `?program=` param names a program other than the one stored for the session,
+  the previous session is closed. If none of the three resolve, the sign-in
+  screen shows a clear error instead of inventing a program id.
+- **The magic link is never sent to the wrong program.** When `POST
+/auth/magic-link` receives a valid program id, the email lookup is scoped to
+  that program; when it does not, the lookup spans all programs. If the same
+  email exists in more than one program, no link is sent — the same generic
+  response as an unknown email — so a link is never issued against a guessed
+  program.
+
+### Upgrade notes
+
+1. **Set `PORTAL_PROGRAM_ID` for the portal.** The portal image writes this into
+   `/config.js` at boot, so the program can be changed without rebuilding the
+   image (Docker Compose `PORTAL_PROGRAM_ID`, Helm `portal.programId`). If it is
+   left empty, the portal requires a `?program=` link and otherwise shows a clear
+   error on the sign-in screen.
+
 ## [1.9.2] - 2026-11-19
 
 > **Security release.** All deployments of v1.9.1 and earlier should upgrade. See advisory GHSA-388r-m42q-5f6x.
