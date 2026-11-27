@@ -1,11 +1,11 @@
-import type { PrismaClient } from "@prisma/client";
 import { buildTools } from "@loyaltyos/ai";
-import { hashPassword } from "@loyaltyos/core";
+import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
 import { createInjectLoopbackFetch } from "../routes/admin/ai.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // Regression tests for the AI-companion breakage introduced by the
 // admin-session guard (PR #42). The AI tools in packages/ai call /admin/*
@@ -52,14 +52,12 @@ beforeAll(async () => {
 
   const password = `pw-${suffix}`;
   adminEmail = `ai-admin-${suffix}@loyaltyos.dev`;
-  await prisma.adminUser.create({
-    data: {
-      email: adminEmail,
-      name: "AI Admin",
-      passwordHash: await hashPassword(password),
-      role: "SUPER_ADMIN",
-      programId: programAId,
-    },
+  await createTestAdmin(prisma, {
+    email: adminEmail,
+    name: "AI Admin",
+    password,
+    role: "SUPER_ADMIN",
+    programId: programAId,
   });
 
   const login = await app.inject({
@@ -77,11 +75,7 @@ afterAll(async () => {
     .deleteMany({ where: { programId: { in: [programAId, programBId] } } })
     .catch(() => {});
   await prisma.apiKey.deleteMany({ where: { programId: programAId } }).catch(() => {});
-  const admin = await prisma.adminUser.findUnique({ where: { email: adminEmail } });
-  if (admin) {
-    await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-    await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
-  }
+  await deleteTestAdmin(prisma, adminEmail);
   await prisma.program
     .deleteMany({ where: { id: { in: [programAId, programBId] } } })
     .catch(() => {});

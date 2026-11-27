@@ -3,8 +3,9 @@
 import { hashPassword } from "@loyaltyos/core";
 import { PrismaClient } from "@prisma/client";
 
+import { createAdminUser } from "../src/admin-create.js";
 import { backfillOrganizationColumns } from "../src/lib/tenancy-org.js";
-import { ensureDefaultOrganization, syncAdminUserToTenancy } from "../src/lib/tenancy-users.js";
+import { ensureDefaultOrganization } from "../src/lib/tenancy-users.js";
 
 const prisma = new PrismaClient({
   log: ["warn", "error"],
@@ -74,42 +75,35 @@ async function main(): Promise<void> {
   });
   console.log(`Created API key: ${apiKey.key}`);
 
-  // === Admin User ===
+  // === Admin Users ===
+  // Created via the inverted path (PR 7): the tenancy User + default-org
+  // membership are the source of truth, and the AdminUser is the reverse mirror.
   const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD ?? "admin123";
   const hashedPassword = await hashPassword(adminPassword);
-  const admin = await prisma.adminUser.create({
-    data: {
-      email: "admin@loyaltyos.dev",
-      name: "Admin Demo",
-      role: "SUPER_ADMIN",
-      passwordHash: hashedPassword,
-      programId: program.id,
-    },
+  const admin = await createAdminUser(prisma, {
+    email: "admin@loyaltyos.dev",
+    name: "Admin Demo",
+    role: "SUPER_ADMIN",
+    programId: program.id,
+    passwordHash: hashedPassword,
   });
-  await syncAdminUserToTenancy(prisma, admin);
   console.log(`Created admin user: ${admin.email}`);
 
   // Demo users for the other two roles (RBAC).
-  const operator = await prisma.adminUser.create({
-    data: {
-      email: "operator@loyaltyos.dev",
-      name: "Operator Demo",
-      role: "OPERATOR",
-      passwordHash: hashedPassword,
-      programId: program.id,
-    },
+  const operator = await createAdminUser(prisma, {
+    email: "operator@loyaltyos.dev",
+    name: "Operator Demo",
+    role: "OPERATOR",
+    programId: program.id,
+    passwordHash: hashedPassword,
   });
-  await syncAdminUserToTenancy(prisma, operator);
-  const analyst = await prisma.adminUser.create({
-    data: {
-      email: "analyst@loyaltyos.dev",
-      name: "Analyst Demo",
-      role: "ANALYST",
-      passwordHash: hashedPassword,
-      programId: program.id,
-    },
+  const analyst = await createAdminUser(prisma, {
+    email: "analyst@loyaltyos.dev",
+    name: "Analyst Demo",
+    role: "ANALYST",
+    programId: program.id,
+    passwordHash: hashedPassword,
   });
-  await syncAdminUserToTenancy(prisma, analyst);
   console.log(
     `Created admin users: ${admin.email} (SUPER_ADMIN), ${operator.email} (OPERATOR), ${analyst.email} (ANALYST)`,
   );

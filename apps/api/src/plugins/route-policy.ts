@@ -14,7 +14,7 @@ function resolvePrincipal(request: FastifyRequest): Principal | null {
   // effective role is adminRole, which is null when the stored role is missing
   // or not a recognized role. Such a session must be denied, not treated as
   // SERVER — there is no principal fallback.
-  if (request.adminId != null) {
+  if (request.userId != null) {
     return request.adminRole;
   }
 

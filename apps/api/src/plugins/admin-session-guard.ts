@@ -32,7 +32,7 @@ async function adminSessionGuardImpl(app: FastifyInstance): Promise<void> {
       done();
       return;
     }
-    if (request.adminId == null) {
+    if (request.userId == null) {
       done(new LoyaltyError("FORBIDDEN", 403));
       return;
     }

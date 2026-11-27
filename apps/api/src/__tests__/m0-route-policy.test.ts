@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { hashPassword } from "@loyaltyos/core";
 import { ADMIN_ROLES } from "@loyaltyos/permissions";
 import type { AdminRole } from "@loyaltyos/permissions";
 import type { PrismaClient } from "@prisma/client";
@@ -11,6 +10,7 @@ import { buildApp } from "../app.js";
 import { coalitionService } from "../lib/coalition-setup.js";
 import { PRINCIPALS, routePolicy } from "../lib/route-policy.js";
 import type { PolicyEntry, Principal } from "../lib/route-policy.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // M0 point 1 — deny-by-default route policy for non-/admin routes.
 //
@@ -241,14 +241,12 @@ function isInScope(entry: { method: string; url: string }): boolean {
 async function loginAs(role: AdminRole): Promise<string> {
   const email = `m0p-${role.toLowerCase()}-${suffix}@loyaltyos.dev`;
   const password = `pw-${suffix}`;
-  await prisma.adminUser.create({
-    data: {
-      email,
-      name: `M0P ${role}`,
-      passwordHash: await hashPassword(password),
-      role,
-      programId,
-    },
+  await createTestAdmin(prisma, {
+    email,
+    name: `M0P ${role}`,
+    password,
+    role,
+    programId,
   });
   const login = await app.inject({
     method: "POST",
@@ -388,13 +386,7 @@ afterAll(async () => {
   await prisma.member.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.apiKey.deleteMany({ where: { programId } }).catch(() => {});
   for (const role of ADMIN_ROLES) {
-    const admin = await prisma.adminUser.findUnique({
-      where: { email: `m0p-${role.toLowerCase()}-${suffix}@loyaltyos.dev` },
-    });
-    if (admin) {
-      await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-      await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
-    }
+    await deleteTestAdmin(prisma, `m0p-${role.toLowerCase()}-${suffix}@loyaltyos.dev`);
   }
   await prisma.auditLog.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.program.delete({ where: { id: programId } }).catch(() => {});
@@ -640,13 +632,13 @@ describe("M0 route policy — resolvePrincipal has no fallback", () => {
 
   it("an authenticated admin with a null role is denied (403) on a MUTATE route", async () => {
     // The AdminRole Prisma enum cannot store an invalid role, so the "admin with
-    // null role" path is defensive. Simulate it (adminId set, adminRole null)
+    // null role" path is defensive. Simulate it (userId set, adminRole null)
     // with an onRequest hook on a throwaway app; auth still passes via a valid
-    // SERVER key, but resolvePrincipal must key off adminId/role — not fall back
+    // SERVER key, but resolvePrincipal must key off userId/role — not fall back
     // to SERVER.
     const probe = await buildApp({ logger: false });
     probe.addHook("onRequest", async (request) => {
-      request.adminId = "defensive-admin";
+      request.userId = "defensive-admin";
       request.adminRole = null;
       request.programId = programId;
       request.apiKeyScope = "SERVER";

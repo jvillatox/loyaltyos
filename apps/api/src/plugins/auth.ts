@@ -7,25 +7,41 @@ import {
   resolveTenantRlsMode,
   runWithTenant,
 } from "@loyaltyos/tenancy";
-import type { AuditActorType } from "@prisma/client";
+import type { AuditActorType, OrganizationMembership } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 
 import { prisma } from "../db.js";
+import {
+  resolveAdminUserByEmail,
+  resolveUserByEmail,
+  resolveUserIdForAdminUser,
+} from "../lib/admin-user-bridge.js";
 import type { AuditActor } from "../lib/audit.js";
-import { adminLucia } from "../lib/auth/admin-lucia.js";
+import { adminAuthMode, adminLucia } from "../lib/auth/admin-lucia.js";
 import { lucia } from "../lib/auth/lucia.js";
 import { LoyaltyError } from "../lib/errors.js";
 import { MEMBER_TOKEN_PREFIX } from "../lib/member-session-token.js";
 import { hashToken, PAT_PREFIX } from "../lib/personal-access-token.js";
+import {
+  resolveDefaultMembership,
+  resolveDefaultProgramId,
+  validateProgramInMembership,
+} from "../lib/tenancy-users.js";
 
 declare module "fastify" {
   interface FastifyRequest {
     programId: string;
     apiKeyScope: string;
     memberId: string | null;
+    // Identity-root User.id (PR 7). Set for any authenticated admin (session or
+    // PAT); distinct from `adminId` (the legacy AdminUser.id bridge, nullable).
+    userId: string | null;
     adminId: string | null;
     adminRole: AdminRole | null;
+    // Active organization id resolved from the admin's membership. Null in
+    // `legacy` mode where the org is derived from programId instead.
+    organizationId: string | null;
     patId: string | null;
     memberTokenReadOnly: boolean;
     actor: AuditActor;
@@ -38,13 +54,40 @@ function safeTokenEqual(provided: string, expected: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+// Resolves the active program for an admin session in `user` mode (rule 8). A
+// client-supplied `X-Program-Id` is validated strictly (403 on a program outside
+// the membership scope or the active org); otherwise the session's persisted
+// program is used when still valid, falling back to the deterministic default.
+async function resolveSessionProgramId(
+  membership: OrganizationMembership,
+  sessionProgramId: string | null,
+  headerProgramId: string | undefined,
+  preferredProgramId: string | null,
+): Promise<string | null> {
+  if (headerProgramId) {
+    if (!(await validateProgramInMembership(prisma, membership, headerProgramId))) {
+      throw new LoyaltyError("FORBIDDEN", 403);
+    }
+    return headerProgramId;
+  }
+  if (
+    sessionProgramId &&
+    (await validateProgramInMembership(prisma, membership, sessionProgramId))
+  ) {
+    return sessionProgramId;
+  }
+  return resolveDefaultProgramId(prisma, membership, preferredProgramId);
+}
+
 // eslint-disable-next-line @typescript-eslint/require-await
 async function authPluginImpl(app: FastifyInstance): Promise<void> {
   app.decorateRequest("programId", "");
   app.decorateRequest("apiKeyScope", "");
   app.decorateRequest("memberId", null);
+  app.decorateRequest("userId", null);
   app.decorateRequest("adminId", null);
   app.decorateRequest("adminRole", null);
+  app.decorateRequest("organizationId", null);
   app.decorateRequest("patId", null);
   app.decorateRequest("memberTokenReadOnly", false);
   app.decorateRequest("actor", { type: "SYSTEM" as AuditActorType, id: "anonymous" });
@@ -103,15 +146,85 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
     if (cookieHeader) {
       const adminSessionId = adminLucia.readSessionCookie(cookieHeader);
       if (adminSessionId) {
-        const { user: adminUser } = await adminLucia.validateSession(adminSessionId);
-        if (adminUser) {
-          request.adminId = adminUser.id;
-          request.adminRole =
-            adminUser.role != null && isAdminRole(adminUser.role) ? adminUser.role : null;
-          request.programId = adminUser.programId;
-          request.apiKeyScope = "SERVER";
-          request.actor = { type: "ADMIN_USER", id: adminUser.id };
-          return;
+        // `adminLucia` shares Lucia's global `Register.Lucia` types, which are
+        // derived from the member lucia (lib/auth/lucia.ts) and therefore lack the
+        // admin-only fields (`status`, `locale`, `activeOrganizationId`,
+        // `activeProgramId`). The adapter targets `User` and persists the admin
+        // session attributes, so cast to the admin shape actually returned here.
+        const { session, user } = (await adminLucia.validateSession(adminSessionId)) as unknown as {
+          session: { activeOrganizationId: string | null; activeProgramId: string | null };
+          user: {
+            id: string;
+            email: string | null;
+            name: string | null;
+            locale: string | null;
+            status: string | null;
+          } | null;
+        };
+        if (user) {
+          const email = user.email;
+          if (email) {
+            const mode = adminAuthMode();
+            if (mode === "user") {
+              // Per-request verification (no caching): the User is read fresh by
+              // validateSession; the membership is read fresh here, so a disabled
+              // User/membership or role change takes effect on the next request.
+              if (user.status !== "ACTIVE") {
+                throw new LoyaltyError("UNAUTHORIZED", 401);
+              }
+
+              const activeOrgId = session.activeOrganizationId ?? null;
+              const membership = activeOrgId
+                ? await prisma.organizationMembership.findUnique({
+                    where: {
+                      userId_organizationId: { userId: user.id, organizationId: activeOrgId },
+                    },
+                  })
+                : await resolveDefaultMembership(prisma, { id: user.id, email });
+              if (!membership || membership.status !== "ACTIVE") {
+                throw new LoyaltyError("UNAUTHORIZED", 401);
+              }
+
+              const adminUser = await resolveAdminUserByEmail(prisma, email);
+              const programId = await resolveSessionProgramId(
+                membership,
+                session.activeProgramId ?? null,
+                request.headers["x-program-id"] as string | undefined,
+                adminUser?.programId ?? null,
+              );
+
+              request.userId = user.id;
+              request.adminId = adminUser?.id ?? null;
+              request.adminRole = isAdminRole(membership.role) ? membership.role : null;
+              request.organizationId = membership.organizationId;
+              request.programId = programId ?? "";
+              request.apiKeyScope = "SERVER";
+              request.actor = {
+                type: "ADMIN_USER",
+                id: user.id,
+                adminUserId: adminUser?.id ?? null,
+              };
+              return;
+            }
+
+            // legacy: AdminUser is the source of truth (rollback window).
+            const adminUser = await resolveAdminUserByEmail(prisma, email);
+            if (!adminUser?.isActive) {
+              throw new LoyaltyError("UNAUTHORIZED", 401);
+            }
+            request.userId = user.id;
+            request.adminId = adminUser.id;
+            request.adminRole = isAdminRole(adminUser.role) ? adminUser.role : null;
+            request.organizationId = null;
+            request.programId = adminUser.programId;
+            request.apiKeyScope = "SERVER";
+            request.actor = {
+              type: "ADMIN_USER",
+              id: user.id,
+              adminUserId: adminUser.id,
+            };
+            return;
+          }
         }
       }
     }
@@ -152,10 +265,60 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
         throw Object.assign(new Error("Token owner is inactive"), { statusCode: 401 });
       }
 
-      // A token is bound to its owner's program; a client must not switch tenants.
       const tokenProgramId = request.headers["x-program-id"] as string | undefined;
-      if (tokenProgramId && tokenProgramId !== token.adminUser.programId) {
-        throw new LoyaltyError("FORBIDDEN", 403);
+      const mode = adminAuthMode();
+
+      if (mode === "user") {
+        // PAT stays bound to the owner's org/program: resolve the owner's User via
+        // the email bridge, read the default membership for role/org, and reject
+        // any cross-program `X-Program-Id`.
+        const ownerUser = await resolveUserByEmail(prisma, token.adminUser.email);
+        if (!ownerUser || ownerUser.status !== "ACTIVE") {
+          throw new LoyaltyError("UNAUTHORIZED", 401);
+        }
+        const membership = await resolveDefaultMembership(prisma, {
+          id: ownerUser.id,
+          email: ownerUser.email,
+        });
+        if (!membership || membership.status !== "ACTIVE") {
+          throw new LoyaltyError("UNAUTHORIZED", 401);
+        }
+        if (tokenProgramId && tokenProgramId !== token.adminUser.programId) {
+          throw new LoyaltyError("FORBIDDEN", 403);
+        }
+
+        request.userId = ownerUser.id;
+        request.adminId = token.adminUser.id;
+        request.adminRole = minAdminRole(token.role, membership.role);
+        request.organizationId = membership.organizationId;
+        request.programId = token.adminUser.programId;
+        request.apiKeyScope = "SERVER";
+        request.patId = token.id;
+        request.actor = {
+          type: "ADMIN_USER",
+          id: ownerUser.id,
+          patId: token.id,
+          adminUserId: token.adminUser.id,
+        };
+      } else {
+        // legacy: PAT bound to owner's AdminUser (unchanged behavior).
+        if (tokenProgramId && tokenProgramId !== token.adminUser.programId) {
+          throw new LoyaltyError("FORBIDDEN", 403);
+        }
+        const ownerUserId = await resolveUserIdForAdminUser(prisma, token.adminUser.id);
+        request.userId = ownerUserId;
+        request.adminId = token.adminUser.id;
+        request.adminRole = minAdminRole(token.role, token.adminUser.role);
+        request.organizationId = null;
+        request.programId = token.adminUser.programId;
+        request.apiKeyScope = "SERVER";
+        request.patId = token.id;
+        request.actor = {
+          type: "ADMIN_USER",
+          id: token.adminUser.id,
+          patId: token.id,
+          adminUserId: token.adminUser.id,
+        };
       }
 
       // Avoid a write on every request: refresh lastUsedAt at most once a minute.
@@ -166,15 +329,6 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
           data: { lastUsedAt: now },
         });
       }
-
-      // The effective role is capped by the owner's current role, so demoting
-      // (or deactivating) an admin immediately degrades their tokens.
-      request.adminId = token.adminUser.id;
-      request.adminRole = minAdminRole(token.role, token.adminUser.role);
-      request.programId = token.adminUser.programId;
-      request.apiKeyScope = "SERVER";
-      request.patId = token.id;
-      request.actor = { type: "ADMIN_USER", id: token.adminUser.id, patId: token.id };
       return;
     }
 
@@ -257,7 +411,16 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
       return;
     }
 
+    // An admin session in `user` mode resolves the org directly from the active
+    // membership; otherwise derive it from the program (the pre-context path).
+    const organizationId = request.organizationId;
     const programId = request.programId;
+    if (organizationId) {
+      void runWithTenant({ organizationId, programId: programId || undefined }, () => {
+        done();
+      });
+      return;
+    }
     if (!programId) {
       done();
       return;
@@ -268,8 +431,8 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
     // The short in-memory cache (invalidated by tenancy:move-program) absorbs the
     // round-trip on hot paths.
     resolveOrganizationIdCached(prisma, programId)
-      .then((organizationId) => {
-        void runWithTenant({ organizationId, programId }, () => {
+      .then((resolvedOrganizationId) => {
+        void runWithTenant({ organizationId: resolvedOrganizationId, programId }, () => {
           done();
         });
       })

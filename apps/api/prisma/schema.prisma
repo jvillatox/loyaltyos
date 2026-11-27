@@ -838,7 +838,6 @@ model AdminUser {
 
   program              Program               @relation(fields: [programId], references: [id], onDelete: Restrict)
   auditLogs            AuditLog[]
-  sessions             AdminSession[]
   giftCardBatches      GiftCardBatch[]
   personalAccessTokens PersonalAccessToken[]
 
@@ -890,7 +889,8 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  memberships OrganizationMembership[]
+  memberships   OrganizationMembership[]
+  adminSessions AdminSession[]
 }
 
 model OrganizationMembership {
@@ -940,12 +940,14 @@ model Session {
 }
 
 model AdminSession {
-  id        String   @id
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id                   String   @id
+  userId               String
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+  activeOrganizationId String?
+  activeProgramId      String?
 
-  adminUser AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

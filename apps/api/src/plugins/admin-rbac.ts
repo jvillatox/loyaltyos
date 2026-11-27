@@ -33,7 +33,7 @@ async function adminRbacImpl(app: FastifyInstance): Promise<void> {
   // `/admin/*`. Runs for admin sessions only; API keys and member sessions keep
   // their existing scope rules.
   app.addHook("preHandler", async (request) => {
-    if (request.adminId == null) {
+    if (request.userId == null) {
       return;
     }
 
