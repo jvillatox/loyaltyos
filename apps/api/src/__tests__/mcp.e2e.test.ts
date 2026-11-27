@@ -1,4 +1,3 @@
-import { hashPassword } from "@loyaltyos/core";
 import type { AdminRole } from "@loyaltyos/permissions";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -12,6 +11,7 @@ import {
 
 import { buildApp } from "../app.js";
 import { generateToken } from "../lib/personal-access-token.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // Real-API E2E for the MCP server (issue #48, PR B). Boots the actual Fastify
 // app against Postgres, mints a personal access token per role, and drives each
@@ -74,14 +74,12 @@ beforeAll(async () => {
   const password = `pw-${suffix}`;
   const admins: Record<AdminRole, string> = {} as Record<AdminRole, string>;
   for (const role of ROLES) {
-    const admin = await prisma.adminUser.create({
-      data: {
-        email: `mcp-${role.toLowerCase()}-${suffix}@loyaltyos.dev`,
-        name: `MCP ${role}`,
-        passwordHash: await hashPassword(password),
-        role,
-        programId,
-      },
+    const { admin } = await createTestAdmin(prisma, {
+      email: `mcp-${role.toLowerCase()}-${suffix}@loyaltyos.dev`,
+      name: `MCP ${role}`,
+      password,
+      role,
+      programId,
     });
     admins[role] = admin.id;
   }
@@ -194,7 +192,9 @@ afterAll(async () => {
   await prisma.pointAccount.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.member.deleteMany({ where: { programId } }).catch(() => {});
   await prisma.auditLog.deleteMany({ where: { programId } }).catch(() => {});
-  await prisma.adminUser.deleteMany({ where: { programId } }).catch(() => {});
+  for (const role of ROLES) {
+    await deleteTestAdmin(prisma, `mcp-${role.toLowerCase()}-${suffix}@loyaltyos.dev`);
+  }
   await prisma.program.deleteMany({ where: { id: programId } }).catch(() => {});
 });
 

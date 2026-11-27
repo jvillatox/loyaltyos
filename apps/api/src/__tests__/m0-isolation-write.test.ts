@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import { hashPassword } from "@loyaltyos/core";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
 import { coalitionService } from "../lib/coalition-setup.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // M0 point 3 (writes) — cross-program isolation on write paths.
 //
@@ -60,14 +60,12 @@ beforeAll(async () => {
   // Admin in program A (SUPER_ADMIN reaches every admin by-id route).
   const email = `m0w-admin-${suffix}@loyaltyos.dev`;
   const password = `pw-${suffix}`;
-  const admin = await prisma.adminUser.create({
-    data: {
-      email,
-      name: "M0W Admin",
-      passwordHash: await hashPassword(password),
-      role: "SUPER_ADMIN",
-      programId: progA,
-    },
+  await createTestAdmin(prisma, {
+    email,
+    name: "M0W Admin",
+    password,
+    role: "SUPER_ADMIN",
+    programId: progA,
   });
   const login = await app.inject({
     method: "POST",
@@ -143,14 +141,12 @@ beforeAll(async () => {
   bTermsId = bTerms.id;
 
   // Batch requires a creator admin (FK) + a terms template.
-  const bAdmin = await prisma.adminUser.create({
-    data: {
-      email: `m0w-badmin-${suffix}@loyaltyos.dev`,
-      name: "M0W B Admin",
-      passwordHash: await hashPassword(password),
-      role: "SUPER_ADMIN",
-      programId: progB,
-    },
+  const { admin: bAdmin } = await createTestAdmin(prisma, {
+    email: `m0w-badmin-${suffix}@loyaltyos.dev`,
+    name: "M0W B Admin",
+    password,
+    role: "SUPER_ADMIN",
+    programId: progB,
   });
   const bBatch = await prisma.giftCardBatch.create({
     data: {
@@ -270,16 +266,8 @@ afterAll(async () => {
   await prisma.event.deleteMany({ where: { programId: { in: [progA, progB] } } }).catch(() => {});
   await prisma.member.deleteMany({ where: { programId: progB } }).catch(() => {});
   await prisma.apiKey.deleteMany({ where: { programId: progA } }).catch(() => {});
-  for (const adminEmail of [
-    `m0w-admin-${suffix}@loyaltyos.dev`,
-    `m0w-badmin-${suffix}@loyaltyos.dev`,
-  ]) {
-    const a = await prisma.adminUser.findUnique({ where: { email: adminEmail } });
-    if (a) {
-      await prisma.adminSession.deleteMany({ where: { userId: a.id } }).catch(() => {});
-      await prisma.adminUser.delete({ where: { id: a.id } }).catch(() => {});
-    }
-  }
+  await deleteTestAdmin(prisma, `m0w-admin-${suffix}@loyaltyos.dev`);
+  await deleteTestAdmin(prisma, `m0w-badmin-${suffix}@loyaltyos.dev`);
   await prisma.program.deleteMany({ where: { id: { in: [progA, progB] } } }).catch(() => {});
   await app.close();
 });

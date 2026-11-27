@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import { hashPassword } from "@loyaltyos/core";
 import type { AdminRole } from "@loyaltyos/permissions";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -8,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
 import { expirePendingAdjustments } from "../lib/point-adjustments.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
@@ -40,14 +40,12 @@ async function balanceOf(targetMemberId: string): Promise<number> {
 async function loginAs(role: AdminRole, targetProgramId: string, tag: string): Promise<string> {
   const email = `adj-${role.toLowerCase()}-${tag}-${suffix}@loyaltyos.dev`;
   const password = `pw-${suffix}`;
-  const admin = await prisma.adminUser.create({
-    data: {
-      email,
-      name: `Adj ${role} ${tag}`,
-      passwordHash: await hashPassword(password),
-      role,
-      programId: targetProgramId,
-    },
+  const { admin } = await createTestAdmin(prisma, {
+    email,
+    name: `Adj ${role} ${tag}`,
+    password,
+    role,
+    programId: targetProgramId,
   });
   if (targetProgramId === programId) adminIds[role] = admin.id;
   const login = await app.inject({
@@ -122,10 +120,10 @@ afterAll(async () => {
 
   const admins = await prisma.adminUser.findMany({
     where: { programId: { in: [programId, otherProgramId] } },
+    select: { email: true },
   });
-  for (const admin of admins) {
-    await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-    await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
+  for (const { email } of admins) {
+    await deleteTestAdmin(prisma, email);
   }
   await prisma.pointAdjustmentRequest
     .deleteMany({ where: { programId: otherProgramId } })

@@ -10,6 +10,7 @@ import {
   DEFAULT_ORG_ID,
   syncAdminUserToTenancy,
 } from "../lib/tenancy-users.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // Tenancy mirror (PR 2, docs/design/tenancy.md §4). These tests prove the
 // compatibility path: every AdminUser write is mirrored into User +
@@ -22,19 +23,6 @@ let app: FastifyInstance;
 let prisma: PrismaClient;
 
 const suffix = Date.now().toString();
-
-async function cleanupAdmin(email: string): Promise<void> {
-  const admin = await prisma.adminUser.findUnique({ where: { email } });
-  if (admin) {
-    await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-  }
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (user) {
-    await prisma.organizationMembership.deleteMany({ where: { userId: user.id } }).catch(() => {});
-    await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
-  }
-  await prisma.adminUser.deleteMany({ where: { email } }).catch(() => {});
-}
 
 beforeAll(async () => {
   app = await buildApp({ logger: false });
@@ -75,7 +63,7 @@ describe("syncAdminUserToTenancy", () => {
       expect(membership?.role).toBe("OPERATOR");
       expect(membership?.programIds).toEqual(["prog_dev"]);
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 
@@ -102,7 +90,7 @@ describe("syncAdminUserToTenancy", () => {
       });
       expect(membership?.status).toBe("DISABLED");
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 
@@ -132,7 +120,7 @@ describe("syncAdminUserToTenancy", () => {
       });
       expect(membership?.role).toBe("ANALYST");
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 });
@@ -164,7 +152,7 @@ describe("backfillTenancyUsers", () => {
       });
       expect(memberships).toHaveLength(1);
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 });
@@ -195,7 +183,7 @@ describe("duplicate AdminUser email handling", () => {
         }),
       ).rejects.toMatchObject({ code: "P2002" });
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 
@@ -210,18 +198,16 @@ describe("duplicate AdminUser email handling", () => {
   });
 });
 
-describe("admin auth stays in sync with the mirror", () => {
-  it("POST /admin/login mirrors lastLoginAt to the User", async () => {
+describe("admin auth keeps the AdminUser mirror in sync (reverse direction)", () => {
+  it("POST /admin/login sets User.lastLoginAt and mirrors it to AdminUser", async () => {
     const email = `login-sync-${suffix}@loyaltyos.dev`;
     const password = "pw-login-sync";
-    await prisma.adminUser.create({
-      data: {
-        email,
-        name: "Login Sync",
-        passwordHash: await hashPassword(password),
-        role: "OPERATOR",
-        programId: "prog_dev",
-      },
+    await createTestAdmin(prisma, {
+      email,
+      name: "Login Sync",
+      password,
+      role: "OPERATOR",
+      programId: "prog_dev",
     });
 
     try {
@@ -233,24 +219,23 @@ describe("admin auth stays in sync with the mirror", () => {
       expect(res.statusCode).toBe(200);
 
       const user = await prisma.user.findUnique({ where: { email } });
-      expect(user).not.toBeNull();
       expect(user?.lastLoginAt).not.toBeNull();
+      const mirror = await prisma.adminUser.findUnique({ where: { email } });
+      expect(mirror?.lastLoginAt).not.toBeNull();
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 
-  it("PATCH /admin/me mirrors a name change to the User", async () => {
+  it("PATCH /admin/me updates User.name and mirrors it to AdminUser", async () => {
     const email = `patch-sync-${suffix}@loyaltyos.dev`;
     const password = "pw-patch-sync";
-    await prisma.adminUser.create({
-      data: {
-        email,
-        name: "Before",
-        passwordHash: await hashPassword(password),
-        role: "OPERATOR",
-        programId: "prog_dev",
-      },
+    await createTestAdmin(prisma, {
+      email,
+      name: "Before",
+      password,
+      role: "OPERATOR",
+      programId: "prog_dev",
     });
 
     try {
@@ -272,8 +257,10 @@ describe("admin auth stays in sync with the mirror", () => {
 
       const user = await prisma.user.findUnique({ where: { email } });
       expect(user?.name).toBe("After");
+      const mirror = await prisma.adminUser.findUnique({ where: { email } });
+      expect(mirror?.name).toBe("After");
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 });

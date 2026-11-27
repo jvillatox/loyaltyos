@@ -105,6 +105,7 @@ beforeEach(async () => {
   app = await buildApp({ logger: false });
 
   app.addHook("onRequest", async (request) => {
+    request.userId = "user-1";
     request.adminId = "admin-1";
     request.adminRole = "SUPER_ADMIN";
     request.programId = (request.headers["x-program-id"] as string) || "prog-1";

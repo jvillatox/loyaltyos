@@ -6,29 +6,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { createAdminUser } from "../admin-create.js";
 import { DEFAULT_ORG_ID } from "../lib/tenancy-users.js";
+import { deleteTestAdmin } from "./helpers/test-admin.js";
 
 // Covers the `admin:create` CLI path (PR 2, docs/design/tenancy.md §4). Creating
-// an admin from the command line mirrors a User + OrganizationMembership in the
-// same transaction, and a forced sync failure rolls the AdminUser back so no
-// orphaned admin survives the CLI.
+// an admin from the command line creates the identity root User + membership and
+// mirrors an AdminUser in the same transaction, and a forced sync failure rolls
+// the whole identity back so no orphaned admin survives the CLI.
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
 
 const suffix = Date.now().toString();
-
-async function cleanupAdmin(email: string): Promise<void> {
-  const admin = await prisma.adminUser.findUnique({ where: { email } });
-  if (admin) {
-    await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-  }
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (user) {
-    await prisma.organizationMembership.deleteMany({ where: { userId: user.id } }).catch(() => {});
-    await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
-  }
-  await prisma.adminUser.deleteMany({ where: { email } }).catch(() => {});
-}
 
 beforeAll(async () => {
   app = await buildApp({ logger: false });
@@ -73,7 +61,7 @@ describe("createAdminUser", () => {
       expect(membership?.programIds).toEqual(["prog_dev"]);
       expect(membership?.status).toBe("ACTIVE");
     } finally {
-      await cleanupAdmin(email);
+      await deleteTestAdmin(prisma, email);
     }
   });
 

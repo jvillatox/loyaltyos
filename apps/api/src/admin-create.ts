@@ -6,8 +6,8 @@ import { isAdminRole } from "@loyaltyos/permissions";
 import type { AdminRole, AdminUser } from "@prisma/client";
 import { PrismaClient } from "@prisma/client";
 
-import type { AdminUserMirror, TenantDb } from "./lib/tenancy-users.js";
-import { syncAdminUserToTenancy } from "./lib/tenancy-users.js";
+import type { TenancyUserMirror, TenantDb } from "./lib/tenancy-users.js";
+import { ensureDefaultOrganization, syncTenancyUserToAdminUser } from "./lib/tenancy-users.js";
 
 /**
  * Create an admin user from the command line.
@@ -34,25 +34,51 @@ export interface CreateAdminInput {
   passwordHash: string;
 }
 
-// Creates an AdminUser and mirrors it into User + OrganizationMembership in the
-// same transaction (docs/design/tenancy.md §4). Exported for the CLI test; the
-// sync step is injectable so tests can force a failure and assert the rollback.
+// Creates an admin identity: the tenancy `User` + default-org membership are the
+// source of truth (PR 7), and the AdminUser is the reverse mirror kept in sync in
+// the same transaction for the 2-release rollback window (docs/design/tenancy.md
+// §7). Exported for the CLI test; the sync step is injectable so tests can force
+// a failure and assert the rollback.
 export async function createAdminUser(
   db: TenantDb,
   input: CreateAdminInput,
-  sync: (db: TenantDb, admin: AdminUserMirror) => Promise<void> = syncAdminUserToTenancy,
+  sync: (db: TenantDb, input: TenancyUserMirror) => Promise<AdminUser> = syncTenancyUserToAdminUser,
 ): Promise<AdminUser> {
-  const created = await db.adminUser.create({
+  const org = await ensureDefaultOrganization(db);
+  const user = await db.user.create({
     data: {
       email: input.email.toLowerCase(),
       name: input.name,
-      role: input.role,
       passwordHash: input.passwordHash,
-      programId: input.programId,
+      status: "ACTIVE",
+      locale: "es-MX",
     },
   });
-  await sync(db, created);
-  return created;
+  const membership = await db.organizationMembership.create({
+    data: {
+      userId: user.id,
+      organizationId: org.id,
+      role: input.role,
+      programIds: [input.programId],
+      status: "ACTIVE",
+    },
+  });
+  return sync(db, {
+    user: {
+      email: user.email,
+      passwordHash: user.passwordHash,
+      name: user.name,
+      status: user.status,
+      locale: user.locale,
+      lastLoginAt: user.lastLoginAt,
+    },
+    membership: {
+      role: membership.role,
+      programIds: membership.programIds,
+      status: membership.status,
+    },
+    programId: input.programId,
+  });
 }
 
 function parseArgs(argv: string[]): Options {

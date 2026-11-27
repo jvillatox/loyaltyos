@@ -1,5 +1,4 @@
 import { buildTools } from "@loyaltyos/ai";
-import { hashPassword } from "@loyaltyos/core";
 import { maskCode as maskCouponCode } from "@loyaltyos/coupons";
 import { maskCode } from "@loyaltyos/giftcards";
 import { ADMIN_ROLES, can } from "@loyaltyos/permissions";
@@ -11,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { ADMIN_ROUTE_PERMISSIONS, ADMIN_SELF_SERVICE_PATHS } from "../lib/permissions.js";
 import { createInjectLoopbackFetch, toolDefsForRole } from "../routes/admin/ai.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // Role-based access control (issue #32, PR B). Three things are proven here:
 //
@@ -42,14 +42,12 @@ async function loginAs(role: AdminRole): Promise<string> {
   const email = `rbac-${role.toLowerCase()}-${suffix}@loyaltyos.dev`;
   adminEmails[role] = email;
   const password = `pw-${suffix}`;
-  const admin = await prisma.adminUser.create({
-    data: {
-      email,
-      name: `RBAC ${role}`,
-      passwordHash: await hashPassword(password),
-      role,
-      programId,
-    },
+  const { admin } = await createTestAdmin(prisma, {
+    email,
+    name: `RBAC ${role}`,
+    password,
+    role,
+    programId,
   });
   adminIds[role] = admin.id;
   const login = await app.inject({
@@ -148,11 +146,7 @@ afterAll(async () => {
   for (const role of ADMIN_ROLES) {
     const email = adminEmails[role];
     if (email) {
-      const admin = await prisma.adminUser.findUnique({ where: { email } });
-      if (admin) {
-        await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-        await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
-      }
+      await deleteTestAdmin(prisma, email);
     }
   }
   await prisma.coalitionConfig.deleteMany({ where: { programId } }).catch(() => {});

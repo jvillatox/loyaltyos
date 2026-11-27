@@ -180,4 +180,7 @@ export const ADMIN_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set([
   // token can never mint or revoke another token.
   "/api/v1/admin/tokens",
   "/api/v1/admin/tokens/:id",
+  // Org/program selector (PR 7): list memberships + switch the active scope.
+  "/api/v1/admin/organizations",
+  "/api/v1/admin/organizations/active",
 ]);

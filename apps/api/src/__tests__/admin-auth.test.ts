@@ -1,9 +1,9 @@
-import { hashPassword } from "@loyaltyos/core";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
@@ -30,51 +30,46 @@ describe("POST /admin/login", () => {
   });
 
   it("returns 401 with wrong password", async () => {
-    const pwd = await hashPassword("real-password");
-    // Create a test admin user for this test case only
-    const admin = await prisma.adminUser.create({
-      data: {
-        email: "wrongpwd-test@loyaltyos.dev",
-        name: "Test",
-        passwordHash: pwd,
-        role: "OPERATOR",
-        programId: "prog_dev",
-      },
+    const email = "wrongpwd-test@loyaltyos.dev";
+    await createTestAdmin(prisma, {
+      email,
+      name: "Test",
+      password: "real-password",
+      role: "OPERATOR",
+      programId: "prog_dev",
     });
 
     try {
       const res = await app.inject({
         method: "POST",
         url: "/api/v1/admin/login",
-        payload: { email: "wrongpwd-test@loyaltyos.dev", password: "wrong" },
+        payload: { email, password: "wrong" },
       });
       expect(res.statusCode).toBe(401);
     } finally {
-      await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
+      await deleteTestAdmin(prisma, email);
     }
   });
 
   it("successfully logs in with correct credentials", async () => {
-    const pwd = await hashPassword("correct-password");
-    const admin = await prisma.adminUser.create({
-      data: {
-        email: "login-test@loyaltyos.dev",
-        name: "Test Login",
-        passwordHash: pwd,
-        role: "OPERATOR",
-        programId: "prog_dev",
-      },
+    const email = "login-test@loyaltyos.dev";
+    await createTestAdmin(prisma, {
+      email,
+      name: "Test Login",
+      password: "correct-password",
+      role: "OPERATOR",
+      programId: "prog_dev",
     });
 
     try {
       const res = await app.inject({
         method: "POST",
         url: "/api/v1/admin/login",
-        payload: { email: "login-test@loyaltyos.dev", password: "correct-password" },
+        payload: { email, password: "correct-password" },
       });
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.data.admin.email).toBe("login-test@loyaltyos.dev");
+      expect(body.data.admin.email).toBe(email);
       expect(body.data.admin.role).toBe("OPERATOR");
 
       // Check that Set-Cookie header is present
@@ -84,7 +79,7 @@ describe("POST /admin/login", () => {
       expect(sessionCookie?.name).toBe("loyaltyos_admin_session");
       expect(sessionCookie?.httpOnly).toBe(true);
     } finally {
-      await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
+      await deleteTestAdmin(prisma, email);
     }
   });
 });
@@ -100,15 +95,13 @@ describe("POST /admin/logout", () => {
   });
 
   it("clears the cookie when logged in", async () => {
-    const pwd = await hashPassword("logout-test");
-    const admin = await prisma.adminUser.create({
-      data: {
-        email: "logout-test@loyaltyos.dev",
-        name: "Logout Test",
-        passwordHash: pwd,
-        role: "OPERATOR",
-        programId: "prog_dev",
-      },
+    const email = "logout-test@loyaltyos.dev";
+    await createTestAdmin(prisma, {
+      email,
+      name: "Logout Test",
+      password: "logout-test",
+      role: "OPERATOR",
+      programId: "prog_dev",
     });
 
     try {
@@ -116,7 +109,7 @@ describe("POST /admin/logout", () => {
       const loginRes = await app.inject({
         method: "POST",
         url: "/api/v1/admin/login",
-        payload: { email: "logout-test@loyaltyos.dev", password: "logout-test" },
+        payload: { email, password: "logout-test" },
       });
       const loginCookies = loginRes.cookies;
       const sessionCookie = loginCookies.find((c) => c.name === "loyaltyos_admin_session");
@@ -136,7 +129,7 @@ describe("POST /admin/logout", () => {
       const blank = blankCookies.find((c) => c.name === "loyaltyos_admin_session");
       expect(blank).toBeDefined();
     } finally {
-      await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
+      await deleteTestAdmin(prisma, email);
     }
   });
 });

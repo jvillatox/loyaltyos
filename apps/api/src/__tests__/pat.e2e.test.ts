@@ -1,10 +1,10 @@
-import { hashPassword } from "@loyaltyos/core";
 import type { AdminRole } from "@loyaltyos/permissions";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // Personal access tokens (issue #48, PR B). A token is minted once by an admin
 // session, shown exactly once, and thereafter acts as that admin with an
@@ -19,9 +19,8 @@ const programId = `prog_pat_${suffix}`;
 const otherProgramId = `prog_pat_other_${suffix}`;
 
 let superAdminCookie: string;
-let superAdminId: string;
 let operatorCookie: string;
-let operatorId: string;
+let operatorMembershipId: string;
 
 interface CreatedToken {
   id: string;
@@ -64,29 +63,24 @@ beforeAll(async () => {
   });
 
   const password = `pw-${suffix}`;
-  const superAdmin = await prisma.adminUser.create({
-    data: {
-      email: `pat-super-${suffix}@loyaltyos.dev`,
-      name: "PAT Super",
-      passwordHash: await hashPassword(password),
-      role: "SUPER_ADMIN",
-      programId,
-    },
+  const superAdmin = await createTestAdmin(prisma, {
+    email: `pat-super-${suffix}@loyaltyos.dev`,
+    name: "PAT Super",
+    password,
+    role: "SUPER_ADMIN",
+    programId,
   });
-  superAdminId = superAdmin.id;
-  superAdminCookie = await loginAs(superAdmin.email, password);
+  superAdminCookie = await loginAs(superAdmin.admin.email, password);
 
-  const operator = await prisma.adminUser.create({
-    data: {
-      email: `pat-op-${suffix}@loyaltyos.dev`,
-      name: "PAT Operator",
-      passwordHash: await hashPassword(password),
-      role: "OPERATOR",
-      programId,
-    },
+  const operator = await createTestAdmin(prisma, {
+    email: `pat-op-${suffix}@loyaltyos.dev`,
+    name: "PAT Operator",
+    password,
+    role: "OPERATOR",
+    programId,
   });
-  operatorId = operator.id;
-  operatorCookie = await loginAs(operator.email, password);
+  operatorMembershipId = operator.membership.id;
+  operatorCookie = await loginAs(operator.admin.email, password);
 });
 
 afterAll(async () => {
@@ -94,10 +88,15 @@ afterAll(async () => {
   await prisma.auditLog
     .deleteMany({ where: { programId: { in: [programId, otherProgramId] } } })
     .catch(() => {});
-  // Admins cascade their tokens and sessions; delete them before the program.
-  await prisma.adminUser
-    .deleteMany({ where: { programId: { in: [programId, otherProgramId] } } })
-    .catch(() => {});
+  // Delete each admin's identity (User cascades membership + admin sessions) and
+  // its AdminUser mirror before removing the programs they reference.
+  const admins = await prisma.adminUser.findMany({
+    where: { programId: { in: [programId, otherProgramId] } },
+    select: { email: true },
+  });
+  for (const { email } of admins) {
+    await deleteTestAdmin(prisma, email);
+  }
   await prisma.program
     .deleteMany({ where: { id: { in: [programId, otherProgramId] } } })
     .catch(() => {});
@@ -189,19 +188,17 @@ describe("PAT authentication", () => {
 
   it("rejects a token whose owner was deactivated with 401", async () => {
     const password = `pw-inactive-${suffix}`;
-    const admin = await prisma.adminUser.create({
-      data: {
-        email: `pat-inactive-${suffix}@loyaltyos.dev`,
-        name: "PAT Inactive",
-        passwordHash: await hashPassword(password),
-        role: "OPERATOR",
-        programId,
-      },
+    const { admin, user } = await createTestAdmin(prisma, {
+      email: `pat-inactive-${suffix}@loyaltyos.dev`,
+      name: "PAT Inactive",
+      password,
+      role: "OPERATOR",
+      programId,
     });
     const cookie = await loginAs(admin.email, password);
     const created = await createToken(cookie, "OPERATOR", `inactive-${suffix}`);
 
-    await prisma.adminUser.update({ where: { id: admin.id }, data: { isActive: false } });
+    await prisma.user.update({ where: { id: user.id }, data: { status: "DISABLED" } });
 
     const res = await app.inject({
       method: "GET",
@@ -278,8 +275,11 @@ describe("PAT role enforcement", () => {
 
   it("effective role is capped by the owner's current role", async () => {
     const created = await createToken(operatorCookie, "OPERATOR", `cap-${suffix}`);
-    // Demote the owner; the token must degrade with them, not stay OPERATOR.
-    await prisma.adminUser.update({ where: { id: operatorId }, data: { role: "ANALYST" } });
+    // Demote the owner's membership; the token must degrade with it.
+    await prisma.organizationMembership.update({
+      where: { id: operatorMembershipId },
+      data: { role: "ANALYST" },
+    });
 
     const write = await app.inject({
       method: "POST",
@@ -401,14 +401,12 @@ describe("no tokenHash leaks from /admin/tokens", () => {
 describe("DELETE /admin/tokens authorization", () => {
   it("returns 404 for a token owned by another program", async () => {
     const password = `pw-other-${suffix}`;
-    const otherAdmin = await prisma.adminUser.create({
-      data: {
-        email: `pat-other-${suffix}@loyaltyos.dev`,
-        name: "PAT Other Admin",
-        passwordHash: await hashPassword(password),
-        role: "SUPER_ADMIN",
-        programId: otherProgramId,
-      },
+    const { admin: otherAdmin } = await createTestAdmin(prisma, {
+      email: `pat-other-${suffix}@loyaltyos.dev`,
+      name: "PAT Other Admin",
+      password,
+      role: "SUPER_ADMIN",
+      programId: otherProgramId,
     });
     const otherCookie = await loginAs(otherAdmin.email, password);
     const created = await createToken(otherCookie, "ANALYST", `other-program-${suffix}`);
@@ -424,7 +422,10 @@ describe("DELETE /admin/tokens authorization", () => {
   it("returns 403 when a non-SUPER_ADMIN revokes another admin's token in the same program", async () => {
     // A prior test demoted the operator to ANALYST; restore them to OPERATOR so
     // the scenario is a same-program peer (still not SUPER_ADMIN).
-    await prisma.adminUser.update({ where: { id: operatorId }, data: { role: "OPERATOR" } });
+    await prisma.organizationMembership.update({
+      where: { id: operatorMembershipId },
+      data: { role: "OPERATOR" },
+    });
     const created = await createToken(superAdminCookie, "ANALYST", `other-admin-${suffix}`);
 
     const res = await app.inject({

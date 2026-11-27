@@ -4,25 +4,24 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-// Contract guard that stays in place until PR 7 swaps auth to the identity
-// tables (docs/design/tenancy.md §4). Every file that writes to AdminUser must
-// call syncAdminUserToTenancy so the User + OrganizationMembership mirror cannot
-// drift. `createAdminUser` (apps/api/src/admin-create.ts) is the sync-aware
-// wrapper around `adminUser.create`, so it also counts as a mirrored write path.
-// A write that legitimately has no per-row mirror goes into EXEMPT_WRITES with a
-// reason — do not add a blanket exemption.
+// Contract guard for the reverse mirror (PR 7, docs/design/tenancy.md §7 row 7).
+// Once auth reads the identity tables, every file that writes to `User` or
+// `OrganizationMembership` must call syncTenancyUserToAdminUser so the AdminUser
+// mirror cannot drift during the 2-release rollback window. `createAdminUser`
+// (apps/api/src/admin-create.ts) is the sync-aware wrapper around the
+// `user.create` + `organizationMembership.create` pair, so it also counts as a
+// mirrored write path. A write that legitimately has no per-row mirror goes into
+// EXEMPT_WRITES with a reason — do not add a blanket exemption.
 
 const WRITE_METHOD_RE =
-  /\badminUser\.(create|update|upsert|delete|createMany|updateMany|deleteMany)\b/g;
-const RAW_SQL_RE = /"AdminUser"/;
-const SYNC_RE = /\b(?:syncAdminUserToTenancy|createAdminUser)\s*\(/;
+  /\b(?:user|organizationMembership)\.(create|update|upsert|delete|createMany|updateMany|deleteMany)\b/g;
+const RAW_SQL_RE = /"(?:User|OrganizationMembership)"/;
+const SYNC_RE = /\b(?:syncTenancyUserToAdminUser|createAdminUser)\s*\(/;
 
 // file-relative path + " :: " + write method → why syncing is not required.
 const EXEMPT_WRITES: Record<string, string> = {
-  "apps/api/prisma/seed.ts :: deleteMany":
-    "pre-seed reset that also deletes the User/OrganizationMembership mirror rows",
   "packages/tenancy/src/extension.ts :: rawSql":
-    '"AdminUser" is a model name in GLOBAL_MODELS (tenant/global classification), not a raw SQL write',
+    '"User"/"OrganizationMembership" are model names in GLOBAL_MODELS (tenant/global classification), not a raw SQL write',
 };
 
 const EXTENSIONS = new Set([".ts", ".tsx"]);
@@ -68,8 +67,8 @@ function walk(dir: string, out: string[]): void {
   }
 }
 
-describe("AdminUser tenancy-sync contract", () => {
-  it("every AdminUser write site is mirrored via syncAdminUserToTenancy", () => {
+describe("User tenancy-sync contract (reverse mirror)", () => {
+  it("every User/OrganizationMembership write site is mirrored via syncTenancyUserToAdminUser", () => {
     const files: string[] = [];
     for (const root of scannedRoots) {
       walk(root, files);
@@ -103,9 +102,9 @@ describe("AdminUser tenancy-sync contract", () => {
     expect(
       offenders,
       [
-        "AdminUser writes found without a syncAdminUserToTenancy call:",
+        "User/OrganizationMembership writes found without a syncTenancyUserToAdminUser call:",
         ...offenders,
-        "Add syncAdminUserToTenancy to the writing file, or list the write in EXEMPT_WRITES with a reason.",
+        "Add syncTenancyUserToAdminUser to the writing file, or list the write in EXEMPT_WRITES with a reason.",
       ].join("\n"),
     ).toEqual([]);
   });

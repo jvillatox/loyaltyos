@@ -50,12 +50,12 @@ describe("audit()", () => {
     expect(call.data.programId).toBe("prog-1");
   });
 
-  it("sets adminUserId when actorType is ADMIN_USER (backward compat)", async () => {
+  it("writes adminUserId from actor.adminUserId (User.id → AdminUser.id bridge)", async () => {
     mockPrisma.auditLog.create.mockResolvedValue({});
 
     await audit(
       "prog-1",
-      { type: "ADMIN_USER", id: "admin-99" },
+      { type: "ADMIN_USER", id: "user-7", adminUserId: "admin-99" },
       "UPDATE_WEBHOOK",
       "WebhookSubscription",
       "wh-1",
@@ -66,7 +66,7 @@ describe("audit()", () => {
       data: { actorType: string; actorId: string; adminUserId: string | null };
     };
     expect(call.data.actorType).toBe("ADMIN_USER");
-    expect(call.data.actorId).toBe("admin-99");
+    expect(call.data.actorId).toBe("user-7");
     expect(call.data.adminUserId).toBe("admin-99");
   });
 

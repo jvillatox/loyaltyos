@@ -41,6 +41,10 @@ declare module "lucia" {
       name: string | null;
       role: string | null;
       programId: string;
+      // Identity-root User fields (read by the admin Lucia instance, whose
+      // adapter targets `User`; see lib/auth/admin-lucia.ts).
+      locale: string | null;
+      status: string | null;
     };
   }
 }

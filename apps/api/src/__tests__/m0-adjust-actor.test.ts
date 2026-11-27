@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { hashPassword } from "@loyaltyos/core";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // M0 point 2 — /members/:id/adjust must record the real actor in the audit log,
 // not the hardcoded "admin". Today the handler passes adminUserId: "admin" and
@@ -18,6 +18,7 @@ const suffix = randomUUID().slice(0, 8);
 const programId = `prog_m0a_${suffix}`;
 
 let adminId = "";
+let userId = "";
 let adminCookie = "";
 let memberId = "";
 
@@ -32,16 +33,15 @@ beforeAll(async () => {
 
   const email = `m0a-admin-${suffix}@loyaltyos.dev`;
   const password = `pw-${suffix}`;
-  const admin = await prisma.adminUser.create({
-    data: {
-      email,
-      name: "M0A Admin",
-      passwordHash: await hashPassword(password),
-      role: "SUPER_ADMIN",
-      programId,
-    },
+  const { admin, user } = await createTestAdmin(prisma, {
+    email,
+    name: "M0A Admin",
+    password,
+    role: "SUPER_ADMIN",
+    programId,
   });
   adminId = admin.id;
+  userId = user.id;
 
   const login = await app.inject({
     method: "POST",
@@ -63,13 +63,7 @@ afterAll(async () => {
   await prisma.pointAccount.deleteMany({ where: { memberId } }).catch(() => {});
   await prisma.pointAdjustmentRequest.deleteMany({ where: { memberId } }).catch(() => {});
   await prisma.member.deleteMany({ where: { programId } }).catch(() => {});
-  const admin = await prisma.adminUser.findUnique({
-    where: { email: `m0a-admin-${suffix}@loyaltyos.dev` },
-  });
-  if (admin) {
-    await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-    await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
-  }
+  await deleteTestAdmin(prisma, `m0a-admin-${suffix}@loyaltyos.dev`);
   await prisma.program.delete({ where: { id: programId } }).catch(() => {});
   await app.close();
 });
@@ -90,7 +84,7 @@ describe("M0 adjust — real actor in the audit log", () => {
     });
     expect(row).not.toBeNull();
     expect(row!.actorType).toBe("ADMIN_USER");
-    expect(row!.actorId).toBe(adminId);
+    expect(row!.actorId).toBe(userId);
     expect(row!.adminUserId).toBe(adminId);
     expect(row!.actorId).not.toBe("admin");
   });

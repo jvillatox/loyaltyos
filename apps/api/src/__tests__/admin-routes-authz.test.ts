@@ -1,9 +1,9 @@
-import { hashPassword } from "@loyaltyos/core";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "../app.js";
+import { createTestAdmin, deleteTestAdmin } from "./helpers/test-admin.js";
 
 // Regression tests for the admin-session guard (issue #32, PR A).
 //
@@ -162,14 +162,12 @@ beforeAll(async () => {
   // An admin in program A, logged in
   const password = `pw-${suffix}`;
   adminAEmail = `authz-admin-${suffix}@loyaltyos.dev`;
-  await prisma.adminUser.create({
-    data: {
-      email: adminAEmail,
-      name: "Authz Admin A",
-      passwordHash: await hashPassword(password),
-      role: "SUPER_ADMIN",
-      programId: PROGRAM_A,
-    },
+  await createTestAdmin(prisma, {
+    email: adminAEmail,
+    name: "Authz Admin A",
+    password,
+    role: "SUPER_ADMIN",
+    programId: PROGRAM_A,
   });
   const login = await app.inject({
     method: "POST",
@@ -185,11 +183,7 @@ afterAll(async () => {
   await prisma.apiKey.delete({ where: { id: clientKeyId } }).catch(() => {});
   await prisma.campaign.deleteMany({ where: { programId: programBId } }).catch(() => {});
   await prisma.program.delete({ where: { id: programBId } }).catch(() => {});
-  const admin = await prisma.adminUser.findUnique({ where: { email: adminAEmail } });
-  if (admin) {
-    await prisma.adminSession.deleteMany({ where: { userId: admin.id } }).catch(() => {});
-    await prisma.adminUser.delete({ where: { id: admin.id } }).catch(() => {});
-  }
+  await deleteTestAdmin(prisma, adminAEmail);
   for (const id of createdIds) {
     await prisma.campaign.delete({ where: { id } }).catch(() => {});
   }
@@ -239,39 +233,24 @@ describe("encoding bypass is closed (guard uses resolved route, not raw URL)", (
   }
 });
 
-describe("cross-tenant isolation (programId from AdminUser)", () => {
-  it("admin of program A cannot read program B's campaigns via X-Program-Id", async () => {
-    const bCampaign = await prisma.campaign.create({
-      data: { programId: programBId, name: `B-only-${suffix}`, type: "BONUS_POINTS" },
-    });
-
+describe("cross-program escalation is denied (X-Program-Id out of membership scope)", () => {
+  it("admin of program A cannot read program B's campaigns via X-Program-Id (403)", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/admin/campaigns",
       headers: { cookie: adminACookie, "x-program-id": programBId },
     });
-    expect(res.statusCode).toBe(200);
-
-    const ids = (res.json().data.items as Array<{ id: string }>).map((c) => c.id);
-    expect(ids).not.toContain(bCampaign.id);
+    expect(res.statusCode).toBe(403);
   });
 
-  it("admin of program A cannot create a campaign under program B via X-Program-Id", async () => {
+  it("admin of program A cannot create a campaign under program B via X-Program-Id (403)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/admin/campaigns",
       headers: { cookie: adminACookie, "x-program-id": programBId },
       payload: { name: `attempt-B-${suffix}`, type: "BONUS_POINTS" },
     });
-    expect(res.statusCode).toBe(201);
-
-    const created = await prisma.campaign.findFirst({
-      where: { name: `attempt-B-${suffix}` },
-    });
-    expect(created).not.toBeNull();
-    expect(created!.programId).toBe(PROGRAM_A);
-    expect(created!.programId).not.toBe(programBId);
-    createdIds.push(created!.id);
+    expect(res.statusCode).toBe(403);
   });
 });
 
